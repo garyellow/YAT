@@ -18,7 +18,9 @@
     "transcribing": "Transcribing…",
     "polishing": "Polishing…",
     "done": "Done",
+    "clipboardFallback": "Copied to clipboard (paste failed)",
     "error": "Error",
+    "busy": "Processing…",
     "loading": "Loading…"
   },
   "settings": {
@@ -30,8 +32,9 @@
     "sidebarPolish": "Polish",
     "quickSummary": "Quick summary",
     "hotkeySummary": "Current hotkey: {{key}}",
-    "outputAutoPasteSummary": "YATL will try to paste directly into the focused app.",
+    "outputAutoPasteSummary": "YATL will try to paste directly into the focused app, with the clipboard as a fallback if paste fails.",
     "outputClipboardSummary": "YATL will only copy to the clipboard for a safer workflow.",
+    "loadingSummary": "Loading current settings…",
     "groups": {
       "workspace": "Workspace",
       "capture": "Capture & models",
@@ -122,12 +125,13 @@
       "unknownTitle": "Manually review platform permissions",
       "macosMicrophoneBody": "If you denied microphone access the first time, reopen it under System Settings → Privacy & Security → Microphone.",
       "macosAccessibilityBody": "Auto-paste usually requires YATL to be allowed under System Settings → Privacy & Security → Accessibility.",
-      "macosHotkeyBody": "Some macOS versions also need permission refreshes or a full app restart before global hotkeys feel reliable again.",
+      "macosHotkeyBody": "Global hotkeys rely on the same Accessibility path on macOS. If they stop firing, re-check Accessibility permission and restart YATL.",
       "windowsMicrophoneBody": "Open Settings → Privacy & security → Microphone and confirm desktop apps are allowed to use the mic.",
       "windowsAutoPasteBody": "If the target app runs elevated and YATL does not, simulated paste can fail. Clipboard-only mode is usually the safest fallback.",
       "windowsInstallBody": "If Windows shows a protection prompt on install or first launch, only continue after confirming the build source is trusted.",
       "linuxMicrophoneBody": "Make sure your desktop environment, package format, or portal setup allows microphone access.",
-      "linuxAutoPasteBody": "Global hotkeys and keyboard simulation vary a lot by desktop environment, so clipboard-only may be the most stable path.",
+      "linuxHotkeyBody": "YATL currently uses an X11-based global hotkey listener. In native Wayland sessions, hotkeys may not fire at all unless your environment provides compatibility. Linux builds also do not currently consume Esc away from the foreground app during an active operation.",
+      "linuxAutoPasteBody": "Keyboard simulation varies a lot by desktop environment. Clipboard-only is usually the most stable fallback on Linux.",
       "unknownBody": "If recording, hotkeys, or paste behavior feels unreliable, check microphone, keyboard monitoring, and accessibility-related permissions first."
     },
     "platformSummary": {
@@ -172,7 +176,6 @@
   },
   "general": {
     "hotkey": "Hotkey",
-    "hotkeyType": "Type",
     "single": "Single key",
     "doubleTap": "Double-tap",
     "combo": "Key combo",
@@ -182,14 +185,29 @@
     "comboDesc": "Safer from accidental triggers.",
     "holdDesc": "Only record while the key is held down.",
     "key": "Key",
-    "keyHint": "Pick something easy to reach but unlikely to clash with normal typing.",
+    "keyHint": "Examples: RCtrl, RCmd, Alt, F8, Space, A. Use supported key names exactly.",
     "modifier": "Modifier",
-    "modifierHint": "Common choices are Ctrl, Alt, Shift, or Cmd.",
+    "modifierHint": "Examples: Ctrl, Alt, Shift, or Cmd.",
     "doubleTapInterval": "Interval",
     "doubleTapHint": "Shorter is harder to trigger accidentally, but also demands faster tapping.",
     "hotkeyPreviewTitle": "Interaction preview",
     "hotkeyPreview": "You will use {{hotkey}} to trigger recording.",
-    "hotkeyBehaviorHint": "If you multitask heavily, combos are usually the safest default.",
+    "hotkeyBehaviorHint": "All four trigger modes stay available. You can use Alt as hold-to-talk now and later switch it to single key, double-tap, or combo. Safer defaults only change what new setups start with.",
+    "hotkeyRecommendedTitle": "Recommended setup",
+    "hotkeyRecommendedBody": "Hold-to-talk on {{recommended}} is the safest default. It keeps accidental triggers low and usually stays out of the foreground app's way.",
+    "hotkeyComboTitle": "Good everyday choice",
+    "hotkeyComboBody": "Combos are the next safest option. On supported platforms, YATL can consume the action key after the combo is recognized, so stray characters are less likely to leak into the foreground app.",
+    "hotkeyModifierHoldTitle": "Supported, but test it first",
+    "hotkeyModifierHoldBody": "Hold-to-talk on Alt / Ctrl / Cmd is supported, but those keys sit closer to app and OS shortcuts than {{recommended}}. If you like Alt hold today, you can still switch the same key to single key or another mode later — just test it in the apps you actually use.",
+    "hotkeyModifierRiskTitle": "High-risk hotkey",
+    "hotkeyModifierRiskBody": "Single or double-tap modifier keys can still affect app menus, OS shortcuts, or focus behavior before YATL knows whether you meant the hotkey. Prefer hold-to-talk on {{recommended}} or a combo instead.",
+    "hotkeyTypingRiskTitle": "Typing-heavy hotkey",
+    "hotkeyTypingRiskBody": "Using letters, Space, Tab, or Enter as a standalone hotkey steals normal typing. Only keep this if you truly want that key dedicated to YATL.",
+    "hotkeyCustomTitle": "Test this in real apps",
+    "hotkeyCustomBody": "This setup can work, but you should test it in the apps you actually use. The safest patterns are hold-to-talk on {{recommended}} or a combo you never need for normal typing.",
+    "useRecommendedHotkey": "Use {{recommended}} hold-to-talk",
+    "hotkeyWindowPauseTitle": "Settings-safe behavior",
+    "hotkeyWindowPauseBody": "When the settings window is focused, YATL pauses recording hotkeys automatically so editing fields does not accidentally start dictation.",
     "theme": "Theme",
     "dark": "Dark",
     "light": "Light",
@@ -199,7 +217,6 @@
     "maxRecording": "Max duration",
     "maxRecordingHint": "Lower values prevent runaway recordings; higher values work better for long dictation.",
     "seconds": "sec",
-    "outputMode": "Output mode",
     "autoPaste": "Auto-paste",
     "autoPasteDesc": "Fastest when it works, but relies on simulated paste being accepted by the target app.",
     "clipboardOnly": "Clipboard only",
@@ -220,7 +237,8 @@
     "soundEffectsHint": "Helpful when you want confirmation without looking at the screen.",
     "autoMute": "Mute during recording",
     "autoMuteHint": "Helps reduce feedback, but changes how you can listen to other apps while dictating.",
-    "desc": "Configure application behavior and preferences",
+    "autoMuteLinuxTitle": "Linux note",
+    "autoMuteLinuxBody": "Auto-mute is currently a no-op on Linux in this build. YATL still records normally, but it will not mute or restore system audio for you.",
     "sectionAppearance": "Appearance",
     "sectionRecording": "Recording",
     "sectionOutput": "Output",
@@ -241,8 +259,6 @@
     "advancedNote": "Timeout and retry settings affect perceived responsiveness. On stable networks, lower retry counts often feel better because failures surface faster."
   },
   "stt": {
-    "title": "Speech Recognition",
-    "desc": "Configure speech-to-text API connection",
     "baseUrl": "Base URL",
     "baseUrlHint": "Use the OpenAI-compatible root URL. YATL will append /audio/transcriptions automatically.",
     "apiKey": "API Key",
@@ -271,8 +287,6 @@
     "hideKeyShort": "Hide"
   },
   "llm": {
-    "title": "Text Polishing",
-    "desc": "Configure text polishing API connection",
     "enabled": "Enable polishing",
     "enabledHint": "When this is off, YATL outputs the raw transcript directly for maximum speed and predictability.",
     "enabledStateOn": "On",
@@ -312,9 +326,7 @@
     "hideKeyShort": "Hide"
   },
   "prompt": {
-    "title": "System Prompt",
     "systemPrompt": "System Prompt",
-    "desc": "Customize the text polishing behavior",
     "resetToDefault": "Reset to default",
     "userInstructions": "Your instructions",
     "userInstructionsDesc": "Start with simple rules like “keep the casual tone” or “turn lists into bullets.” Most users never need to edit the system prompt.",
@@ -357,8 +369,6 @@
     }
   },
   "vocabulary": {
-    "title": "Custom Terms",
-    "desc": "Add corrections for proper nouns",
     "wrongForm": "Wrong form",
     "correctForm": "Correct form",
     "addEntry": "Add",
@@ -378,7 +388,6 @@
     "confirmDelete": "Delete this correction rule?"
   },
   "history": {
-    "title": "History",
     "search": "Search",
     "searchPlaceholder": "Search transcriptions…",
     "searchButton": "Search",
@@ -387,8 +396,6 @@
     "days": "d",
     "noHistory": "No records yet",
     "emptyHint": "Start recording to see results here",
-    "raw": "Raw",
-    "polished": "Polished",
     "confirmDelete": "Delete this entry?",
     "clearOld": "Purge old",
     "summaryTitle": "Your output workspace",
@@ -421,6 +428,10 @@
     "delete": "Delete",
     "unsaved": "Unsaved changes",
     "saveSuccess": "Settings saved",
+    "saveFailed": "Failed to save settings",
     "saveHint": "Save changes (Ctrl+S)"
+  },
+  "capsule": {
+    "escHint": "Press Esc to cancel"
   }
 }

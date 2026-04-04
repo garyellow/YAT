@@ -11,7 +11,9 @@ export type RecordingStatus =
   | "transcribing"
   | "polishing"
   | "done"
-  | "error";
+  | "error"
+  | "busy"
+  | "clipboardFallback";
 
 interface PipelinePayload {
   status: RecordingStatus;
@@ -52,10 +54,24 @@ export const useRecordingStore = create<RecordingState>((set) => ({
           case "done":
             sounds.done();
             break;
+          case "clipboardFallback":
+            sounds.done();
+            break;
           case "error":
             sounds.error();
             break;
+          case "busy":
+            sounds.busy();
+            break;
         }
+      }
+
+      // "busy" is only a transient feedback cue when the user tries to
+      // trigger recording during an active pipeline. Keep the visible status
+      // aligned with the real pipeline stage (recording/transcribing/polishing)
+      // and let the sound effect carry the feedback.
+      if (status === "busy") {
+        return;
       }
 
       set({

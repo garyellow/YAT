@@ -1,6 +1,73 @@
 import type { AppSettings, HotkeyConfig, PromptConfig } from "../stores/settingsStore";
 
 export type DesktopPlatform = "windows" | "macos" | "linux" | "unknown";
+export type HotkeyAdviceTone = "accent" | "warning" | "danger";
+
+export interface HotkeyAdvice {
+  tone: HotkeyAdviceTone;
+  titleKey: string;
+  bodyKey: string;
+}
+
+const FRIENDLY_KEY_LABELS: Record<string, string> = {
+  alt: "Alt",
+  lalt: "Left Alt",
+  ralt: "Right Alt",
+  altgr: "Right Alt",
+  ctrl: "Ctrl",
+  control: "Ctrl",
+  lctrl: "Left Ctrl",
+  rctrl: "Right Ctrl",
+  shift: "Shift",
+  lshift: "Left Shift",
+  rshift: "Right Shift",
+  meta: "Meta",
+  super: "Super",
+  cmd: "Cmd",
+  command: "Command",
+  lmeta: "Left Cmd",
+  rmeta: "Right Cmd",
+  rcmd: "Right Cmd",
+  space: "Space",
+  escape: "Esc",
+  esc: "Esc",
+  enter: "Enter",
+  return: "Enter",
+  backspace: "Backspace",
+  tab: "Tab",
+  capslock: "Caps Lock",
+};
+
+function normalizeKeyToken(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isModifierToken(token: string): boolean {
+  return [
+    "alt",
+    "lalt",
+    "ralt",
+    "altgr",
+    "ctrl",
+    "control",
+    "lctrl",
+    "rctrl",
+    "shift",
+    "lshift",
+    "rshift",
+    "meta",
+    "super",
+    "cmd",
+    "command",
+    "lmeta",
+    "rmeta",
+    "rcmd",
+  ].includes(token);
+}
+
+function isTypingToken(token: string): boolean {
+  return token.length === 1 || ["space", "tab", "enter", "return"].includes(token);
+}
 
 export function normalizePlatform(value?: string | null): DesktopPlatform {
   if (!value) return "unknown";
@@ -51,13 +118,85 @@ export function buildPromptPreview(prompt: PromptConfig): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
+export function formatHotkeyKey(value?: string | null): string {
+  const token = normalizeKeyToken(value);
+  if (!token) return "—";
+
+  if (FRIENDLY_KEY_LABELS[token]) {
+    return FRIENDLY_KEY_LABELS[token];
+  }
+
+  if (token.length === 1) {
+    return token.toUpperCase();
+  }
+
+  return value?.trim() || token;
+}
+
+export function getRecommendedHotkeyLabel(platform: DesktopPlatform): string {
+  return platform === "macos" ? "Right Cmd" : "Right Ctrl";
+}
+
+export function getHotkeyAdvice(hotkey: HotkeyConfig): HotkeyAdvice {
+  const key = normalizeKeyToken(hotkey.key);
+  const mode = hotkey.hotkey_type;
+  const isRightSideHold =
+    mode === "hold" && ["rctrl", "rmeta", "rcmd"].includes(key);
+
+  if (isRightSideHold) {
+    return {
+      tone: "accent",
+      titleKey: "general.hotkeyRecommendedTitle",
+      bodyKey: "general.hotkeyRecommendedBody",
+    };
+  }
+
+  if (mode === "combo") {
+    return {
+      tone: "accent",
+      titleKey: "general.hotkeyComboTitle",
+      bodyKey: "general.hotkeyComboBody",
+    };
+  }
+
+  if (mode === "hold" && isModifierToken(key)) {
+    return {
+      tone: "warning",
+      titleKey: "general.hotkeyModifierHoldTitle",
+      bodyKey: "general.hotkeyModifierHoldBody",
+    };
+  }
+
+  if ((mode === "single" || mode === "double_tap") && isModifierToken(key)) {
+    return {
+      tone: "danger",
+      titleKey: "general.hotkeyModifierRiskTitle",
+      bodyKey: "general.hotkeyModifierRiskBody",
+    };
+  }
+
+  if ((mode === "single" || mode === "double_tap") && isTypingToken(key)) {
+    return {
+      tone: "danger",
+      titleKey: "general.hotkeyTypingRiskTitle",
+      bodyKey: "general.hotkeyTypingRiskBody",
+    };
+  }
+
+  return {
+    tone: "warning",
+    titleKey: "general.hotkeyCustomTitle",
+    bodyKey: "general.hotkeyCustomBody",
+  };
+}
+
 export function formatHotkeyCombo(hotkey: HotkeyConfig): string {
-  const key = hotkey.key.trim() || "Alt";
-  const modifier = hotkey.modifier?.trim();
+  const key = formatHotkeyKey(hotkey.key);
+  const modifier = formatHotkeyKey(hotkey.modifier);
 
   switch (hotkey.hotkey_type) {
     case "combo":
-      return modifier ? `${modifier} + ${key}` : key;
+      return hotkey.modifier?.trim() ? `${modifier} + ${key}` : key;
     case "double_tap":
       return `${key} ×2`;
     case "hold":

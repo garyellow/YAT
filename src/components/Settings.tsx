@@ -83,6 +83,8 @@ export default function Settings() {
   const { t } = useTranslation();
   const [active, setActive] = useState<SettingsTab>("overview");
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastTone, setToastTone] = useState<"success" | "error">("success");
   const [isSaving, setIsSaving] = useState(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
@@ -100,6 +102,14 @@ export default function Settings() {
 
   const sttReady = isSttConfigured(settings);
   const llmReady = isLlmConfigured(settings);
+  const summaryHotkey = settings
+    ? formatHotkeyCombo(settings.general.hotkey)
+    : t("status.loading");
+  const outputSummary = !settings
+    ? t("settings.loadingSummary")
+    : settings.general.output_mode === "auto_paste"
+      ? t("settings.outputAutoPasteSummary")
+      : t("settings.outputClipboardSummary");
 
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("tab");
@@ -131,10 +141,7 @@ export default function Settings() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!isSaving && dirty && settings) {
-          setIsSaving(true);
-          void saveSettings(settings).then(() => {
-            setToastVisible(true);
-          }).finally(() => setIsSaving(false));
+          void handleSave();
         }
       }
     };
@@ -143,12 +150,22 @@ export default function Settings() {
     return () => window.removeEventListener("keydown", handler);
   }, [dirty, isSaving, saveSettings, settings]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (settings && dirty && !isSaving) {
       setIsSaving(true);
-      void saveSettings(settings).then(() => {
+      try {
+        await saveSettings(settings);
+        setToastTone("success");
+        setToastMessage(t("actions.saveSuccess"));
         setToastVisible(true);
-      }).finally(() => setIsSaving(false));
+      } catch (error) {
+        console.error("Failed to save settings:", error);
+        setToastTone("error");
+        setToastMessage(`${t("actions.saveFailed")}: ${error instanceof Error ? error.message : String(error)}`);
+        setToastVisible(true);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -184,7 +201,12 @@ export default function Settings() {
 
   return (
     <div className="app-shell mx-auto flex gap-5 max-xl:flex-col">
-      <Toast message={t("actions.saveSuccess")} visible={toastVisible} onDone={hideToast} />
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        onDone={hideToast}
+        tone={toastTone}
+      />
       <aside className="app-sidebar-panel shrink-0 rounded-[28px] border border-black/5 p-4 backdrop-blur-xl dark:border-white/8">
         <div className="flex h-full flex-col gap-5">
           <div className="app-card border-none bg-white/70 px-5 py-5 dark:bg-slate-950/50">
@@ -256,12 +278,10 @@ export default function Settings() {
                   {t("settings.quickSummary")}
                 </p>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {t("settings.hotkeySummary", { key: formatHotkeyCombo(settings?.general.hotkey ?? { hotkey_type: "single", key: "Alt", modifier: null, double_tap_interval_ms: 300 }) })}
+                  {t("settings.hotkeySummary", { key: summaryHotkey })}
                 </p>
                 <p className="text-sm leading-6 text-gray-600 dark:text-gray-300">
-                  {settings?.general.output_mode === "auto_paste"
-                    ? t("settings.outputAutoPasteSummary")
-                    : t("settings.outputClipboardSummary")}
+                  {outputSummary}
                 </p>
               </div>
             </div>
@@ -288,7 +308,7 @@ export default function Settings() {
               </StatusPill>
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 disabled={!dirty}
                 className={dirty ? "app-button-primary" : "app-button-secondary opacity-70"}
                 title={t("actions.saveHint")}

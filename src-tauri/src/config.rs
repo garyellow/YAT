@@ -58,11 +58,21 @@ pub struct HotkeyConfig {
     pub double_tap_interval_ms: u64,
 }
 
+#[cfg(target_os = "macos")]
+fn default_hotkey_key() -> &'static str {
+    "RCmd"
+}
+
+#[cfg(not(target_os = "macos"))]
+fn default_hotkey_key() -> &'static str {
+    "RCtrl"
+}
+
 impl Default for HotkeyConfig {
     fn default() -> Self {
         Self {
-            hotkey_type: HotkeyType::Single,
-            key: "Alt".into(),
+            hotkey_type: HotkeyType::Hold,
+            key: default_hotkey_key().into(),
             modifier: None,
             double_tap_interval_ms: 300,
         }

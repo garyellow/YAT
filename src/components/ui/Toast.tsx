@@ -5,9 +5,16 @@ interface ToastProps {
   visible: boolean;
   onDone: () => void;
   duration?: number;
+  tone?: "success" | "error";
 }
 
-export default function Toast({ message, visible, onDone, duration = 2000 }: ToastProps) {
+export default function Toast({
+  message,
+  visible,
+  onDone,
+  duration = 2000,
+  tone = "success",
+}: ToastProps) {
   const [phase, setPhase] = useState<"enter" | "exit" | "hidden">("hidden");
 
   useEffect(() => {
@@ -29,16 +36,20 @@ export default function Toast({ message, visible, onDone, duration = 2000 }: Toa
 
   if (phase === "hidden") return null;
 
+  const icon = tone === "error" ? "!" : "✓";
+  const iconClass = tone === "error" ? "text-rose-500" : "text-success";
+  const role = tone === "error" ? "alert" : "status";
+
   return (
     <div
-      role="status"
+      role={role}
       aria-live="polite"
       className={`fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-full border border-black/5 bg-white/90 px-5 py-2.5 text-sm font-semibold shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/90 ${
         phase === "enter" ? "toast-enter" : "toast-exit"
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className="text-success">✓</span>
+        <span className={iconClass}>{icon}</span>
         {message}
       </span>
     </div>

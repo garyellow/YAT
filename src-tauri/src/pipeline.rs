@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 
@@ -34,8 +36,12 @@ fn emit_status(app: &AppHandle, status: &str, text: Option<&str>, error: Option<
     }
 }
 
+fn was_cancelled(cancel_generation: &Arc<AtomicU64>, operation_generation: u64) -> bool {
+    cancel_generation.load(Ordering::SeqCst) != operation_generation
+}
+
 /// Build the system prompt, appending user instructions and vocabulary entries.
-fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabulary: &[VocabularyEntry]) -> String {
+pub fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabulary: &[VocabularyEntry]) -> String {
     let mut prompt = base_prompt.to_string();
 
     if !user_instructions.trim().is_empty() {
@@ -58,6 +64,7 @@ pub struct PipelineResult {
     pub raw_text: String,
     pub polished_text: Option<String>,
     pub duration_seconds: f64,
+    pub suppressed: bool,
 }
 
 /// Run the full pipeline: STT → LLM polish → output.
@@ -67,6 +74,8 @@ pub async fn run(
     audio_data: Vec<u8>,
     settings: &AppSettings,
     recent_context: Vec<String>,
+    cancel_generation: Arc<AtomicU64>,
+    operation_generation: u64,
 ) -> Result<PipelineResult, PipelineError> {
     let start = std::time::Instant::now();
 
@@ -80,12 +89,23 @@ pub async fn run(
     )
     .await?;
 
+    if was_cancelled(&cancel_generation, operation_generation) {
+        log::info!("pipeline cancelled after transcription; suppressing result presentation");
+        return Ok(PipelineResult {
+            raw_text,
+            polished_text: None,
+            duration_seconds: start.elapsed().as_secs_f64(),
+            suppressed: true,
+        });
+    }
+
     if raw_text.trim().is_empty() {
         emit_status(app, "done", Some(""), None);
         return Ok(PipelineResult {
             raw_text: String::new(),
             polished_text: None,
             duration_seconds: start.elapsed().as_secs_f64(),
+            suppressed: false,
         });
     }
 
@@ -119,24 +139,55 @@ pub async fn run(
         None
     };
 
+    if was_cancelled(&cancel_generation, operation_generation) {
+        log::info!("pipeline cancelled during processing; suppressing result presentation");
+        return Ok(PipelineResult {
+            raw_text,
+            polished_text: polished,
+            duration_seconds: start.elapsed().as_secs_f64(),
+            suppressed: true,
+        });
+    }
+
     let final_text = polished.as_deref().unwrap_or(&raw_text);
 
     // Step 3: Output
-    if !final_text.is_empty() {
-        if let Err(e) = output::output_text(
+    let outcome = if !final_text.is_empty() {
+        match output::output_text(
             final_text,
             &settings.general.output_mode,
             &settings.general.clipboard_behavior,
         ) {
-            log::error!("output error: {e}");
+            Ok(o) => o,
+            Err(e) => {
+                log::error!("output error: {e}");
+                // Clipboard itself failed — nothing was delivered.
+                emit_status(app, "error", Some(final_text), Some(&e.to_string()));
+                return Ok(PipelineResult {
+                    raw_text,
+                    polished_text: polished,
+                    duration_seconds: start.elapsed().as_secs_f64(),
+                    suppressed: false,
+                });
+            }
+        }
+    } else {
+        output::OutputOutcome::CopiedToClipboard
+    };
+
+    match outcome {
+        output::OutputOutcome::PasteFailedCopiedToClipboard => {
+            emit_status(app, "clipboardFallback", Some(final_text), None);
+        }
+        _ => {
+            emit_status(app, "done", Some(final_text), None);
         }
     }
-
-    emit_status(app, "done", Some(final_text), None);
 
     Ok(PipelineResult {
         raw_text,
         polished_text: polished,
         duration_seconds: start.elapsed().as_secs_f64(),
+        suppressed: false,
     })
 }

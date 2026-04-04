@@ -3,7 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { formatHotkeyCombo } from "../../lib/settingsFormatters";
+import {
+  formatHotkeyCombo,
+  getHotkeyAdvice,
+  getRecommendedHotkeyLabel,
+} from "../../lib/settingsFormatters";
 import type { AppSettings } from "../../stores/settingsStore";
 import { Notice, OptionCard, SectionCard, StatusPill } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
@@ -19,20 +23,26 @@ export default function GeneralTab() {
   const platform = useAppStore((s) => s.platform);
 
   useEffect(() => {
-    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch(() => {});
+    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch((e) => console.error("Failed to list audio devices:", e));
   }, []);
 
   if (!settings) return null;
 
   const g = settings.general;
+  const recommendedKeyToken = platform === "macos" ? "RCmd" : "RCtrl";
 
   const update = (patch: Partial<AppSettings["general"]>) => {
     updateSettings({ general: { ...g, ...patch } });
   };
 
   const hotkeySummary = formatHotkeyCombo(g.hotkey);
+  const hotkeyAdvice = getHotkeyAdvice(g.hotkey);
+  const recommendedHoldKey = getRecommendedHotkeyLabel(platform);
+  const isRecommendedHotkey =
+    g.hotkey.hotkey_type === "hold" &&
+    g.hotkey.key.trim().toLowerCase() === recommendedKeyToken.toLowerCase();
   const refreshDevices = () => {
-    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch(() => {});
+    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch((e) => console.error("Failed to list audio devices:", e));
   };
 
   const platformNote =
@@ -53,7 +63,7 @@ export default function GeneralTab() {
       <SectionCard
         title={t("general.hotkey")}
         description={t("general.hotkeyDesc")}
-        aside={<StatusPill tone="accent">{hotkeySummary}</StatusPill>}
+        aside={<StatusPill tone={hotkeyAdvice.tone}>{hotkeySummary}</StatusPill>}
       >
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -91,8 +101,9 @@ export default function GeneralTab() {
                 value={g.hotkey.key}
                 onChange={(e) => update({ hotkey: { ...g.hotkey, key: e.target.value } })}
                 className="app-input"
-                placeholder="Alt"
+                placeholder={platform === "macos" ? "RCmd" : "RCtrl"}
                 autoComplete="off"
+                spellCheck={false}
               />
               <p className={fieldHintCls}>{t("general.keyHint")}</p>
             </div>
@@ -114,6 +125,7 @@ export default function GeneralTab() {
                   className="app-input"
                   placeholder="Ctrl"
                   autoComplete="off"
+                  spellCheck={false}
                 />
                 <p className={fieldHintCls}>{t("general.modifierHint")}</p>
               </div>
@@ -158,6 +170,34 @@ export default function GeneralTab() {
               </div>
             )}
           </div>
+
+          <Notice title={t(hotkeyAdvice.titleKey)} tone={hotkeyAdvice.tone}>
+            <div className="space-y-3">
+              <p>{t(hotkeyAdvice.bodyKey, { recommended: recommendedHoldKey })}</p>
+              {!isRecommendedHotkey ? (
+                <button
+                  type="button"
+                  className="app-button-ghost"
+                  onClick={() =>
+                    update({
+                      hotkey: {
+                        ...g.hotkey,
+                        hotkey_type: "hold",
+                        key: recommendedKeyToken,
+                        modifier: null,
+                      },
+                    })
+                  }
+                >
+                  {t("general.useRecommendedHotkey", { recommended: recommendedHoldKey })}
+                </button>
+              ) : null}
+            </div>
+          </Notice>
+
+          <Notice title={t("general.hotkeyWindowPauseTitle")} tone="default">
+            {t("general.hotkeyWindowPauseBody")}
+          </Notice>
         </div>
       </SectionCard>
 
@@ -242,6 +282,12 @@ export default function GeneralTab() {
                 ariaLabelledBy="auto-mute-label"
               />
             </div>
+
+            {platform === "linux" ? (
+              <Notice title={t("general.autoMuteLinuxTitle")} tone="warning">
+                {t("general.autoMuteLinuxBody")}
+              </Notice>
+            ) : null}
           </div>
         </div>
       </SectionCard>

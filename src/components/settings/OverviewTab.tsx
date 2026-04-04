@@ -1,5 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { buildPromptPreview, formatHotkeyCombo, isLlmConfigured, isSttConfigured } from "../../lib/settingsFormatters";
+import {
+  buildPromptPreview,
+  formatHotkeyCombo,
+  getHotkeyAdvice,
+  isLlmConfigured,
+  isSttConfigured,
+} from "../../lib/settingsFormatters";
 import { useRecordingStore } from "../../stores/recordingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAppStore } from "../../stores/appStore";
@@ -22,6 +28,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
 
   const sttReady = isSttConfigured(settings);
   const llmReady = isLlmConfigured(settings);
+  const hotkeyAdvice = getHotkeyAdvice(settings.general.hotkey);
   const hasCustomPrompt =
     settings.prompt.user_instructions.trim().length > 0 ||
     settings.prompt.vocabulary.length > 0;
@@ -73,6 +80,11 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
           tone: "warning" as const,
           title: t("overview.permissions.microphoneTitle"),
           body: t("overview.permissions.linuxMicrophoneBody"),
+        },
+        {
+          tone: "warning" as const,
+          title: t("overview.permissions.hotkeyTitle"),
+          body: t("overview.permissions.linuxHotkeyBody"),
         },
         {
           tone: settings.general.output_mode === "auto_paste" ? ("warning" as const) : ("default" as const),
@@ -201,8 +213,8 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         <StatCard
           label={t("overview.stats.hotkey")}
           value={formatHotkeyCombo(settings.general.hotkey)}
-          hint={t(`general.${settings.general.hotkey.hotkey_type === "double_tap" ? "doubleTap" : settings.general.hotkey.hotkey_type === "combo" ? "combo" : settings.general.hotkey.hotkey_type === "hold" ? "hold" : "single"}`)}
-          tone="default"
+          hint={t(hotkeyAdvice.titleKey)}
+          tone={hotkeyAdvice.tone === "danger" ? "danger" : hotkeyAdvice.tone === "warning" ? "warning" : "accent"}
         />
         <StatCard
           label={t("overview.stats.vocabulary")}

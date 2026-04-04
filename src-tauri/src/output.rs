@@ -12,6 +12,17 @@ pub enum OutputError {
     Keyboard(String),
 }
 
+/// Describes how the text was actually delivered to the user.
+#[derive(Debug, Clone, PartialEq)]
+pub enum OutputOutcome {
+    /// Successfully pasted into the focused application.
+    Pasted,
+    /// Copied to clipboard (user chose clipboard-only mode).
+    CopiedToClipboard,
+    /// Paste simulation failed; text is still available in the clipboard.
+    PasteFailedCopiedToClipboard,
+}
+
 pub fn copy_to_clipboard(text: &str) -> Result<(), OutputError> {
     let mut clipboard = Clipboard::new().map_err(|e| OutputError::Clipboard(e.to_string()))?;
     clipboard
@@ -51,11 +62,12 @@ pub fn output_text(
     text: &str,
     mode: &OutputMode,
     clipboard_behavior: &ClipboardBehavior,
-) -> Result<(), OutputError> {
+) -> Result<OutputOutcome, OutputError> {
     match mode {
         OutputMode::ClipboardOnly => {
             copy_to_clipboard(text)?;
             log::info!("text copied to clipboard ({} chars)", text.len());
+            Ok(OutputOutcome::CopiedToClipboard)
         }
         OutputMode::AutoPaste => {
             // Always copy to clipboard first (needed for paste simulation)
@@ -64,23 +76,36 @@ pub fn output_text(
             match simulate_paste() {
                 Ok(_) => {
                     log::info!("text auto-pasted ({} chars)", text.len());
-                    // If behavior is OnlyOnPasteFail, clear clipboard after successful paste
+                    // If behavior is OnlyOnPasteFail, clear clipboard after successful paste.
+                    // Verify the clipboard still holds our text before clearing so we don't
+                    // accidentally wipe something the user copied in the meantime.
                     if *clipboard_behavior == ClipboardBehavior::OnlyOnPasteFail {
-                        std::thread::spawn(|| {
-                            std::thread::sleep(std::time::Duration::from_millis(300));
+                        let expected = text.to_string();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
                             if let Ok(mut cb) = Clipboard::new() {
-                                let _ = cb.clear();
-                                log::debug!("clipboard cleared after successful paste");
+                                let still_ours = cb
+                                    .get_text()
+                                    .map_or(false, |current| current == expected);
+                                if still_ours {
+                                    let _ = cb.clear();
+                                    log::debug!("clipboard cleared after successful paste");
+                                } else {
+                                    log::debug!(
+                                        "clipboard content changed since paste; skipping clear"
+                                    );
+                                }
                             }
                         });
                     }
+                    Ok(OutputOutcome::Pasted)
                 }
                 Err(e) => {
                     log::warn!("paste simulation failed: {e}, text remains in clipboard");
                     // Text is already in clipboard from the copy above
+                    Ok(OutputOutcome::PasteFailedCopiedToClipboard)
                 }
             }
         }
     }
-    Ok(())
 }

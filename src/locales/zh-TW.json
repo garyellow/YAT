@@ -18,7 +18,9 @@
     "transcribing": "轉錄中…",
     "polishing": "潤飾中…",
     "done": "完成",
+    "clipboardFallback": "已複製到剪貼簿（貼上失敗）",
     "error": "發生錯誤",
+    "busy": "處理中…",
     "loading": "載入中…"
   },
   "settings": {
@@ -30,8 +32,9 @@
     "sidebarPolish": "潤飾",
     "quickSummary": "快速摘要",
     "hotkeySummary": "目前熱鍵：{{key}}",
-    "outputAutoPasteSummary": "完成後會嘗試直接貼到目前游標位置。",
+    "outputAutoPasteSummary": "完成後會先嘗試直接貼到目前游標位置；若貼上失敗，結果仍會留在剪貼簿。",
     "outputClipboardSummary": "完成後只會複製到剪貼簿，適合保守工作流。",
+    "loadingSummary": "正在載入目前設定…",
     "groups": {
       "workspace": "工作台",
       "capture": "輸入與模型",
@@ -122,12 +125,13 @@
       "unknownTitle": "請手動確認目前平台權限",
       "macosMicrophoneBody": "如果第一次拒絕麥克風，請到「系統設定 → 隱私權與安全性 → 麥克風」重新開啟。",
       "macosAccessibilityBody": "若你要自動貼上，通常需要在「系統設定 → 隱私權與安全性 → 輔助使用」允許 YATL。",
-      "macosHotkeyBody": "某些 macOS 版本在背景監聽快捷鍵時，也可能需要重新授權或重開 App。",
+      "macosHotkeyBody": "macOS 的全域熱鍵同樣依賴『輔助使用』權限；若熱鍵突然失效，請重新確認授權並重開 YATL。",
       "windowsMicrophoneBody": "請到「設定 → 隱私權與安全性 → 麥克風」確認已允許桌面應用程式使用麥克風。",
       "windowsAutoPasteBody": "若目標 App 以系統管理員權限執行，而 YATL 沒有同等權限，自動貼上可能失敗；此時建議改用『僅複製』。",
       "windowsInstallBody": "若安裝或啟動時出現系統防護提示，可在確認來源可信後選擇繼續執行。",
       "linuxMicrophoneBody": "請確認桌面環境、套件格式或 portal 已允許麥克風存取。",
-      "linuxAutoPasteBody": "不同桌面環境對全域熱鍵與鍵盤模擬支援不一；若行為不穩，建議改為『僅複製』。",
+      "linuxHotkeyBody": "YATL 目前使用以 X11 為基礎的全域熱鍵監聽；在原生 Wayland 工作階段中，熱鍵可能完全無法觸發，除非桌面環境提供相容層。此外，Linux 版本在執行中也不會像 macOS / Windows 一樣把 Esc 從前景 App 手上攔下來。",
+      "linuxAutoPasteBody": "Linux 各桌面環境對鍵盤模擬支援差異很大；若行為不穩，建議改為『僅複製』。",
       "unknownBody": "如果錄音、熱鍵或貼上行為異常，請優先檢查麥克風、鍵盤監聽與輔助使用權限。"
     },
     "platformSummary": {
@@ -172,7 +176,6 @@
   },
   "general": {
     "hotkey": "快捷鍵",
-    "hotkeyType": "類型",
     "single": "單一按鍵",
     "doubleTap": "連按兩下",
     "combo": "組合鍵",
@@ -182,14 +185,29 @@
     "comboDesc": "需要修飾鍵，較不容易誤觸。",
     "holdDesc": "按住才錄音，放開就停止。",
     "key": "按鍵",
-    "keyHint": "建議使用容易按、但不會在一般輸入中頻繁誤觸的按鍵。",
+    "keyHint": "例如：RCtrl、RCmd、Alt、F8、Space、A。請使用支援的按鍵名稱。",
     "modifier": "修飾鍵",
-    "modifierHint": "常見如 Ctrl、Alt、Shift 或 Cmd。",
+    "modifierHint": "例如：Ctrl、Alt、Shift 或 Cmd。",
     "doubleTapInterval": "間隔",
     "doubleTapHint": "間隔越短越不容易誤觸，但也需要更快的連按節奏。",
     "hotkeyPreviewTitle": "操作預覽",
     "hotkeyPreview": "你將使用 {{hotkey}} 來觸發錄音。",
-    "hotkeyBehaviorHint": "如果你的工作經常需要快速切換焦點，建議優先使用組合鍵。",
+    "hotkeyBehaviorHint": "四種觸發模式都會保留。你現在可以先用 Alt 長按，之後也能改成單按、連按兩下或組合鍵；安全預設只改變新設定從哪裡開始，不會拿掉這些能力。",
+    "hotkeyRecommendedTitle": "建議配置",
+    "hotkeyRecommendedBody": "把 {{recommended}} 設成按住說話，是目前最安全的預設。誤觸率低，也最不容易干擾前景 App。",
+    "hotkeyComboTitle": "日常使用也很穩",
+    "hotkeyComboBody": "組合鍵是第二安全的選擇。在支援的平台上，YATL 能在辨識出組合後吃掉主鍵，降低把多餘字元送進前景 App 的機率。",
+    "hotkeyModifierHoldTitle": "支援，但請先在真實 App 裡測一下",
+    "hotkeyModifierHoldBody": "Alt / Ctrl / Cmd 這類修飾鍵的長按模式仍然支援，但它們比 {{recommended}} 更貼近系統與 App 原本的快捷鍵。你今天如果想先用 Alt 長按，之後還是可以把同一顆鍵改成單按或其他模式；只是上線前最好先在你真正常用的 App 裡試一輪。",
+    "hotkeyModifierRiskTitle": "高風險熱鍵",
+    "hotkeyModifierRiskBody": "單獨使用 Alt / Ctrl / Shift / Cmd 這類修飾鍵，可能在 YATL 判斷出你要觸發前，就先影響 App 選單、系統快捷鍵或焦點行為。建議改用 {{recommended}} 的按住說話，或改成組合鍵。",
+    "hotkeyTypingRiskTitle": "會搶走一般輸入的熱鍵",
+    "hotkeyTypingRiskBody": "把字母、Space、Tab 或 Enter 設成單獨熱鍵，等於把正常打字常用鍵保留給 YATL。除非你真的要這樣，否則不建議。",
+    "hotkeyCustomTitle": "請在真實工作流程裡測試",
+    "hotkeyCustomBody": "這組設定不是不能用，但最好到你真正常用的 App 裡試一次。最安全的仍然是 {{recommended}} 的按住說話，或你平常根本不會拿來打字的組合鍵。",
+    "useRecommendedHotkey": "改用 {{recommended}} 的按住說話",
+    "hotkeyWindowPauseTitle": "設定視窗安全機制",
+    "hotkeyWindowPauseBody": "當設定視窗取得焦點時，YATL 會自動暫停錄音熱鍵，避免你在編輯欄位時意外開始錄音。",
     "theme": "主題",
     "dark": "深色",
     "light": "淺色",
@@ -199,7 +217,6 @@
     "maxRecording": "最長錄音",
     "maxRecordingHint": "較短的上限可避免忘記停止；較長則適合長段講述。",
     "seconds": "秒",
-    "outputMode": "輸出方式",
     "autoPaste": "自動貼上",
     "autoPasteDesc": "最流暢，但需要目標 App 接受貼上模擬。",
     "clipboardOnly": "僅複製",
@@ -220,7 +237,8 @@
     "soundEffectsHint": "開始、結束與錯誤時給你一個不用看畫面的回饋。",
     "autoMute": "錄音時靜音",
     "autoMuteHint": "降低環境聲音回灌，但可能影響你一邊錄音一邊聽其他內容的流程。",
-    "desc": "設定應用程式行為與偏好",
+    "autoMuteLinuxTitle": "Linux 提醒",
+    "autoMuteLinuxBody": "目前這個版本在 Linux 上的自動靜音不會真的控制系統音量。YATL 仍可正常錄音，但不會幫你自動靜音或恢復系統聲音。",
     "sectionAppearance": "外觀",
     "sectionRecording": "錄音",
     "sectionOutput": "輸出",
@@ -241,8 +259,6 @@
     "advancedNote": "逾時與重試會改變等待感受。若你常在穩定網路下工作，可以把重試數壓低，讓失敗更快顯示。"
   },
   "stt": {
-    "title": "語音辨識設定",
-    "desc": "設定語音轉文字 API 連線",
     "baseUrl": "基礎網址",
     "baseUrlHint": "需要是 OpenAI 相容的根網址，YATL 會自動接上 /audio/transcriptions。",
     "apiKey": "API 金鑰",
@@ -271,8 +287,6 @@
     "hideKeyShort": "隱藏"
   },
   "llm": {
-    "title": "文字潤飾設定",
-    "desc": "設定文字潤飾 API 連線",
     "enabled": "啟用潤飾",
     "enabledHint": "關閉後會直接輸出 STT 結果，速度更快，也更少不可預期。",
     "enabledStateOn": "啟用中",
@@ -312,9 +326,7 @@
     "hideKeyShort": "隱藏"
   },
   "prompt": {
-    "title": "系統提示詞",
     "systemPrompt": "系統提示詞",
-    "desc": "自訂文字潤飾的行為與規則",
     "resetToDefault": "還原為預設",
     "userInstructions": "你的自訂指令",
     "userInstructionsDesc": "從最簡單的規則開始，例如「保留口語感」或「整理成條列」。大多數使用者其實不需要改到 system prompt。",
@@ -357,8 +369,6 @@
     }
   },
   "vocabulary": {
-    "title": "自訂詞彙",
-    "desc": "新增專有名詞的自動校正",
     "wrongForm": "錯誤寫法",
     "correctForm": "正確寫法",
     "addEntry": "新增",
@@ -378,7 +388,6 @@
     "confirmDelete": "確定刪除這筆修正規則？"
   },
   "history": {
-    "title": "歷史紀錄",
     "search": "搜尋",
     "searchPlaceholder": "搜尋轉錄紀錄…",
     "searchButton": "搜尋",
@@ -387,8 +396,6 @@
     "days": "天",
     "noHistory": "尚無紀錄",
     "emptyHint": "開始錄音後紀錄會顯示在這裡",
-    "raw": "原始文字",
-    "polished": "潤飾結果",
     "confirmDelete": "確定刪除此筆紀錄？",
     "clearOld": "清理過期",
     "summaryTitle": "這裡是你的輸出工作台",
@@ -421,6 +428,10 @@
     "delete": "刪除",
     "unsaved": "有未儲存的變更",
     "saveSuccess": "設定已儲存",
+    "saveFailed": "設定儲存失敗",
     "saveHint": "儲存變更 (Ctrl+S)"
+  },
+  "capsule": {
+    "escHint": "按 Esc 取消錄音"
   }
 }

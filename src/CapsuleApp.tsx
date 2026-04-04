@@ -34,10 +34,20 @@ const statusConfig: Record<
     dot: "bg-white",
     pulse: false,
   },
+  clipboardFallback: {
+    shell: "border-amber-300/30 bg-amber-500/85",
+    dot: "bg-white",
+    pulse: false,
+  },
   error: {
     shell: "border-rose-300/30 bg-rose-500/85",
     dot: "bg-white",
     pulse: false,
+  },
+  busy: {
+    shell: "border-amber-300/30 bg-amber-500/85",
+    dot: "bg-white",
+    pulse: true,
   },
 };
 
@@ -62,7 +72,11 @@ export default function CapsuleApp() {
     const unlisten = listen<{ status: RecordingStatus; text?: string }>(
       "pipeline-status",
       (e) => {
-        if (mounted) setStatus(e.payload.status);
+        // Ignore "busy" — that status is only for the sound effect (via
+        // recordingStore in the main window).  Showing it in the capsule
+        // would cause a confusing visual flicker during pipeline processing.
+        if (mounted && e.payload.status !== "busy")
+          setStatus(e.payload.status);
       }
     );
     const unlisten2 = listen<string>("capsule-status", (e) => {
@@ -128,13 +142,12 @@ export default function CapsuleApp() {
         </div>
 
         {status === "recording" && (
-          <button
-            onClick={() => invoke("cancel_recording")}
-            className="rounded-full border border-white/25 px-3 py-1 text-xs font-semibold text-white/90 transition-colors hover:bg-white/10"
-            aria-label={t("actions.cancel")}
+          <span
+            className="rounded-full border border-white/25 px-3 py-1 text-xs font-semibold text-white/60"
+            aria-label={t("capsule.escHint")}
           >
-            {t("actions.cancel")}
-          </button>
+            Esc
+          </span>
         )}
       </div>
     </div>

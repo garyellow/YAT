@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+/// Parse an RFC 3339 string into `DateTime<Utc>`, logging a warning on failure.
+fn parse_datetime(raw: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(raw)
+        .unwrap_or_else(|e| {
+            log::warn!("invalid datetime in history DB: {raw:?}: {e}");
+            DateTime::default()
+        })
+        .with_timezone(&Utc)
+}
+
 #[derive(Error, Debug)]
 pub enum HistoryError {
     #[error("database error: {0}")]
@@ -85,9 +95,7 @@ impl HistoryManager {
                         id: row.get(0)?,
                         raw_text: row.get(1)?,
                         polished_text: row.get(2)?,
-                        created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?)
-                            .unwrap_or_default()
-                            .with_timezone(&Utc),
+                        created_at: parse_datetime(&row.get::<_, String>(3)?),
                         duration_seconds: row.get(4)?,
                         status: row.get(5)?,
                     })
@@ -110,9 +118,7 @@ impl HistoryManager {
                 id: row.get(0)?,
                 raw_text: row.get(1)?,
                 polished_text: row.get(2)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?)
-                    .unwrap_or_default()
-                    .with_timezone(&Utc),
+                created_at: parse_datetime(&row.get::<_, String>(3)?),
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
             })
@@ -167,9 +173,7 @@ impl HistoryManager {
                 id: row.get(0)?,
                 raw_text: row.get(1)?,
                 polished_text: row.get(2)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?)
-                    .unwrap_or_default()
-                    .with_timezone(&Utc),
+                created_at: parse_datetime(&row.get::<_, String>(3)?),
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
             })

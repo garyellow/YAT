@@ -40,8 +40,12 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   };
 
   const resetToDefault = async () => {
-    const defaultPrompt = await invoke<string>("get_default_prompt");
-    updateSystemPrompt(defaultPrompt);
+    try {
+      const defaultPrompt = await invoke<string>("get_default_prompt");
+      updateSystemPrompt(defaultPrompt);
+    } catch (error) {
+      console.error("Failed to load default prompt:", error);
+    }
   };
 
   const instructionPresets = [

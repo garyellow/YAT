@@ -32,4 +32,8 @@ export const sounds = {
     setTimeout(() => beep(784, 0.15), 200);
   },
   error: () => beep(220, 0.3),
+  busy: () => {
+    beep(330, 0.08);
+    setTimeout(() => beep(330, 0.08), 100);
+  },
 };

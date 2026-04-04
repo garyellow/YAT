@@ -41,7 +41,7 @@ arboard = "3"
 enigo = "0.2"
 
 # Global keyboard hook (for single-key hotkeys like Alt)
-rdev = "0.5"
+rdev = { version = "0.5", features = ["unstable_grab"] }
 
 # Local history database
 rusqlite = { version = "0.32", features = ["bundled"] }
