@@ -26,6 +26,7 @@
     "single": "Single key",
     "doubleTap": "Double-tap",
     "combo": "Key combo",
+    "hold": "Hold to talk",
     "key": "Key",
     "modifier": "Modifier",
     "doubleTapInterval": "Interval",

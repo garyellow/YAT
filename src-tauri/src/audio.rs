@@ -2,6 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use parking_lot::Mutex;
 use std::io::Cursor;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -59,7 +60,7 @@ impl AudioRecorder {
     }
 
     /// Start recording from the specified device (or system default if None).
-    pub fn start(&mut self, device_name: Option<&str>) -> Result<(), AudioError> {
+    pub fn start(&mut self, device_name: Option<&str>, mic_level: Arc<AtomicU32>) -> Result<(), AudioError> {
         let host = cpal::default_host();
 
         let device = if let Some(name) = device_name {
@@ -101,20 +102,28 @@ impl AudioRecorder {
         };
 
         let stream = match config.sample_format() {
-            cpal::SampleFormat::F32 => device
+            cpal::SampleFormat::F32 => {
+                let mic_level_f32 = Arc::clone(&mic_level);
+                device
                 .build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &cpal::InputCallbackInfo| {
                         if let Some(ref mut state) = *recording.lock() {
                             state.samples.extend_from_slice(data);
                         }
+                        if !data.is_empty() {
+                            let rms = (data.iter().map(|&s| s * s).sum::<f32>() / data.len() as f32).sqrt();
+                            mic_level_f32.store(rms.to_bits(), Ordering::Relaxed);
+                        }
                     },
                     err_fn,
                     None,
                 )
-                .map_err(|e| AudioError::BuildStream(e.to_string()))?,
+                .map_err(|e| AudioError::BuildStream(e.to_string()))?
+            }
             cpal::SampleFormat::I16 => {
                 let recording = Arc::clone(&self.recording);
+                let mic_level_i16 = Arc::clone(&mic_level);
                 device
                     .build_input_stream(
                         &config.into(),
@@ -124,6 +133,13 @@ impl AudioRecorder {
                                     .samples
                                     .extend(data.iter().map(|&s| s as f32 / i16::MAX as f32));
                             }
+                            if !data.is_empty() {
+                                let rms = (data.iter().map(|&s| {
+                                    let f = s as f32 / i16::MAX as f32;
+                                    f * f
+                                }).sum::<f32>() / data.len() as f32).sqrt();
+                                mic_level_i16.store(rms.to_bits(), Ordering::Relaxed);
+                            }
                         },
                         err_fn,
                         None,
@@ -132,6 +148,7 @@ impl AudioRecorder {
             }
             cpal::SampleFormat::U16 => {
                 let recording = Arc::clone(&self.recording);
+                let mic_level_u16 = Arc::clone(&mic_level);
                 device
                     .build_input_stream(
                         &config.into(),
@@ -141,6 +158,13 @@ impl AudioRecorder {
                                     data.iter()
                                         .map(|&s| (s as f32 / u16::MAX as f32) * 2.0 - 1.0),
                                 );
+                            }
+                            if !data.is_empty() {
+                                let rms = (data.iter().map(|&s| {
+                                    let f = (s as f32 / u16::MAX as f32) * 2.0 - 1.0;
+                                    f * f
+                                }).sum::<f32>() / data.len() as f32).sqrt();
+                                mic_level_u16.store(rms.to_bits(), Ordering::Relaxed);
                             }
                         },
                         err_fn,

@@ -17,23 +17,26 @@ const statusConfig: Record<
 
 export default function CapsuleApp() {
   const [status, setStatus] = useState<RecordingStatus>("idle");
-  const [, setText] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [micLevel, setMicLevel] = useState(0);
 
   useEffect(() => {
     const unlisten = listen<{ status: RecordingStatus; text?: string }>(
       "pipeline-status",
       (e) => {
         setStatus(e.payload.status);
-        if (e.payload.text) setText(e.payload.text);
       }
     );
     const unlisten2 = listen<string>("capsule-status", (e) => {
       setStatus(e.payload as RecordingStatus);
     });
+    const unlisten3 = listen<number>("mic-level", (e) => {
+      setMicLevel(e.payload);
+    });
     return () => {
       unlisten.then((f) => f());
       unlisten2.then((f) => f());
+      unlisten3.then((f) => f());
     };
   }, []);
 
@@ -60,6 +63,12 @@ export default function CapsuleApp() {
         <span className="text-base">{cfg.label}</span>
         {status === "recording" && (
           <>
+            <div className="w-10 h-3 rounded-sm bg-white/20 overflow-hidden">
+              <div
+                className="h-full rounded-sm bg-green-300 transition-[width] duration-100"
+                style={{ width: `${Math.min(micLevel * 400, 100)}%` }}
+              />
+            </div>
             <span className="tabular-nums text-xs opacity-80">
               {formatTime(elapsed)}
             </span>

@@ -16,7 +16,7 @@ export interface LlmConfig {
 }
 
 export interface HotkeyConfig {
-  hotkey_type: "single" | "double_tap" | "combo";
+  hotkey_type: "single" | "double_tap" | "combo" | "hold";
   key: string;
   modifier: string | null;
   double_tap_interval_ms: number;

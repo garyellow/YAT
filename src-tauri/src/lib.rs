@@ -9,6 +9,7 @@ mod stt;
 mod volume;
 
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -27,6 +28,7 @@ pub struct AppState {
     pub settings: Mutex<AppSettings>,
     pub history: Mutex<HistoryManager>,
     pub hotkey_settings: Arc<Mutex<HotkeySettings>>,
+    pub mic_level: Arc<AtomicU32>,
 }
 
 // ── Tauri Commands ──────────────────────────────────────────────────
@@ -120,10 +122,11 @@ async fn toggle_recording(
             }
         }
 
+        let mic_level = Arc::clone(&state.mic_level);
         state
             .recorder
             .lock()
-            .start(device_name.as_deref())
+            .start(device_name.as_deref(), mic_level)
             .map_err(|e| {
                 // Restore system audio if recording failed to start
                 if auto_mute {
@@ -152,6 +155,20 @@ async fn toggle_recording(
             }
         });
 
+        // Mic level emitter
+        let app_mic = app.clone();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let state = app_mic.state::<AppState>();
+                if !state.recorder.lock().is_recording() {
+                    break;
+                }
+                let level = f32::from_bits(state.mic_level.load(Ordering::Relaxed));
+                app_mic.emit("mic-level", level).ok();
+            }
+        });
+
         Ok("recording".into())
     }
 }
@@ -161,6 +178,14 @@ async fn cancel_recording(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    // Restore system audio if auto-mute was enabled
+    let auto_mute = state.settings.lock().general.auto_mute;
+    if auto_mute {
+        if let Err(e) = volume::restore_system() {
+            log::warn!("auto-mute restore on cancel failed: {e}");
+        }
+    }
+
     state.recorder.lock().cancel();
     app.emit("pipeline-status", pipeline::PipelineStatus {
         status: "idle".into(),
@@ -196,6 +221,7 @@ async fn save_settings(
             config::HotkeyType::Single => hotkey::HotkeyType::Single,
             config::HotkeyType::DoubleTap => hotkey::HotkeyType::DoubleTap,
             config::HotkeyType::Combo => hotkey::HotkeyType::Combo,
+            config::HotkeyType::Hold => hotkey::HotkeyType::Hold,
         };
         let mut hs = state.hotkey_settings.lock();
         hs.hotkey_type = hotkey_type;
@@ -460,6 +486,7 @@ pub fn run() {
                 config::HotkeyType::Single => hotkey::HotkeyType::Single,
                 config::HotkeyType::DoubleTap => hotkey::HotkeyType::DoubleTap,
                 config::HotkeyType::Combo => hotkey::HotkeyType::Combo,
+                config::HotkeyType::Hold => hotkey::HotkeyType::Hold,
             };
             let hotkey_settings = Arc::new(Mutex::new(HotkeySettings {
                 hotkey_type,
@@ -474,6 +501,7 @@ pub fn run() {
                 settings: Mutex::new(settings),
                 history: Mutex::new(history),
                 hotkey_settings: Arc::clone(&hotkey_settings),
+                mic_level: Arc::new(AtomicU32::new(0)),
             };
             app.manage(state);
 

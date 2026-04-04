@@ -42,7 +42,7 @@ export default function GeneralTab() {
               update({
                 hotkey: {
                   ...g.hotkey,
-                  hotkey_type: e.target.value as "single" | "double_tap" | "combo",
+                  hotkey_type: e.target.value as "single" | "double_tap" | "combo" | "hold",
                 },
               })
             }
@@ -51,6 +51,7 @@ export default function GeneralTab() {
             <option value="single">{t("general.single")}</option>
             <option value="double_tap">{t("general.doubleTap")}</option>
             <option value="combo">{t("general.combo")}</option>
+            <option value="hold">{t("general.hold")}</option>
           </select>
         </label>
 

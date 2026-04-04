@@ -15,6 +15,7 @@ pub enum HotkeyType {
     Single,
     DoubleTap,
     Combo,
+    Hold,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,7 @@ struct HotkeyState {
     other_key_pressed: bool,
     last_trigger_time: Option<Instant>,
     modifier_held: bool,
+    hold_active: bool,
 }
 
 /// Parse a string key name into an `rdev::Key`.
@@ -120,6 +122,7 @@ where
             other_key_pressed: false,
             last_trigger_time: None,
             modifier_held: false,
+            hold_active: false,
         }));
 
         let callback = move |event: Event| {
@@ -151,6 +154,12 @@ where
                             } else if is_same_key(&key, &settings.key) && st.modifier_held {
                                 on_trigger();
                             }
+                        }
+                    }
+                    HotkeyType::Hold => {
+                        if is_same_key(&key, &settings.key) && !st.hold_active {
+                            st.hold_active = true;
+                            on_trigger();
                         }
                     }
                 },
@@ -189,6 +198,12 @@ where
                             if is_same_key(&key, modifier) {
                                 st.modifier_held = false;
                             }
+                        }
+                    }
+                    HotkeyType::Hold => {
+                        if is_same_key(&key, &settings.key) && st.hold_active {
+                            st.hold_active = false;
+                            on_trigger();
                         }
                     }
                 },

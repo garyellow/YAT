@@ -26,6 +26,7 @@
     "single": "單一按鍵",
     "doubleTap": "連按兩下",
     "combo": "組合鍵",
+    "hold": "按住說話",
     "key": "按鍵",
     "modifier": "修飾鍵",
     "doubleTapInterval": "間隔",

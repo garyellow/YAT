@@ -47,6 +47,7 @@ pub enum HotkeyType {
     Single,
     DoubleTap,
     Combo,
+    Hold,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
