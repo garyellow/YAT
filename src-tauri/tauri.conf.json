@@ -1,7 +1,7 @@
 {
   "productName": "YAT",
   "version": "0.1.0",
-  "identifier": "com.YAT.app",
+  "identifier": "com.garyellow.yat",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
