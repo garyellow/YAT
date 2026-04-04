@@ -1,0 +1,113 @@
+{
+  "app": {
+    "name": "YATL",
+    "desc": "語音轉文字輸入工具"
+  },
+  "tabs": {
+    "general": "一般設定",
+    "stt": "語音辨識",
+    "llm": "文字潤飾",
+    "prompt": "提示詞",
+    "vocabulary": "詞彙表",
+    "history": "歷史紀錄"
+  },
+  "status": {
+    "idle": "待命中",
+    "recording": "錄音中…",
+    "transcribing": "轉錄中…",
+    "polishing": "潤飾中…",
+    "done": "完成",
+    "error": "發生錯誤",
+    "loading": "載入中…"
+  },
+  "general": {
+    "hotkey": "快捷鍵",
+    "hotkeyType": "類型",
+    "single": "單一按鍵",
+    "doubleTap": "連按兩下",
+    "combo": "組合鍵",
+    "key": "按鍵",
+    "modifier": "修飾鍵",
+    "doubleTapInterval": "間隔",
+    "theme": "主題",
+    "dark": "深色",
+    "light": "淺色",
+    "system": "跟隨系統",
+    "autoStart": "開機自動啟動",
+    "maxRecording": "最長錄音",
+    "seconds": "秒",
+    "outputMode": "輸出方式",
+    "autoPaste": "自動貼上",
+    "clipboardOnly": "僅複製",
+    "clipboardBehavior": "剪貼簿",
+    "alwaysCopy": "一律複製",
+    "onPasteFail": "失敗才複製",
+    "language": "介面語言",
+    "timeout": "逾時時間",
+    "ms": "毫秒",
+    "maxRetries": "重試次數",
+    "microphoneDevice": "麥克風裝置",
+    "defaultDevice": "系統預設",
+    "refreshDevices": "重新整理",
+    "soundEffects": "音效提示",
+    "autoMute": "錄音時靜音"
+  },
+  "stt": {
+    "title": "語音辨識設定",
+    "baseUrl": "基礎網址",
+    "apiKey": "API 金鑰",
+    "model": "模型名稱",
+    "language": "辨識語言",
+    "languageHint": "ISO 639-1（如 en、zh、ja）"
+  },
+  "llm": {
+    "title": "文字潤飾設定",
+    "enabled": "啟用潤飾",
+    "baseUrl": "基礎網址",
+    "apiKey": "API 金鑰",
+    "model": "模型名稱",
+    "test": "測試",
+    "testing": "測試中…",
+    "connected": "連線成功",
+    "failed": "連線失敗"
+  },
+  "prompt": {
+    "title": "系統提示詞",
+    "systemPrompt": "系統提示詞",
+    "desc": "自訂文字潤飾的行為與規則",
+    "resetToDefault": "還原為預設"
+  },
+  "vocabulary": {
+    "title": "自訂詞彙",
+    "desc": "新增專有名詞的自動校正",
+    "wrongForm": "錯誤寫法",
+    "correctForm": "正確寫法",
+    "addEntry": "新增",
+    "noEntries": "尚未新增任何項目"
+  },
+  "history": {
+    "title": "歷史紀錄",
+    "search": "搜尋",
+    "searchPlaceholder": "搜尋轉錄紀錄…",
+    "retention": "保留期限",
+    "hours": "小時",
+    "days": "天",
+    "noHistory": "尚無紀錄",
+    "raw": "原始文字",
+    "polished": "潤飾結果",
+    "confirmDelete": "確定刪除此筆紀錄？",
+    "clearOld": "清理過期"
+  },
+  "actions": {
+    "save": "儲存",
+    "saved": "已儲存",
+    "cancel": "取消",
+    "close": "關閉",
+    "testConnection": "測試連線",
+    "testing": "測試中…",
+    "connected": "連線成功",
+    "copy": "複製",
+    "retry": "重試",
+    "delete": "刪除"
+  }
+}

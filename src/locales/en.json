@@ -1,0 +1,113 @@
+{
+  "app": {
+    "name": "YATL",
+    "desc": "Voice-to-text input tool"
+  },
+  "tabs": {
+    "general": "General",
+    "stt": "Speech",
+    "llm": "Polish",
+    "prompt": "Prompt",
+    "vocabulary": "Terms",
+    "history": "History"
+  },
+  "status": {
+    "idle": "Ready",
+    "recording": "Recording…",
+    "transcribing": "Transcribing…",
+    "polishing": "Polishing…",
+    "done": "Done",
+    "error": "Error",
+    "loading": "Loading…"
+  },
+  "general": {
+    "hotkey": "Hotkey",
+    "hotkeyType": "Type",
+    "single": "Single key",
+    "doubleTap": "Double-tap",
+    "combo": "Key combo",
+    "key": "Key",
+    "modifier": "Modifier",
+    "doubleTapInterval": "Interval",
+    "theme": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System",
+    "autoStart": "Launch at login",
+    "maxRecording": "Max duration",
+    "seconds": "sec",
+    "outputMode": "Output mode",
+    "autoPaste": "Auto-paste",
+    "clipboardOnly": "Clipboard only",
+    "clipboardBehavior": "Clipboard",
+    "alwaysCopy": "Always copy",
+    "onPasteFail": "Copy on fail",
+    "language": "Language",
+    "timeout": "Timeout",
+    "ms": "ms",
+    "maxRetries": "Max retries",
+    "microphoneDevice": "Microphone",
+    "defaultDevice": "System default",
+    "refreshDevices": "Refresh",
+    "soundEffects": "Sound effects",
+    "autoMute": "Mute during recording"
+  },
+  "stt": {
+    "title": "Speech Recognition",
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "model": "Model",
+    "language": "Language",
+    "languageHint": "ISO 639-1 (e.g. en, zh, ja)"
+  },
+  "llm": {
+    "title": "Text Polishing",
+    "enabled": "Enable",
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "model": "Model",
+    "test": "Test",
+    "testing": "Testing…",
+    "connected": "Connected",
+    "failed": "Failed"
+  },
+  "prompt": {
+    "title": "System Prompt",
+    "systemPrompt": "System Prompt",
+    "desc": "Customise the text polishing behaviour",
+    "resetToDefault": "Reset to default"
+  },
+  "vocabulary": {
+    "title": "Custom Terms",
+    "desc": "Add corrections for proper nouns",
+    "wrongForm": "Wrong form",
+    "correctForm": "Correct form",
+    "addEntry": "Add",
+    "noEntries": "No entries yet"
+  },
+  "history": {
+    "title": "History",
+    "search": "Search",
+    "searchPlaceholder": "Search transcriptions…",
+    "retention": "Keep for",
+    "hours": "h",
+    "days": "d",
+    "noHistory": "No records yet",
+    "raw": "Raw",
+    "polished": "Polished",
+    "confirmDelete": "Delete this entry?",
+    "clearOld": "Purge old"
+  },
+  "actions": {
+    "save": "Save",
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "close": "Close",
+    "testConnection": "Test connection",
+    "testing": "Testing…",
+    "connected": "Connected",
+    "copy": "Copy",
+    "retry": "Retry",
+    "delete": "Delete"
+  }
+}

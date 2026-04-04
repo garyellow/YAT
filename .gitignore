@@ -1,0 +1,32 @@
+# Build artifacts
+/target/
+/dist/
+/node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Tauri build
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+
+# Logs
+*.log
+
+# Debug outputs
+build-err.txt
+cargo-*.txt

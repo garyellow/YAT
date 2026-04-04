@@ -1,0 +1,23 @@
+{
+  "identifier": "default",
+  "description": "Default capability for YATL",
+  "windows": ["main", "capsule"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-create",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-center",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-set-decorations",
+    "store:default",
+    "autostart:default",
+    "shell:default",
+    "log:default"
+  ]
+}
