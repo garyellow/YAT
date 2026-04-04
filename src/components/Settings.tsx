@@ -83,6 +83,7 @@ export default function Settings() {
   const { t } = useTranslation();
   const [active, setActive] = useState<SettingsTab>("overview");
   const [toastVisible, setToastVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
   const saved = useSettingsStore((s) => s.saved);
@@ -129,23 +130,25 @@ export default function Settings() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (dirty && settings) {
+        if (!isSaving && dirty && settings) {
+          setIsSaving(true);
           void saveSettings(settings).then(() => {
             setToastVisible(true);
-          });
+          }).finally(() => setIsSaving(false));
         }
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dirty, saveSettings, settings]);
+  }, [dirty, isSaving, saveSettings, settings]);
 
   const handleSave = () => {
-    if (settings && dirty) {
+    if (settings && dirty && !isSaving) {
+      setIsSaving(true);
       void saveSettings(settings).then(() => {
         setToastVisible(true);
-      });
+      }).finally(() => setIsSaving(false));
     }
   };
 

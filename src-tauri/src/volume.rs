@@ -1,15 +1,12 @@
 /// System volume control for auto-mute during recording.
 ///
-/// Saves the previous mute state before muting, and restores it after recording.
-
-use std::sync::atomic::{AtomicBool, Ordering};
-
-static WAS_MUTED: AtomicBool = AtomicBool::new(false);
+/// `mute_system()` returns whether audio was already muted so the caller can
+/// pass this flag back to `restore_system()`, avoiding global state.
 
 // ── macOS implementation ────────────────────────────────────────────
 
 #[cfg(target_os = "macos")]
-pub fn mute_system() -> Result<(), String> {
+pub fn mute_system() -> Result<bool, String> {
     use std::process::Command;
 
     // Save current mute state
@@ -19,7 +16,6 @@ pub fn mute_system() -> Result<(), String> {
         .map_err(|e| format!("failed to query mute state: {e}"))?;
 
     let was_muted = String::from_utf8_lossy(&output.stdout).trim() == "true";
-    WAS_MUTED.store(was_muted, Ordering::Relaxed);
 
     // Mute system audio
     Command::new("osascript")
@@ -28,14 +24,13 @@ pub fn mute_system() -> Result<(), String> {
         .map_err(|e| format!("failed to mute system: {e}"))?;
 
     log::info!("system audio muted (was_muted={was_muted})");
-    Ok(())
+    Ok(was_muted)
 }
 
 #[cfg(target_os = "macos")]
-pub fn restore_system() -> Result<(), String> {
+pub fn restore_system(was_muted: bool) -> Result<(), String> {
     use std::process::Command;
 
-    let was_muted = WAS_MUTED.load(Ordering::Relaxed);
     if !was_muted {
         Command::new("osascript")
             .args(["-e", "set volume output muted false"])
@@ -51,7 +46,7 @@ pub fn restore_system() -> Result<(), String> {
 // ── Windows implementation ──────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-pub fn mute_system() -> Result<(), String> {
+pub fn mute_system() -> Result<bool, String> {
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
@@ -76,19 +71,18 @@ pub fn mute_system() -> Result<(), String> {
             .map_err(|e| format!("Activate: {e}"))?;
 
         let was_muted = volume.GetMute().map_err(|e| format!("GetMute: {e}"))?.as_bool();
-        WAS_MUTED.store(was_muted, Ordering::Relaxed);
 
         volume
             .SetMute(true, std::ptr::null())
             .map_err(|e| format!("SetMute: {e}"))?;
 
         log::info!("system audio muted (was_muted={was_muted})");
-        Ok(())
+        Ok(was_muted)
     }
 }
 
 #[cfg(target_os = "windows")]
-pub fn restore_system() -> Result<(), String> {
+pub fn restore_system(was_muted: bool) -> Result<(), String> {
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
@@ -97,7 +91,6 @@ pub fn restore_system() -> Result<(), String> {
         CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
     };
 
-    let was_muted = WAS_MUTED.load(Ordering::Relaxed);
     if was_muted {
         log::info!("system was already muted, not restoring");
         return Ok(());
@@ -130,12 +123,12 @@ pub fn restore_system() -> Result<(), String> {
 // ── Linux fallback (no-op) ──────────────────────────────────────────
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-pub fn mute_system() -> Result<(), String> {
+pub fn mute_system() -> Result<bool, String> {
     log::warn!("auto-mute not supported on this platform");
-    Ok(())
+    Ok(false)
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-pub fn restore_system() -> Result<(), String> {
+pub fn restore_system(_was_muted: bool) -> Result<(), String> {
     Ok(())
 }

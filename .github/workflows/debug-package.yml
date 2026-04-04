@@ -1,6 +1,6 @@
 name: Debug Package
 
-run-name: Debug package (${{ inputs.package_set }})
+run-name: "Debug package (${{ inputs.package_set }})"
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ on:
           - '7'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.package_set }}
+  group: "${{ github.workflow }}-${{ github.ref }}-${{ inputs.package_set }}"
   cancel-in-progress: true
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
   prepare-matrix:
     runs-on: ubuntu-22.04
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix: "${{ steps.set-matrix.outputs.matrix }}"
     steps:
       - name: Select debug package matrix
         id: set-matrix
@@ -47,12 +47,12 @@ jobs:
           fi
 
   build-debug:
-    name: Build ${{ matrix.artifact_name }}
+    name: "Build ${{ matrix.artifact_name }}"
     needs: prepare-matrix
-    runs-on: ${{ matrix.platform }}
+    runs-on: "${{ matrix.platform }}"
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+      matrix: "${{ fromJson(needs.prepare-matrix.outputs.matrix) }}"
 
     steps:
       - uses: actions/checkout@v6
@@ -72,7 +72,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: "${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}"
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -85,14 +85,14 @@ jobs:
       - name: Build debug bundles
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
-          args: ${{ matrix.args }}
+          args: "${{ matrix.args }}"
 
       - name: Upload debug artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          name: "${{ matrix.artifact_name }}"
+          path: "${{ matrix.artifact_path }}"
           if-no-files-found: error
-          retention-days: ${{ inputs.retention_days }}
+          retention-days: "${{ inputs.retention_days }}"

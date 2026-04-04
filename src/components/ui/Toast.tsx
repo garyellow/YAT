@@ -11,13 +11,17 @@ export default function Toast({ message, visible, onDone, duration = 2000 }: Toa
   const [phase, setPhase] = useState<"enter" | "exit" | "hidden">("hidden");
 
   useEffect(() => {
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     if (visible) {
       setPhase("enter");
       const timer = setTimeout(() => {
         setPhase("exit");
-        setTimeout(onDone, 200);
+        fadeTimer = setTimeout(onDone, 200);
       }, duration);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (fadeTimer) clearTimeout(fadeTimer);
+      };
     } else {
       setPhase("hidden");
     }

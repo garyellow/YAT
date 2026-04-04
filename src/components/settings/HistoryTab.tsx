@@ -40,6 +40,8 @@ export default function HistoryTab() {
     void navigator.clipboard.writeText(text).then(() => {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
+    }).catch((e) => {
+      console.error("clipboard write failed:", e);
     });
   };
 

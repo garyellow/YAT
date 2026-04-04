@@ -58,19 +58,21 @@ export default function CapsuleApp() {
   }, [i18n]);
 
   useEffect(() => {
+    let mounted = true;
     const unlisten = listen<{ status: RecordingStatus; text?: string }>(
       "pipeline-status",
       (e) => {
-        setStatus(e.payload.status);
+        if (mounted) setStatus(e.payload.status);
       }
     );
     const unlisten2 = listen<string>("capsule-status", (e) => {
-      setStatus(e.payload as RecordingStatus);
+      if (mounted) setStatus(e.payload as RecordingStatus);
     });
     const unlisten3 = listen<number>("mic-level", (e) => {
-      setMicLevel(e.payload);
+      if (mounted) setMicLevel(e.payload);
     });
     return () => {
+      mounted = false;
       unlisten.then((f) => f());
       unlisten2.then((f) => f());
       unlisten3.then((f) => f());

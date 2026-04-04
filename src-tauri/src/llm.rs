@@ -88,7 +88,7 @@ pub async fn polish(
         AUTHORIZATION,
         format!("Bearer {}", config.api_key)
             .parse()
-            .map_err(|e: reqwest::header::InvalidHeaderValue| LlmError::Request(e.to_string()))?,
+            .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
 

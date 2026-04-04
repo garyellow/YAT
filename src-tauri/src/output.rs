@@ -66,8 +66,13 @@ pub fn output_text(
                     log::info!("text auto-pasted ({} chars)", text.len());
                     // If behavior is OnlyOnPasteFail, clear clipboard after successful paste
                     if *clipboard_behavior == ClipboardBehavior::OnlyOnPasteFail {
-                        // Restore clipboard after a short delay
-                        // (not clearing immediately to avoid race conditions)
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(300));
+                            if let Ok(mut cb) = Clipboard::new() {
+                                let _ = cb.clear();
+                                log::debug!("clipboard cleared after successful paste");
+                            }
+                        });
                     }
                 }
                 Err(e) => {

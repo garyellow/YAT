@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use reqwest::multipart;
 use serde::Deserialize;
 use thiserror::Error;
@@ -36,6 +37,10 @@ pub async fn transcribe(
         .build()
         .map_err(|e| SttError::Request(e.to_string()))?;
 
+    // Wrap in Bytes so retry loops only bump a refcount instead of
+    // cloning the full audio buffer (which can be several MB).
+    let shared_wav = Bytes::from(wav_data);
+
     let mut last_error = SttError::Request("no attempts made".into());
 
     for attempt in 0..=max_retries {
@@ -45,10 +50,11 @@ pub async fn transcribe(
             log::info!("STT retry attempt {attempt}/{max_retries}");
         }
 
-        let file_part = multipart::Part::bytes(wav_data.clone())
-            .file_name("recording.wav")
-            .mime_str("audio/wav")
-            .map_err(|e| SttError::Request(e.to_string()))?;
+        let file_part =
+            multipart::Part::stream_with_length(shared_wav.clone(), shared_wav.len() as u64)
+                .file_name("recording.wav")
+                .mime_str("audio/wav")
+                .map_err(|e| SttError::Request(e.to_string()))?;
 
         let mut form = multipart::Form::new()
             .text("model", config.model.clone())

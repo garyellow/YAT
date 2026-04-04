@@ -70,11 +70,13 @@ impl HistoryManager {
 
         if let Some(q) = query {
             if !q.is_empty() {
-                let pattern = format!("%{q}%");
+                // Escape SQL LIKE special characters
+                let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+                let pattern = format!("%{escaped}%");
                 let mut stmt = self.conn.prepare(
                     "SELECT id, raw_text, polished_text, created_at, duration_seconds, status
                      FROM history
-                     WHERE raw_text LIKE ?1 OR polished_text LIKE ?1
+                     WHERE raw_text LIKE ?1 ESCAPE '\\' OR polished_text LIKE ?1 ESCAPE '\\'
                      ORDER BY created_at DESC
                      LIMIT ?2",
                 )?;

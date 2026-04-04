@@ -2,13 +2,6 @@ use parking_lot::Mutex;
 use rdev::{listen, Event, EventType, Key};
 use std::sync::Arc;
 use std::time::Instant;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum HotkeyError {
-    #[error("failed to start listener: {0}")]
-    ListenerFailed(String),
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HotkeyType {
@@ -94,20 +87,6 @@ fn is_same_key(a: &Key, b: &Key) -> bool {
         (Key::MetaRight, Key::MetaLeft) | (Key::MetaRight, Key::MetaRight) => true,
         (a, b) => a == b,
     }
-}
-
-fn is_modifier(key: &Key) -> bool {
-    matches!(
-        key,
-        Key::Alt
-            | Key::AltGr
-            | Key::ControlLeft
-            | Key::ControlRight
-            | Key::ShiftLeft
-            | Key::ShiftRight
-            | Key::MetaLeft
-            | Key::MetaRight
-    )
 }
 
 /// Start a global keyboard listener on a background thread.

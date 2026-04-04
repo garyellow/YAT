@@ -31,6 +31,8 @@ pub struct AppState {
     pub history: Mutex<HistoryManager>,
     pub hotkey_settings: Arc<Mutex<HotkeySettings>>,
     pub mic_level: Arc<AtomicU32>,
+    /// Tracks whether system audio was already muted before we auto-muted it.
+    pub was_muted: Mutex<bool>,
 }
 
 #[derive(Serialize)]
@@ -67,7 +69,8 @@ async fn toggle_recording(
 
         // Restore system audio after recording stops
         if auto_mute {
-            if let Err(e) = volume::restore_system() {
+            let was_muted = *state.was_muted.lock();
+            if let Err(e) = volume::restore_system(was_muted) {
                 log::warn!("auto-mute restore failed: {e}");
             }
         }
@@ -91,15 +94,18 @@ async fn toggle_recording(
 
         match result {
             Ok(pr) => {
-                let entry = HistoryEntry {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    raw_text: pr.raw_text.clone(),
-                    polished_text: pr.polished_text.clone(),
-                    created_at: chrono::Utc::now(),
-                    duration_seconds: pr.duration_seconds,
-                    status: "success".into(),
-                };
-                state.history.lock().insert(&entry).ok();
+                // Skip history for empty transcriptions (e.g. silence)
+                if !pr.raw_text.is_empty() {
+                    let entry = HistoryEntry {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        raw_text: pr.raw_text.clone(),
+                        polished_text: pr.polished_text.clone(),
+                        created_at: chrono::Utc::now(),
+                        duration_seconds: pr.duration_seconds,
+                        status: "success".into(),
+                    };
+                    state.history.lock().insert(&entry).ok();
+                }
                 Ok(pr.polished_text.unwrap_or(pr.raw_text))
             }
             Err(e) => {
@@ -124,8 +130,9 @@ async fn toggle_recording(
 
         // Auto-mute system audio if enabled
         if auto_mute {
-            if let Err(e) = volume::mute_system() {
-                log::warn!("auto-mute failed: {e}");
+            match volume::mute_system() {
+                Ok(was_muted) => *state.was_muted.lock() = was_muted,
+                Err(e) => log::warn!("auto-mute failed: {e}"),
             }
         }
 
@@ -137,7 +144,8 @@ async fn toggle_recording(
             .map_err(|e| {
                 // Restore system audio if recording failed to start
                 if auto_mute {
-                    volume::restore_system().ok();
+                    let was_muted = *state.was_muted.lock();
+                    volume::restore_system(was_muted).ok();
                 }
                 e.to_string()
             })?;
@@ -152,7 +160,6 @@ async fn toggle_recording(
             let state = app_clone.state::<AppState>();
             if state.recorder.lock().is_recording() {
                 log::info!("auto-stopping after {max_secs}s");
-                // Directly invoke stop logic instead of calling async toggle_recording
                 tauri::async_runtime::block_on(async {
                     match toggle_recording(app_clone.state::<AppState>(), app_clone.clone()).await {
                         Ok(_) => log::info!("auto-stopped recording"),
@@ -188,7 +195,8 @@ async fn cancel_recording(
     // Restore system audio if auto-mute was enabled
     let auto_mute = state.settings.lock().general.auto_mute;
     if auto_mute {
-        if let Err(e) = volume::restore_system() {
+        let was_muted = *state.was_muted.lock();
+        if let Err(e) = volume::restore_system(was_muted) {
             log::warn!("auto-mute restore on cancel failed: {e}");
         }
     }
@@ -546,6 +554,7 @@ pub fn run() {
                 history: Mutex::new(history),
                 hotkey_settings: Arc::clone(&hotkey_settings),
                 mic_level: Arc::new(AtomicU32::new(0)),
+                was_muted: Mutex::new(false),
             };
             app.manage(state);
 

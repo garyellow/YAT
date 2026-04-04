@@ -27,9 +27,18 @@ struct RecordingState {
 }
 
 /// Wrapper to make cpal::Stream Send.
-/// cpal marks Stream as !Send conservatively, but on desktop (WASAPI/CoreAudio)
-/// dropping or pausing from another thread is fine as long as access is serialised.
+///
+/// # Safety
+///
+/// `cpal::Stream` is `!Send` as a conservative default across all backends.
+/// On the desktop backends we target — WASAPI (Windows), CoreAudio (macOS),
+/// and ALSA (Linux) — moving the stream handle between threads is safe as long
+/// as access is serialised.  The `Mutex<AudioRecorder>` in `AppState` provides
+/// that serialisation: only one thread touches the stream at a time.
+#[allow(dead_code)]
 struct SendStream(cpal::Stream);
+
+// SAFETY: see doc-comment above. Only valid for desktop audio backends.
 unsafe impl Send for SendStream {}
 
 pub struct AudioRecorder {
