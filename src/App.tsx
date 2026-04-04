@@ -66,7 +66,7 @@ export default function App() {
         <div className="app-loading-orb" aria-hidden="true" />
         <div className="space-y-2 text-center">
           <p className="text-sm font-semibold tracking-[0.18em] text-primary/80 uppercase">
-            YATL
+            YAT
           </p>
           <p className="text-base font-medium text-gray-700 dark:text-gray-200">
             {t("status.loading")}

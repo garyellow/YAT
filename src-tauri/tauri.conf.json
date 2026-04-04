@@ -1,7 +1,7 @@
 {
-  "productName": "YATL",
+  "productName": "YAT",
   "version": "0.1.0",
-  "identifier": "com.yatl.app",
+  "identifier": "com.YAT.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "YATL",
+        "title": "YAT",
         "width": 1160,
         "height": 760,
         "visible": false,

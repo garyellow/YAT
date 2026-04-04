@@ -650,7 +650,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
             "capsule",
             WebviewUrl::App("capsule.html".into()),
         )
-        .title("YATL")
+        .title("YAT")
         .transparent(true)
         .decorations(false)
         .always_on_top(true)
@@ -705,7 +705,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let _tray = TrayIconBuilder::new()
         .menu(&menu)
-        .tooltip("YATL – Voice to Text")
+        .tooltip("YAT – Voice to Text")
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "settings" => {
                 if let Some(win) = app.get_webview_window("main") {
@@ -866,7 +866,7 @@ pub fn run() {
             list_audio_devices,
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run YATL");
+        .expect("failed to run YAT");
 }
 
 #[cfg(test)]

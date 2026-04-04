@@ -1,4 +1,4 @@
-# YATL — Yet Another Typeless
+# YAT — Yet Another Typeless
 
 [English](#english) | [繁體中文](#繁體中文)
 
@@ -6,22 +6,22 @@
 
 ## English
 
-**YATL** turns your voice into polished, ready-to-use text — right where your cursor is.
-Press a hotkey, speak, and YATL transcribes your speech, cleans it up with AI, then either pastes it into the app you're using or leaves it in your clipboard — depending on your output mode.
+**YAT** turns your voice into polished, ready-to-use text — right where your cursor is.
+Press a hotkey, speak, and YAT transcribes your speech, cleans it up with AI, then either pastes it into the app you're using or leaves it in your clipboard — depending on your output mode.
 
 ### Who Is This For?
 
 - Anyone who thinks faster than they type
 - Developers who want to dictate code comments, commit messages, or documentation
-- Multilingual speakers who mix languages naturally (YATL preserves your code-switching)
+- Multilingual speakers who mix languages naturally (YAT preserves your code-switching)
 - People who need a hands-free text input tool for accessibility
 
 ### How It Works
 
-1. **Press and hold your hotkey** (default: Right Ctrl on Windows/Linux, Right Cmd on macOS) → YATL starts recording
+1. **Press and hold your hotkey** (default: Right Ctrl on Windows/Linux, Right Cmd on macOS) → YAT starts recording
 2. **Speak naturally** → a floating capsule shows you're recording
 3. **Release the hotkey** (or use another trigger mode / press **Esc** to cancel) → recording stops
-4. **YATL transcribes** your speech using a cloud STT service (e.g. Groq Whisper)
+4. **YAT transcribes** your speech using a cloud STT service (e.g. Groq Whisper)
 5. **AI polishes** the text — removes fillers (um, 嗯), fixes punctuation, corrects proper nouns
 6. **Result appears** at your cursor (auto-paste mode) or in your clipboard
 
@@ -34,7 +34,7 @@ On a stable network this often feels quick, but real latency depends on your pro
    – macOS: `.dmg`
    – Linux: `.deb` or `.AppImage`
 
-2. **Launch YATL** — a tray icon appears. Click it (or right-click → Settings) to open the settings window.
+2. **Launch YAT** — a tray icon appears. Click it (or right-click → Settings) to open the settings window.
 
 3. **Set up Speech-to-Text** (required):
    - Go to the **Speech** tab
@@ -53,7 +53,7 @@ On a stable network this often feels quick, but real latency depends on your pro
 
 ### Obtaining API Keys
 
-YATL uses your own API keys (BYOK — Bring Your Own Key). Here's how to get them:
+YAT uses your own API keys (BYOK — Bring Your Own Key). Here's how to get them:
 
 | Provider | Sign Up | Free Tier | Models |
 |----------|---------|-----------|--------|
@@ -66,14 +66,14 @@ YATL uses your own API keys (BYOK — Bring Your Own Key). Here's how to get the
 
 | Feature | Description |
 |---------|-------------|
-| **Global Hotkey** | Trigger without returning to YATL. Supports single key, double-tap, key combo, or hold-to-talk, and you can change modes later. |
+| **Global Hotkey** | Trigger without returning to YAT. Supports single key, double-tap, key combo, or hold-to-talk, and you can change modes later. |
 | **Floating Capsule** | A small always-on-top, click-through widget shows recording status, elapsed time, and microphone level. It never steals focus or blocks your mouse. |
 | **Cancel Recording** | Press **Esc** during an active recording or pipeline step to cancel. On Linux, the key may still reach the foreground app. |
 | **Auto-Paste** | Polished text is automatically pasted into the focused application. Falls back to clipboard if paste fails. |
 | **AI Text Polishing** | Removes filler words and stuttering, adds punctuation, formats numbers, and corrects proper nouns. |
 | **Custom Vocabulary** | Define correction pairs for domain-specific terms (e.g. "deep seek" → "DeepSeek"). |
 | **Custom Prompt** | Full control over how AI processes your text. Add your own instructions or override the system prompt. |
-| **Code-Switching** | Naturally mix languages (e.g. Chinese + English). YATL preserves each segment in its original language. |
+| **Code-Switching** | Naturally mix languages (e.g. Chinese + English). YAT preserves each segment in its original language. |
 | **Transcription History** | Browse, search, copy, or retry past transcriptions. Configurable retention period. |
 | **Context Window** | Recent transcription history is fed to the AI for better consistency across dictation sessions. |
 | **Auto-Mute** | On supported platforms (currently macOS and Windows), system audio can be muted during recording and restored afterward. |
@@ -82,7 +82,7 @@ YATL uses your own API keys (BYOK — Bring Your Own Key). Here's how to get the
 | **Dark Mode** | System, light, or dark theme. |
 | **Bilingual UI** | English and 繁體中文. |
 | **System Tray** | Runs quietly in the background. All operations via hotkey; settings via tray icon. |
-| **Auto-Start** | Optionally launch YATL at system startup. |
+| **Auto-Start** | Optionally launch YAT at system startup. |
 
 ### Settings Overview
 
@@ -99,8 +99,8 @@ YATL uses your own API keys (BYOK — Bring Your Own Key). Here's how to get the
 ### Tips & Tricks
 
 - **Language hint**: If you primarily speak one language, set the "Language" field in the Speech tab (e.g. `zh` for Chinese, `en` for English). This improves accuracy.
-- **Vocabulary corrections**: Add terms specific to your work. YATL will always correct these, even if the AI misses them.
-- **Context window**: YATL feeds the last 10 minutes of transcriptions to the AI as context. This helps maintain consistency when you dictate in multiple short bursts.
+- **Vocabulary corrections**: Add terms specific to your work. YAT will always correct these, even if the AI misses them.
+- **Context window**: YAT feeds the last 10 minutes of transcriptions to the AI as context. This helps maintain consistency when you dictate in multiple short bursts.
 - **Clipboard behavior**: Choose "Always keep in clipboard" (default) to always have the latest transcription available for pasting manually. Or choose "Only keep when paste fails" if you don't want your clipboard overwritten.
 - **Hotkey options**:
    - **Hold** (default): Hold Right Ctrl on Windows/Linux or Right Cmd on macOS to record, release to stop
@@ -110,7 +110,7 @@ YATL uses your own API keys (BYOK — Bring Your Own Key). Here's how to get the
 - **Mode flexibility**: Alt hold is supported, and you can later switch the same key to single key, double-tap, or combo. Modifier-only single/double-tap hotkeys are still supported, but they are riskier in real apps.
 - **Save shortcut**: Press **Ctrl+S** in the settings window to save changes quickly.
 - **Cancel recording**: Press **Esc** while recording to cancel without processing. Useful when you misspoke or started recording by accident.
-- **Hotkey safety**: While the settings window is focused, YATL pauses recording hotkeys so editing fields doesn't accidentally start dictation.
+- **Hotkey safety**: While the settings window is focused, YAT pauses recording hotkeys so editing fields doesn't accidentally start dictation.
 
 ### Troubleshooting
 
@@ -164,28 +164,28 @@ This creates a draft release with platform-specific installers.
 - **Your API keys stay on your device.** They are stored locally and sent only to the endpoints you configure.
 - **Audio is never stored.** Recordings are held in memory during processing and discarded immediately after transcription.
 - **History is local.** Transcription history is stored in a local SQLite database and never leaves your machine.
-- **No telemetry.** YATL does not collect any usage data.
+- **No telemetry.** YAT does not collect any usage data.
 
 ---
 
 ## 繁體中文
 
-**YATL** 把你的聲音轉換成潤飾好、可以直接使用的文字——就在你的游標所在之處。
-按下快捷鍵、開始說話，YATL 會自動轉錄語音、用 AI 清理文字，然後依照你的輸出模式，直接貼到正在使用的應用程式中，或把結果留在剪貼簿裡。
+**YAT** 把你的聲音轉換成潤飾好、可以直接使用的文字——就在你的游標所在之處。
+按下快捷鍵、開始說話，YAT 會自動轉錄語音、用 AI 清理文字，然後依照你的輸出模式，直接貼到正在使用的應用程式中，或把結果留在剪貼簿裡。
 
 ### 適合誰？
 
 - 想的比打字快的人
 - 想用口述寫程式註解、commit message 或文件的開發者
-- 自然混用多語言的人（YATL 保留你的語碼轉換）
+- 自然混用多語言的人（YAT 保留你的語碼轉換）
 - 需要無障礙文字輸入工具的使用者
 
 ### 運作流程
 
-1. **按住快捷鍵**（Windows/Linux 預設為右 Ctrl，macOS 預設為右 Cmd）→ YATL 開始錄音
+1. **按住快捷鍵**（Windows/Linux 預設為右 Ctrl，macOS 預設為右 Cmd）→ YAT 開始錄音
 2. **自然說話** → 畫面上會出現浮動膠囊顯示錄音狀態
 3. **放開快捷鍵**（或改用其他觸發模式／按 **Esc** 取消）→ 錄音停止
-4. **YATL 轉錄**語音（使用雲端 STT 服務，如 Groq Whisper）
+4. **YAT 轉錄**語音（使用雲端 STT 服務，如 Groq Whisper）
 5. **AI 潤飾**文字 — 移除贅詞（嗯、呃、那個）、修正標點、校正專有名詞
 6. **結果出現**在你的游標位置（自動貼上模式）或剪貼簿中
 
@@ -198,7 +198,7 @@ This creates a draft release with platform-specific installers.
    – macOS：`.dmg`
    – Linux：`.deb` 或 `.AppImage`
 
-2. **啟動 YATL** — 系統匣出現圖示。點擊圖示（或右鍵 → 設定）開啟設定視窗。
+2. **啟動 YAT** — 系統匣出現圖示。點擊圖示（或右鍵 → 設定）開啟設定視窗。
 
 3. **設定語音辨識**（必要）：
    - 前往「**語音辨識**」分頁
@@ -217,7 +217,7 @@ This creates a draft release with platform-specific installers.
 
 ### 取得 API Key
 
-YATL 使用你自己的 API Key（BYOK）。以下是取得方式：
+YAT 使用你自己的 API Key（BYOK）。以下是取得方式：
 
 | 服務商 | 註冊網址 | 免費額度 | 可用模型 |
 |--------|---------|---------|---------|
@@ -230,14 +230,14 @@ YATL 使用你自己的 API Key（BYOK）。以下是取得方式：
 
 | 功能 | 說明 |
 |------|------|
-| **全域快捷鍵** | 不必先切回 YATL，也能觸發錄音。支援單一按鍵、連按兩下、組合鍵與長按，之後也能再切換模式。 |
+| **全域快捷鍵** | 不必先切回 YAT，也能觸發錄音。支援單一按鍵、連按兩下、組合鍵與長按，之後也能再切換模式。 |
 | **浮動膠囊** | 小型置頂、可穿透點擊的視窗，顯示錄音狀態、經過時間與麥克風音量。不會搶奪焦點或阻擋滑鼠操作。 |
 | **取消錄音** | 在錄音中或處理流程進行中按 **Esc** 可取消。Linux 上這顆鍵仍可能同時送到前景 App。 |
 | **自動貼上** | 潤飾後的文字自動貼到目前焦點的應用程式。貼上失敗時自動退回到剪貼簿。 |
 | **AI 文字潤飾** | 移除贅詞與口吃、加入標點、格式化數字、校正專有名詞。 |
 | **自訂詞彙表** | 定義領域專業術語的校正對照（如「deep seek」→「DeepSeek」）。 |
 | **自訂提示詞** | 完全控制 AI 如何處理你的文字。可加入自訂指示或覆寫系統提示詞。 |
-| **語碼轉換** | 自然混用中英文。YATL 保留每段文句的原始語言。 |
+| **語碼轉換** | 自然混用中英文。YAT 保留每段文句的原始語言。 |
 | **轉錄歷史** | 瀏覽、搜尋、複製或重試過去的轉錄結果。可設定保留期限。 |
 | **上下文視窗** | 近期轉錄紀錄會提供給 AI 作為上下文參考，提升跨次口述的一致性。 |
 | **錄音自動靜音** | 在支援的平台（目前為 macOS / Windows）上，可於錄音時自動靜音系統音訊，結束後再恢復。 |
@@ -246,7 +246,7 @@ YATL 使用你自己的 API Key（BYOK）。以下是取得方式：
 | **深色模式** | 支援系統、淺色或深色主題。 |
 | **雙語介面** | 繁體中文和英文。 |
 | **系統匣** | 安靜地在背景運行。所有操作透過快捷鍵；設定透過系統匣圖示。 |
-| **開機啟動** | 可選擇在系統啟動時自動啟動 YATL。 |
+| **開機啟動** | 可選擇在系統啟動時自動啟動 YAT。 |
 
 ### 設定說明
 
@@ -263,8 +263,8 @@ YATL 使用你自己的 API Key（BYOK）。以下是取得方式：
 ### 使用技巧
 
 - **語言提示**：如果你主要使用一種語言，在語音辨識分頁的「語言」欄位填入相應代碼（如 `zh` 代表中文、`en` 代表英文），可以提升辨識準確度。
-- **詞彙校正**：加入與你工作相關的專業術語。即使 AI 漏掉，YATL 也會確保這些詞彙被正確校正。
-- **上下文視窗**：YATL 會將最近 10 分鐘的轉錄紀錄提供給 AI 作為上下文，幫助在多次短句口述中保持一致性。
+- **詞彙校正**：加入與你工作相關的專業術語。即使 AI 漏掉，YAT 也會確保這些詞彙被正確校正。
+- **上下文視窗**：YAT 會將最近 10 分鐘的轉錄紀錄提供給 AI 作為上下文，幫助在多次短句口述中保持一致性。
 - **剪貼簿行為**：選擇「永遠保留在剪貼簿」（預設），最新結果隨時可手動貼上。或選擇「僅在貼上失敗時保留」，避免覆蓋剪貼簿內容。
 - **快捷鍵選項**：
    - **長按**（預設）：Windows/Linux 預設按住右 Ctrl、macOS 預設按住右 Cmd，放開即停止
@@ -274,7 +274,7 @@ YATL 使用你自己的 API Key（BYOK）。以下是取得方式：
 - **模式可切換**：Alt 長按仍然支援，而且之後也可以把同一顆鍵改成單按、連按兩下或組合鍵。只是修飾鍵的單按 / 連按模式在真實 App 裡風險會比較高。
 - **儲存快捷鍵**：在設定視窗中按 **Ctrl+S** 可快速儲存變更。
 - **取消錄音**：錄音中按 **Esc** 可取消錄音並不處理。說錯話或不小心觸發時很實用。
-- **熱鍵安全**：當設定視窗取得焦點時，YATL 會暫停錄音熱鍵，避免你在編輯欄位時意外開始錄音。
+- **熱鍵安全**：當設定視窗取得焦點時，YAT 會暫停錄音熱鍵，避免你在編輯欄位時意外開始錄音。
 
 ### 疑難排解
 
@@ -328,7 +328,7 @@ git push origin v0.1.0
 - **API Key 只存在你的裝置上。** 它們儲存在本機，只會傳送到你設定的端點。
 - **音訊不會被儲存。** 錄音只在處理期間暫存於記憶體中，轉錄完成後立即丟棄。
 - **歷史紀錄是本機的。** 轉錄紀錄存放在本機 SQLite 資料庫，絕不會離開你的電腦。
-- **沒有遙測。** YATL 不會收集任何使用資料。
+- **沒有遙測。** YAT 不會收集任何使用資料。
 
 ---
 

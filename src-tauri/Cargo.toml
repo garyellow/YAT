@@ -1,12 +1,12 @@
 [package]
-name = "yatl"
+name = "YAT"
 version = "0.1.0"
 description = "Yet Another Typeless – AI voice-to-text input tool"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "yatl_lib"
+name = "YAT_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

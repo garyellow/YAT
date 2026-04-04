@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for YATL",
+  "description": "Default capability for YAT",
   "windows": ["main", "capsule"],
   "permissions": [
     "core:default",

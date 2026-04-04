@@ -212,7 +212,7 @@ export default function Settings() {
           <div className="app-card border-none bg-white/70 px-5 py-5 dark:bg-slate-950/50">
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">YATL</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">YAT</p>
                 <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t("app.name")}</h1>
                 <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
                   {t("app.desc")}

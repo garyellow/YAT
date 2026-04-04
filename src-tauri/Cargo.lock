@@ -3,6 +3,35 @@
 version = 4
 
 [[package]]
+name = "YAT"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "bytes",
+ "chrono",
+ "cpal",
+ "enigo",
+ "hound",
+ "log",
+ "parking_lot",
+ "rdev",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-log",
+ "tauri-plugin-shell",
+ "tauri-plugin-store",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6617,35 +6646,6 @@ name = "xkeysym"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
-
-[[package]]
-name = "yatl"
-version = "0.1.0"
-dependencies = [
- "arboard",
- "bytes",
- "chrono",
- "cpal",
- "enigo",
- "hound",
- "log",
- "parking_lot",
- "rdev",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-log",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "thiserror 2.0.18",
- "tokio",
- "uuid",
- "windows 0.61.3",
-]
 
 [[package]]
 name = "yoke"
