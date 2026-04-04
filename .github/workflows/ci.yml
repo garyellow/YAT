@@ -1,27 +1,27 @@
-name: Release
+name: CI
 
 on:
+  pull_request:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest # Apple Silicon (M1+)
+          - platform: macos-latest
             args: '--target aarch64-apple-darwin'
-          - platform: macos-latest # Intel Mac
-            args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
             args: ''
           - platform: windows-latest
@@ -57,15 +57,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build and release
+      - name: Build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'YATL ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: true
-          prerelease: false
-          generateReleaseNotes: true
           args: ${{ matrix.args }}

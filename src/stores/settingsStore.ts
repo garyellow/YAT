@@ -44,6 +44,7 @@ export interface VocabularyEntry {
 
 export interface PromptConfig {
   system_prompt: string;
+  user_instructions: string;
   vocabulary: VocabularyEntry[];
 }
 

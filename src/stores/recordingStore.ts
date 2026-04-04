@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { sounds } from "../lib/sounds";
 import { useSettingsStore } from "./settingsStore";
 
+let initialized = false;
+
 export type RecordingStatus =
   | "idle"
   | "recording"
@@ -30,6 +32,9 @@ export const useRecordingStore = create<RecordingState>((set) => ({
   lastError: null,
 
   init: () => {
+    if (initialized) return;
+    initialized = true;
+
     listen<PipelinePayload>("pipeline-status", (event) => {
       const { status, text, error } = event.payload;
 

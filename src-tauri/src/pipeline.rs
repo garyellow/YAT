@@ -34,17 +34,22 @@ fn emit_status(app: &AppHandle, status: &str, text: Option<&str>, error: Option<
     }
 }
 
-/// Build the system prompt, appending vocabulary entries if any.
-fn build_system_prompt(base_prompt: &str, vocabulary: &[VocabularyEntry]) -> String {
-    if vocabulary.is_empty() {
-        return base_prompt.to_string();
+/// Build the system prompt, appending user instructions and vocabulary entries.
+fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabulary: &[VocabularyEntry]) -> String {
+    let mut prompt = base_prompt.to_string();
+
+    if !user_instructions.trim().is_empty() {
+        prompt.push_str("\n\nAdditional user instructions:\n");
+        prompt.push_str(user_instructions.trim());
     }
 
-    let mut prompt = base_prompt.to_string();
-    prompt.push_str("\n\nVocabulary corrections (always apply these):\n");
-    for entry in vocabulary {
-        prompt.push_str(&format!("- \"{}\" → \"{}\"\n", entry.wrong, entry.correct));
+    if !vocabulary.is_empty() {
+        prompt.push_str("\n\nVocabulary corrections (always apply these):\n");
+        for entry in vocabulary {
+            prompt.push_str(&format!("- \"{}\" → \"{}\"\n", entry.wrong, entry.correct));
+        }
     }
+
     prompt
 }
 
@@ -88,8 +93,11 @@ pub async fn run(
     let polished = if settings.llm.enabled {
         emit_status(app, "polishing", Some(&raw_text), None);
 
-        let system_prompt =
-            build_system_prompt(&settings.prompt.system_prompt, &settings.prompt.vocabulary);
+        let system_prompt = build_system_prompt(
+            &settings.prompt.system_prompt,
+            &settings.prompt.user_instructions,
+            &settings.prompt.vocabulary,
+        );
 
         match llm::polish(
             &settings.llm,

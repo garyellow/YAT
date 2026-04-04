@@ -1,0 +1,98 @@
+name: Debug Package
+
+run-name: Debug package (${{ inputs.package_set }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_set:
+        description: Which debug package set to build
+        required: true
+        type: choice
+        default: common
+        options:
+          - common
+          - all-release-platforms
+      retention_days:
+        description: How many days to keep the uploaded debug artifacts
+        required: true
+        type: choice
+        default: '3'
+        options:
+          - '1'
+          - '3'
+          - '7'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.package_set }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Select debug package matrix
+        id: set-matrix
+        shell: bash
+        run: |
+          if [ "${{ inputs.package_set }}" = "all-release-platforms" ]; then
+            echo 'matrix={"include":[{"platform":"macos-latest","args":"--debug --target aarch64-apple-darwin","artifact_name":"yatl-debug-macos-aarch64","artifact_path":"src-tauri/target/aarch64-apple-darwin/debug/bundle/**/*"},{"platform":"macos-latest","args":"--debug --target x86_64-apple-darwin","artifact_name":"yatl-debug-macos-x64","artifact_path":"src-tauri/target/x86_64-apple-darwin/debug/bundle/**/*"},{"platform":"ubuntu-22.04","args":"--debug","artifact_name":"yatl-debug-linux-x64","artifact_path":"src-tauri/target/debug/bundle/**/*"},{"platform":"windows-latest","args":"--debug","artifact_name":"yatl-debug-windows-x64","artifact_path":"src-tauri/target/debug/bundle/**/*"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix={"include":[{"platform":"macos-latest","args":"--debug --target aarch64-apple-darwin","artifact_name":"yatl-debug-macos-aarch64","artifact_path":"src-tauri/target/aarch64-apple-darwin/debug/bundle/**/*"},{"platform":"windows-latest","args":"--debug","artifact_name":"yatl-debug-windows-x64","artifact_path":"src-tauri/target/debug/bundle/**/*"}]}' >> "$GITHUB_OUTPUT"
+          fi
+
+  build-debug:
+    name: Build ${{ matrix.artifact_name }}
+    needs: prepare-matrix
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build debug bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+
+      - name: Upload debug artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}

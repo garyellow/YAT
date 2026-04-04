@@ -124,6 +124,8 @@ impl Default for GeneralConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptConfig {
     pub system_prompt: String,
+    #[serde(default)]
+    pub user_instructions: String,
     pub vocabulary: Vec<VocabularyEntry>,
 }
 
@@ -137,6 +139,7 @@ impl Default for PromptConfig {
     fn default() -> Self {
         Self {
             system_prompt: default_system_prompt().to_string(),
+            user_instructions: String::new(),
             vocabulary: Vec::new(),
         }
     }

@@ -13,13 +13,13 @@
       {
         "label": "main",
         "title": "YATL",
-        "width": 860,
-        "height": 640,
+        "width": 1160,
+        "height": 760,
         "visible": false,
         "center": true,
         "resizable": true,
-        "minWidth": 720,
-        "minHeight": 500
+        "minWidth": 920,
+        "minHeight": 620
       }
     ],
     "trayIcon": {

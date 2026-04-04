@@ -1,24 +1,61 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import type { RecordingStatus } from "./stores/recordingStore";
+import type { AppSettings } from "./stores/settingsStore";
 
 const statusConfig: Record<
   RecordingStatus,
-  { bg: string; pulse: boolean; label: string }
+  { shell: string; dot: string; pulse: boolean }
 > = {
-  idle: { bg: "bg-gray-500", pulse: false, label: "" },
-  recording: { bg: "bg-red-500", pulse: true, label: "🎙" },
-  transcribing: { bg: "bg-purple-500", pulse: true, label: "⏳" },
-  polishing: { bg: "bg-blue-500", pulse: true, label: "✨" },
-  done: { bg: "bg-emerald-500", pulse: false, label: "✓" },
-  error: { bg: "bg-gray-400", pulse: false, label: "✗" },
+  idle: {
+    shell: "border-white/10 bg-slate-900/60",
+    dot: "bg-slate-300",
+    pulse: false,
+  },
+  recording: {
+    shell: "border-red-300/30 bg-red-500/85",
+    dot: "bg-white",
+    pulse: true,
+  },
+  transcribing: {
+    shell: "border-violet-300/30 bg-violet-500/85",
+    dot: "bg-white",
+    pulse: true,
+  },
+  polishing: {
+    shell: "border-sky-300/30 bg-sky-500/85",
+    dot: "bg-white",
+    pulse: true,
+  },
+  done: {
+    shell: "border-emerald-300/30 bg-emerald-500/85",
+    dot: "bg-white",
+    pulse: false,
+  },
+  error: {
+    shell: "border-rose-300/30 bg-rose-500/85",
+    dot: "bg-white",
+    pulse: false,
+  },
 };
 
 export default function CapsuleApp() {
+  const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
+
+  useEffect(() => {
+    invoke<AppSettings>("get_settings")
+      .then((appSettings) => {
+        if (appSettings.general.language) {
+          void i18n.changeLanguage(appSettings.general.language);
+        }
+      })
+      .catch(() => {});
+  }, [i18n]);
 
   useEffect(() => {
     const unlisten = listen<{ status: RecordingStatus; text?: string }>(
@@ -56,30 +93,46 @@ export default function CapsuleApp() {
   if (status === "idle") return null;
 
   return (
-    <div className="flex items-center justify-center w-full h-full no-select" data-tauri-drag-region>
+    <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
       <div
-        className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-white text-sm font-medium ${cfg.bg} ${cfg.pulse ? "animate-pulse" : ""}`}
+        className={`flex min-w-[220px] items-center gap-3 rounded-[22px] border px-4 py-3 text-white shadow-2xl backdrop-blur-xl ${cfg.shell}`}
+        aria-live="polite"
       >
-        <span className="text-base">{cfg.label}</span>
-        {status === "recording" && (
-          <>
-            <div className="w-10 h-3 rounded-sm bg-white/20 overflow-hidden">
+        <span
+          className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
+          aria-hidden="true"
+        />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold tracking-tight">
+              {t(`status.${status}`)}
+            </p>
+            {status === "recording" ? (
+              <span className="tabular-nums text-xs text-white/75">
+                {formatTime(elapsed)}
+              </span>
+            ) : null}
+          </div>
+
+          {status === "recording" ? (
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full rounded-sm bg-green-300 transition-[width] duration-100"
-                style={{ width: `${Math.min(micLevel * 400, 100)}%` }}
+                className="h-full rounded-full bg-white transition-[width] duration-100"
+                style={{ width: `${Math.min(micLevel * 420, 100)}%` }}
               />
             </div>
-            <span className="tabular-nums text-xs opacity-80">
-              {formatTime(elapsed)}
-            </span>
-            <button
-              onClick={() => invoke("cancel_recording")}
-              className="ml-1 text-white/80 hover:text-white text-xs underline"
-              aria-label="Cancel recording"
-            >
-              ✕
-            </button>
-          </>
+          ) : null}
+        </div>
+
+        {status === "recording" && (
+          <button
+            onClick={() => invoke("cancel_recording")}
+            className="rounded-full border border-white/25 px-3 py-1 text-xs font-semibold text-white/90 transition-colors hover:bg-white/10"
+            aria-label={t("actions.cancel")}
+          >
+            {t("actions.cancel")}
+          </button>
         )}
       </div>
     </div>

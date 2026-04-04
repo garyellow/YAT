@@ -9,6 +9,7 @@ mod stt;
 mod volume;
 
 use parking_lot::Mutex;
+use serde::Serialize;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tauri::{
@@ -16,6 +17,7 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::StoreExt;
 
 use audio::AudioRecorder;
@@ -29,6 +31,11 @@ pub struct AppState {
     pub history: Mutex<HistoryManager>,
     pub hotkey_settings: Arc<Mutex<HotkeySettings>>,
     pub mic_level: Arc<AtomicU32>,
+}
+
+#[derive(Serialize)]
+struct PlatformContext {
+    os: &'static str,
 }
 
 // ── Tauri Commands ──────────────────────────────────────────────────
@@ -202,13 +209,30 @@ fn get_recording_status(state: tauri::State<'_, AppState>) -> bool {
 }
 
 #[tauri::command]
-fn get_settings(state: tauri::State<'_, AppState>) -> AppSettings {
-    state.settings.lock().clone()
+fn get_settings(state: tauri::State<'_, AppState>, app: AppHandle) -> AppSettings {
+    let mut settings = state.settings.lock().clone();
+
+    match app.autolaunch().is_enabled() {
+        Ok(is_enabled) => {
+            settings.general.auto_start = is_enabled;
+            *state.settings.lock() = settings.clone();
+        }
+        Err(e) => log::warn!("failed to read autostart state: {e}"),
+    }
+
+    settings
 }
 
 #[tauri::command]
 fn get_default_prompt() -> String {
     config::default_system_prompt().to_string()
+}
+
+#[tauri::command]
+fn get_platform_context() -> PlatformContext {
+    PlatformContext {
+        os: std::env::consts::OS,
+    }
 }
 
 #[tauri::command]
@@ -233,6 +257,12 @@ async fn save_settings(
         hs.key = key;
         hs.modifier = modifier;
         hs.double_tap_interval_ms = hk.double_tap_interval_ms;
+    }
+
+    if settings.general.auto_start {
+        app.autolaunch().enable().map_err(|e| e.to_string())?;
+    } else {
+        app.autolaunch().disable().map_err(|e| e.to_string())?;
     }
 
     // Save to store
@@ -313,6 +343,10 @@ async fn retry_history(
 
     let system_prompt = {
         let mut p = settings.prompt.system_prompt.clone();
+        if !settings.prompt.user_instructions.trim().is_empty() {
+            p.push_str("\n\nAdditional user instructions:\n");
+            p.push_str(settings.prompt.user_instructions.trim());
+        }
         if !settings.prompt.vocabulary.is_empty() {
             p.push_str("\n\nVocabulary corrections:\n");
             for v in &settings.prompt.vocabulary {
@@ -473,7 +507,12 @@ pub fn run() {
             let handle = app.handle().clone();
 
             // Load settings
-            let settings = load_settings(&handle);
+            let mut settings = load_settings(&handle);
+
+            match handle.autolaunch().is_enabled() {
+                Ok(is_enabled) => settings.general.auto_start = is_enabled,
+                Err(e) => log::warn!("failed to sync autostart during setup: {e}"),
+            }
 
             // Initialize history manager
             let app_data_dir = handle
@@ -556,6 +595,7 @@ pub fn run() {
             get_settings,
             save_settings,
             get_default_prompt,
+            get_platform_context,
             test_stt,
             test_llm,
             get_history,
