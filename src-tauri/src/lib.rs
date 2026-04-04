@@ -207,6 +207,11 @@ fn get_settings(state: tauri::State<'_, AppState>) -> AppSettings {
 }
 
 #[tauri::command]
+fn get_default_prompt() -> String {
+    config::default_system_prompt().to_string()
+}
+
+#[tauri::command]
 async fn save_settings(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
@@ -550,6 +555,7 @@ pub fn run() {
             get_recording_status,
             get_settings,
             save_settings,
+            get_default_prompt,
             test_stt,
             test_llm,
             get_history,

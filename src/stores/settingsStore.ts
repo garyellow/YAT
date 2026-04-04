@@ -64,6 +64,7 @@ interface SettingsState {
   settings: AppSettings | null;
   loading: boolean;
   saved: boolean;
+  dirty: boolean;
   loadSettings: () => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
   updateSettings: (partial: Partial<AppSettings>) => void;
@@ -73,6 +74,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   loading: false,
   saved: false,
+  dirty: false,
 
   loadSettings: async () => {
     set({ loading: true });
@@ -82,14 +84,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   saveSettings: async (settings: AppSettings) => {
     await invoke("save_settings", { settings });
-    set({ settings, saved: true });
+    set({ settings, saved: true, dirty: false });
     setTimeout(() => set({ saved: false }), 2000);
   },
 
   updateSettings: (partial) => {
     const current = get().settings;
     if (current) {
-      set({ settings: { ...current, ...partial }, saved: false });
+      set({ settings: { ...current, ...partial }, saved: false, dirty: true });
     }
   },
 }));

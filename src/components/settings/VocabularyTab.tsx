@@ -12,19 +12,25 @@ export default function VocabularyTab() {
 
   const [wrong, setWrong] = useState("");
   const [correct, setCorrect] = useState("");
+  const [showValidation, setShowValidation] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
 
   if (!settings) return null;
 
   const vocab = settings.prompt.vocabulary;
 
   const addEntry = () => {
-    if (!wrong.trim() || !correct.trim()) return;
+    if (!wrong.trim() || !correct.trim()) {
+      setShowValidation(true);
+      return;
+    }
     const entry: VocabularyEntry = { wrong: wrong.trim(), correct: correct.trim() };
     updateSettings({
       prompt: { ...settings.prompt, vocabulary: [...vocab, entry] },
     });
     setWrong("");
     setCorrect("");
+    setShowValidation(false);
   };
 
   const removeEntry = (idx: number) => {
@@ -46,8 +52,8 @@ export default function VocabularyTab() {
           <span className="text-sm">{t("vocabulary.wrongForm")}</span>
           <input
             value={wrong}
-            onChange={(e) => setWrong(e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+            onChange={(e) => { setWrong(e.target.value); setShowValidation(false); }}
+            className={`rounded-lg border ${showValidation && !wrong.trim() ? "border-red-400" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-800 px-3 py-2 text-sm`}
             placeholder="eg: 台風"
           />
         </label>
@@ -55,8 +61,8 @@ export default function VocabularyTab() {
           <span className="text-sm">{t("vocabulary.correctForm")}</span>
           <input
             value={correct}
-            onChange={(e) => setCorrect(e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+            onChange={(e) => { setCorrect(e.target.value); setShowValidation(false); }}
+            className={`rounded-lg border ${showValidation && !correct.trim() ? "border-red-400" : "border-gray-300 dark:border-gray-600"} bg-white dark:bg-gray-800 px-3 py-2 text-sm`}
             placeholder="eg: 颱風"
           />
         </label>
@@ -70,7 +76,11 @@ export default function VocabularyTab() {
 
       {/* Vocabulary list */}
       {vocab.length === 0 ? (
-        <p className="text-sm text-gray-500">{t("vocabulary.noEntries")}</p>
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-4xl mb-3">📖</p>
+          <p className="text-sm">{t("vocabulary.noEntries")}</p>
+          <p className="text-xs mt-1">{t("vocabulary.emptyHint")}</p>
+        </div>
       ) : (
         <table className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
           <thead className="bg-gray-50 dark:bg-gray-800">

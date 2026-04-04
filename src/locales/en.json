@@ -84,7 +84,8 @@
     "wrongForm": "Wrong form",
     "correctForm": "Correct form",
     "addEntry": "Add",
-    "noEntries": "No entries yet"
+    "noEntries": "No entries yet",
+    "emptyHint": "Add your first term to improve accuracy"
   },
   "history": {
     "title": "History",
@@ -94,6 +95,7 @@
     "hours": "h",
     "days": "d",
     "noHistory": "No records yet",
+    "emptyHint": "Start recording to see results here",
     "raw": "Raw",
     "polished": "Polished",
     "confirmDelete": "Delete this entry?",
@@ -108,7 +110,9 @@
     "testing": "Testing…",
     "connected": "Connected",
     "copy": "Copy",
+    "copied": "Copied",
     "retry": "Retry",
-    "delete": "Delete"
+    "delete": "Delete",
+    "unsaved": "Unsaved changes"
   }
 }

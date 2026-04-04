@@ -68,41 +68,45 @@ export default function GeneralTab() {
         </label>
 
         {g.hotkey.hotkey_type === "combo" && (
-          <label className="flex items-center gap-3">
-            <span className="w-28 text-sm">{t("general.modifier")}</span>
-            <input
-              value={g.hotkey.modifier ?? ""}
-              onChange={(e) =>
-                update({
-                  hotkey: { ...g.hotkey, modifier: e.target.value || null },
-                })
-              }
-              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
-              placeholder="Ctrl"
-            />
-          </label>
+          <div className="ml-28 rounded-lg bg-gray-100 dark:bg-gray-800 p-3">
+            <label className="flex items-center gap-3">
+              <span className="w-28 text-sm">{t("general.modifier")}</span>
+              <input
+                value={g.hotkey.modifier ?? ""}
+                onChange={(e) =>
+                  update({
+                    hotkey: { ...g.hotkey, modifier: e.target.value || null },
+                  })
+                }
+                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+                placeholder="Ctrl"
+              />
+            </label>
+          </div>
         )}
 
         {g.hotkey.hotkey_type === "double_tap" && (
-          <label className="flex items-center gap-3">
-            <span className="w-28 text-sm">{t("general.doubleTapInterval")}</span>
-            <input
-              type="number"
-              value={g.hotkey.double_tap_interval_ms}
-              onChange={(e) =>
-                update({
-                  hotkey: {
-                    ...g.hotkey,
-                    double_tap_interval_ms: Number(e.target.value),
-                  },
-                })
-              }
-              className="w-24 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
-              min={100}
-              max={1000}
-            />
-            <span className="text-sm text-gray-500">{t("general.ms")}</span>
-          </label>
+          <div className="ml-28 rounded-lg bg-gray-100 dark:bg-gray-800 p-3">
+            <label className="flex items-center gap-3">
+              <span className="w-28 text-sm">{t("general.doubleTapInterval")}</span>
+              <input
+                type="number"
+                value={g.hotkey.double_tap_interval_ms}
+                onChange={(e) =>
+                  update({
+                    hotkey: {
+                      ...g.hotkey,
+                      double_tap_interval_ms: Number(e.target.value),
+                    },
+                  })
+                }
+                className="w-24 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+                min={100}
+                max={1000}
+              />
+              <span className="text-sm text-gray-500">{t("general.ms")}</span>
+            </label>
+          </div>
         )}
       </fieldset>
 

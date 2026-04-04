@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryStore, type HistoryEntry } from "../../stores/historyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
 export default function HistoryTab() {
   const { t } = useTranslation();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const {
     entries,
     loading,
@@ -28,8 +29,10 @@ export default function HistoryTab() {
 
   const retention = settings.history.retention_hours;
 
-  const copyText = (text: string) => {
+  const copyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const formatDate = (iso: string) => {
@@ -94,7 +97,11 @@ export default function HistoryTab() {
       {loading ? (
         <p className="text-sm text-gray-500">{t("status.loading")}</p>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-gray-500">{t("history.noHistory")}</p>
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-4xl mb-3">📝</p>
+          <p className="text-sm">{t("history.noHistory")}</p>
+          <p className="text-xs mt-1">{t("history.emptyHint")}</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {entries.map((entry: HistoryEntry) => (
@@ -104,9 +111,9 @@ export default function HistoryTab() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0 space-y-1">
-                  <p className="text-sm">{entry.polished_text || entry.raw_text}</p>
+                  <p className="text-sm line-clamp-3">{entry.polished_text || entry.raw_text}</p>
                   {entry.polished_text && entry.raw_text !== entry.polished_text && (
-                    <p className="text-xs text-gray-500 line-through">
+                    <p className="text-xs text-gray-500 line-through line-clamp-2">
                       {entry.raw_text}
                     </p>
                   )}
@@ -114,11 +121,11 @@ export default function HistoryTab() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() =>
-                      copyText(entry.polished_text || entry.raw_text)
+                      copyText(entry.polished_text || entry.raw_text, entry.id)
                     }
                     className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
-                    {t("actions.copy")}
+                    {copiedId === entry.id ? t("actions.copied") : t("actions.copy")}
                   </button>
                   <button
                     onClick={() => retryEntry(entry.id)}

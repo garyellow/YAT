@@ -84,7 +84,8 @@
     "wrongForm": "錯誤寫法",
     "correctForm": "正確寫法",
     "addEntry": "新增",
-    "noEntries": "尚未新增任何項目"
+    "noEntries": "尚未新增任何項目",
+    "emptyHint": "新增第一個詞彙來提升辨識準確度"
   },
   "history": {
     "title": "歷史紀錄",
@@ -94,6 +95,7 @@
     "hours": "小時",
     "days": "天",
     "noHistory": "尚無紀錄",
+    "emptyHint": "開始錄音後紀錄會顯示在這裡",
     "raw": "原始文字",
     "polished": "潤飾結果",
     "confirmDelete": "確定刪除此筆紀錄？",
@@ -108,7 +110,9 @@
     "testing": "測試中…",
     "connected": "連線成功",
     "copy": "複製",
+    "copied": "已複製",
     "retry": "重試",
-    "delete": "刪除"
+    "delete": "刪除",
+    "unsaved": "有未儲存的變更"
   }
 }

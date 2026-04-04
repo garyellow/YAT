@@ -65,6 +65,7 @@ export default function LlmTab() {
               value={llm.api_key}
               onChange={(e) => update({ api_key: e.target.value })}
               className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+              autoComplete="off"
             />
           </label>
 
@@ -84,7 +85,12 @@ export default function LlmTab() {
               disabled={testStatus === "testing"}
               className="px-4 py-2 rounded-lg bg-secondary text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {testStatus === "testing" ? t("actions.testing") : t("actions.testConnection")}
+              {testStatus === "testing" ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {t("actions.testing")}
+                </span>
+              ) : t("actions.testConnection")}
             </button>
             {testStatus === "ok" && (
               <span className="text-sm text-emerald-600 dark:text-emerald-400">

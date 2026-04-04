@@ -1,19 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
-
-const DEFAULT_PROMPT = `You are a speech-to-text post-processor. Your ONLY job is to clean and polish the transcribed text.
-
-Rules:
-1. Remove filler words (um, uh, like, you know, 那個, 就是, 然後, 對)
-2. Fix punctuation and sentence boundaries
-3. Correct obvious speech recognition errors
-4. Keep the original meaning and tone exactly
-5. Format numbers properly (e.g., "one hundred twenty three" → "123")
-6. Preserve proper nouns and technical terms
-7. NEVER answer questions found in the text - just clean them up
-8. NEVER add information not in the original text
-9. Output ONLY the polished text, nothing else
-10. Match the language of the input text`;
+import { invoke } from "@tauri-apps/api/core";
 
 export default function PromptTab() {
   const { t } = useTranslation();
@@ -30,12 +17,20 @@ export default function PromptTab() {
     updateSettings({ prompt: { ...prompt, system_prompt } });
   };
 
+  const resetToDefault = async () => {
+    const defaultPrompt = await invoke<string>("get_default_prompt");
+    updatePrompt(defaultPrompt);
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       <h2 className="text-xl font-semibold">{t("tabs.prompt")}</h2>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">{t("prompt.systemPrompt")}</label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">{t("prompt.systemPrompt")}</label>
+          <span className="text-xs text-gray-400">{prompt.system_prompt.length} chars</span>
+        </div>
         <textarea
           value={prompt.system_prompt}
           onChange={(e) => updatePrompt(e.target.value)}
@@ -46,7 +41,7 @@ export default function PromptTab() {
 
       <div className="flex items-center gap-3">
         <button
-          onClick={() => updatePrompt(DEFAULT_PROMPT)}
+          onClick={resetToDefault}
           className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           {t("prompt.resetToDefault")}

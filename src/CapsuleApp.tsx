@@ -75,6 +75,7 @@ export default function CapsuleApp() {
             <button
               onClick={() => invoke("cancel_recording")}
               className="ml-1 text-white/80 hover:text-white text-xs underline"
+              aria-label="Cancel recording"
             >
               ✕
             </button>
