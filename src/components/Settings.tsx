@@ -15,6 +15,33 @@ import Toast from "./ui/Toast";
 
 type IconName = "overview" | "general" | "stt" | "llm" | "prompt" | "vocabulary" | "history";
 
+const THEME_CYCLE = ["light", "dark", "system"] as const;
+
+function ThemeIcon({ theme }: { theme: string }) {
+  const cls = "h-3.5 w-3.5 text-current";
+  if (theme === "light") {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 3v2m0 14v2m-9-9h2m14 0h2m-3.64-6.36-1.41 1.41M7.05 16.95l-1.41 1.41m0-12.72 1.41 1.41m9.9 9.9 1.41 1.41" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (theme === "dark") {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.03-.93A5.4 5.4 0 0 1 12 7.5c0-1.62.72-3.08 1.86-4.07A9.06 9.06 0 0 0 12 3Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="4" y="5" width="16" height="12" rx="1.5" />
+      <path d="M8 21h8m-4-4v4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function NavIcon({ name }: { name: IconName }) {
   const cls = "h-3.5 w-3.5 text-current";
 
@@ -88,6 +115,7 @@ export default function Settings() {
   const dirty = useSettingsStore((s) => s.dirty);
   const saved = useSettingsStore((s) => s.saved);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   const tabTitle = useMemo(() => t(`tabs.${active}`), [active, t]);
   const sttReady = isSttConfigured(settings);
@@ -228,6 +256,22 @@ export default function Settings() {
           <header className="main-header flex items-center justify-between gap-4 px-6 py-3">
             <h2 className="text-[14px] font-medium">{tabTitle}</h2>
             <div className="flex items-center gap-3" aria-live="polite">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!settings) return;
+                  const current = settings.general.theme;
+                  const idx = THEME_CYCLE.indexOf(current as typeof THEME_CYCLE[number]);
+                  const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+                  updateSettings({ general: { ...settings.general, theme: next } });
+                }}
+                className="btn btn-ghost flex items-center gap-1.5 px-2"
+                title={t(`general.${settings?.general.theme === "light" ? "light" : settings?.general.theme === "dark" ? "dark" : "system"}`)}
+                aria-label={t("general.theme")}
+              >
+                <ThemeIcon theme={settings?.general.theme ?? "system"} />
+                <span className="text-xs">{t(`general.${settings?.general.theme === "light" ? "light" : settings?.general.theme === "dark" ? "dark" : "system"}`)}</span>
+              </button>
               {dirty ? (
                 <span className="text-xs text-[var(--text-muted)]">{t("actions.unsaved")}</span>
               ) : null}

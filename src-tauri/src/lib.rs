@@ -528,6 +528,30 @@ async fn test_llm(llm_config: config::LlmConfig) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn fetch_models(base_url: String, api_key: String) -> Result<Vec<String>, String> {
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let mut req = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10));
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", api_key));
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let models = body["data"]
+        .as_array()
+        .ok_or("Invalid response: missing data array".to_string())?
+        .iter()
+        .filter_map(|m| m["id"].as_str().map(String::from))
+        .collect::<Vec<_>>();
+    Ok(models)
+}
+
+#[tauri::command]
 fn get_history(
     state: tauri::State<'_, AppState>,
     query: Option<String>,
@@ -929,6 +953,7 @@ pub fn run() {
             get_platform_context,
             test_stt,
             test_llm,
+            fetch_models,
             get_history,
             delete_history,
             retry_history,

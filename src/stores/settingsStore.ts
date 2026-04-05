@@ -86,8 +86,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch {
       // Fallback for browser testing (outside Tauri)
       const mock: AppSettings = {
-        stt: { base_url: "https://api.groq.com/openai/v1", api_key: "", model: "whisper-large-v3-turbo", language: "zh" },
-        llm: { enabled: true, base_url: "https://api.groq.com/openai/v1", api_key: "", model: "llama-3.3-70b-versatile" },
+        stt: { base_url: "", api_key: "", model: "", language: "zh" },
+        llm: { enabled: true, base_url: "", api_key: "", model: "" },
         general: {
           hotkey: { hotkey_type: "hold", key: "RCtrl", modifier: null, double_tap_interval_ms: 300 },
           theme: "system", auto_start: false, max_recording_seconds: 120,

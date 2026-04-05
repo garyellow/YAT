@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
-import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
+import { Notice, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
@@ -16,6 +16,8 @@ export default function LlmTab() {
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testMsg, setTestMsg] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<"idle" | "loading" | "fail">("idle");
 
   if (!settings) return null;
   const llm = settings.llm;
@@ -24,12 +26,20 @@ export default function LlmTab() {
     updateSettings({ llm: { ...llm, ...patch } });
   };
 
-  const applyPreset = (preset: "groq" | "openai") => {
-    if (preset === "groq") {
-      update({ base_url: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" });
-      return;
+  const fetchModels = async () => {
+    if (!llm.base_url) return;
+    setFetchStatus("loading");
+    try {
+      const list = await invoke<string[]>("fetch_models", {
+        baseUrl: llm.base_url,
+        apiKey: llm.api_key,
+      });
+      setModels(list);
+      setFetchStatus("idle");
+    } catch {
+      setModels([]);
+      setFetchStatus("fail");
     }
-    update({ base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" });
   };
 
   const testConnection = async () => {
@@ -71,24 +81,6 @@ export default function LlmTab() {
 
       {llm.enabled ? (
         <>
-          {/* Providers */}
-          <Section title={t("llm.providersTitle")} description={t("llm.providersDesc")}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <OptionCard
-                title="Groq"
-                description={t("llm.groqPresetDesc")}
-                selected={llm.base_url.includes("groq.com")}
-                onClick={() => applyPreset("groq")}
-              />
-              <OptionCard
-                title="OpenAI"
-                description={t("llm.openaiPresetDesc")}
-                selected={llm.base_url.includes("openai.com")}
-                onClick={() => applyPreset("openai")}
-              />
-            </div>
-          </Section>
-
           {/* Connection */}
           <Section title={t("llm.connectionTitle")} description={t("llm.connectionDesc")}>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -101,7 +93,7 @@ export default function LlmTab() {
                     value={llm.base_url}
                     onChange={(e) => update({ base_url: e.target.value })}
                     className="field-input"
-                    placeholder="https://api.groq.com/openai/v1"
+                    placeholder="https://api.openai.com/v1"
                     autoComplete="off"
                     spellCheck={false}
                   />
@@ -135,16 +127,36 @@ export default function LlmTab() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label htmlFor="llm-model" className={labelCls}>{t("llm.model")}</label>
-                  <input
-                    id="llm-model"
-                    name="llm-model"
-                    value={llm.model}
-                    onChange={(e) => update({ model: e.target.value })}
-                    className="field-input"
-                    placeholder="llama-3.3-70b-versatile"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      id="llm-model"
+                      name="llm-model"
+                      list="llm-model-list"
+                      value={llm.model}
+                      onChange={(e) => update({ model: e.target.value })}
+                      className="field-input flex-1"
+                      placeholder="gpt-4o-mini"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={fetchModels}
+                      disabled={!llm.base_url || fetchStatus === "loading"}
+                      className="btn btn-ghost shrink-0 text-xs"
+                    >
+                      {fetchStatus === "loading" ? t("llm.fetchingModels") : t("llm.fetchModels")}
+                    </button>
+                  </div>
+                  {models.length > 0 && (
+                    <datalist id="llm-model-list">
+                      {models.map((m) => <option key={m} value={m} />)}
+                    </datalist>
+                  )}
+                  {fetchStatus === "fail" && (
+                    <p className="text-[11px] text-[var(--danger)]">{t("llm.fetchModelsFail")}</p>
+                  )}
+                  <p className={hintCls}>{t("llm.modelHint")}</p>
                 </div>
 
                 <Notice title={t("llm.bestUseTitle")} tone="default">

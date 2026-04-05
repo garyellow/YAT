@@ -296,21 +296,6 @@ export default function GeneralTab() {
       <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="theme-select" className={labelCls}>{t("general.theme")}</label>
-            <select
-              id="theme-select"
-              name="theme-select"
-              value={g.theme}
-              onChange={(e) => update({ theme: e.target.value })}
-              className="field-select"
-            >
-              <option value="system">{t("general.system")}</option>
-              <option value="light">{t("general.light")}</option>
-              <option value="dark">{t("general.dark")}</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
             <label htmlFor="language-select" className={labelCls}>{t("general.language")}</label>
             <select
               id="language-select"

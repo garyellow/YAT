@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
-import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
+import { Notice, Section, StatusDot } from "./SettingPrimitives";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
@@ -15,6 +15,8 @@ export default function SttTab() {
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testMsg, setTestMsg] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [fetchStatus, setFetchStatus] = useState<"idle" | "loading" | "fail">("idle");
 
   if (!settings) return null;
   const stt = settings.stt;
@@ -23,12 +25,20 @@ export default function SttTab() {
     updateSettings({ stt: { ...stt, ...patch } });
   };
 
-  const applyPreset = (preset: "groq" | "openai") => {
-    if (preset === "groq") {
-      update({ base_url: "https://api.groq.com/openai/v1", model: "whisper-large-v3-turbo" });
-      return;
+  const fetchModels = async () => {
+    if (!stt.base_url) return;
+    setFetchStatus("loading");
+    try {
+      const list = await invoke<string[]>("fetch_models", {
+        baseUrl: stt.base_url,
+        apiKey: stt.api_key,
+      });
+      setModels(list);
+      setFetchStatus("idle");
+    } catch {
+      setModels([]);
+      setFetchStatus("fail");
     }
-    update({ base_url: "https://api.openai.com/v1", model: "whisper-1" });
   };
 
   const testConnection = async () => {
@@ -49,24 +59,6 @@ export default function SttTab() {
         {t("stt.quickStartDesc")}
       </Notice>
 
-      {/* Providers */}
-      <Section title={t("stt.providersTitle")} description={t("stt.providersDesc")}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <OptionCard
-            title="Groq"
-            description={t("stt.groqPresetDesc")}
-            selected={stt.base_url.includes("groq.com")}
-            onClick={() => applyPreset("groq")}
-          />
-          <OptionCard
-            title="OpenAI"
-            description={t("stt.openaiPresetDesc")}
-            selected={stt.base_url.includes("openai.com")}
-            onClick={() => applyPreset("openai")}
-          />
-        </div>
-      </Section>
-
       {/* Connection */}
       <Section title={t("stt.connectionTitle")} description={t("stt.connectionDesc")}>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -79,7 +71,7 @@ export default function SttTab() {
                 value={stt.base_url}
                 onChange={(e) => update({ base_url: e.target.value })}
                 className="field-input"
-                placeholder="https://api.groq.com/openai/v1"
+                placeholder="https://api.openai.com/v1"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -114,16 +106,36 @@ export default function SttTab() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
-              <input
-                id="stt-model"
-                name="stt-model"
-                value={stt.model}
-                onChange={(e) => update({ model: e.target.value })}
-                className="field-input"
-                placeholder="whisper-large-v3-turbo"
-                autoComplete="off"
-                spellCheck={false}
-              />
+              <div className="flex gap-2">
+                <input
+                  id="stt-model"
+                  name="stt-model"
+                  list="stt-model-list"
+                  value={stt.model}
+                  onChange={(e) => update({ model: e.target.value })}
+                  className="field-input flex-1"
+                  placeholder="whisper-1"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  onClick={fetchModels}
+                  disabled={!stt.base_url || fetchStatus === "loading"}
+                  className="btn btn-ghost shrink-0 text-xs"
+                >
+                  {fetchStatus === "loading" ? t("stt.fetchingModels") : t("stt.fetchModels")}
+                </button>
+              </div>
+              {models.length > 0 && (
+                <datalist id="stt-model-list">
+                  {models.map((m) => <option key={m} value={m} />)}
+                </datalist>
+              )}
+              {fetchStatus === "fail" && (
+                <p className="text-[11px] text-[var(--danger)]">{t("stt.fetchModelsFail")}</p>
+              )}
+              <p className={hintCls}>{t("stt.modelHint")}</p>
             </div>
 
             <div className="space-y-1.5">

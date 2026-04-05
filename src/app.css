@@ -17,14 +17,14 @@
 }
 
 .dark {
-  --bg: #0c0c0c;
-  --bg-subtle: #141414;
-  --border: #232323;
+  --bg: #111114;
+  --bg-subtle: #191920;
+  --border: #2a2a30;
   --text: #ececec;
   --text-secondary: #8b8b8b;
-  --text-muted: #555555;
+  --text-muted: #5a5a64;
   --accent: #a78bfa;
-  --accent-fg: #0c0c0c;
+  --accent-fg: #111114;
   --red: #e5484d;
   --green: #3fb950;
   --amber: #d29922;
@@ -46,6 +46,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   color: var(--text);
   background: var(--bg);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
 }
 
 body[data-capsule="true"] {
