@@ -9,11 +9,11 @@ import {
   getRecommendedHotkeyLabel,
 } from "../../lib/settingsFormatters";
 import type { AppSettings } from "../../stores/settingsStore";
-import { Notice, OptionCard, SectionCard, StatusPill } from "./SettingPrimitives";
+import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
 
-const fieldLabelCls = "text-sm font-medium text-gray-700 dark:text-gray-200";
-const fieldHintCls = "text-xs leading-5 text-gray-500 dark:text-gray-400";
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function GeneralTab() {
   const { t, i18n } = useTranslation();
@@ -23,7 +23,9 @@ export default function GeneralTab() {
   const platform = useAppStore((s) => s.platform);
 
   useEffect(() => {
-    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch((e) => console.error("Failed to list audio devices:", e));
+    invoke<string[]>("list_audio_devices")
+      .then(setAudioDevices)
+      .catch((e) => console.error("Failed to list audio devices:", e));
   }, []);
 
   if (!settings) return null;
@@ -41,8 +43,11 @@ export default function GeneralTab() {
   const isRecommendedHotkey =
     g.hotkey.hotkey_type === "hold" &&
     g.hotkey.key.trim().toLowerCase() === recommendedKeyToken.toLowerCase();
+
   const refreshDevices = () => {
-    invoke<string[]>("list_audio_devices").then(setAudioDevices).catch((e) => console.error("Failed to list audio devices:", e));
+    invoke<string[]>("list_audio_devices")
+      .then(setAudioDevices)
+      .catch((e) => console.error("Failed to list audio devices:", e));
   };
 
   const platformNote =
@@ -55,18 +60,19 @@ export default function GeneralTab() {
           : t("general.platformHelpUnknown");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <Notice title={t("general.quickStartTitle")} tone="accent">
         {t("general.quickStartDesc", { hotkey: hotkeySummary })}
       </Notice>
 
-      <SectionCard
+      {/* Hotkey */}
+      <Section
         title={t("general.hotkey")}
         description={t("general.hotkeyDesc")}
-        aside={<StatusPill tone={hotkeyAdvice.tone}>{hotkeySummary}</StatusPill>}
+        aside={<StatusDot tone={hotkeyAdvice.tone}>{hotkeySummary}</StatusDot>}
       >
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {([
               { value: "single", title: t("general.single"), description: t("general.singleDesc") },
               { value: "double_tap", title: t("general.doubleTap"), description: t("general.doubleTapDesc") },
@@ -78,114 +84,81 @@ export default function GeneralTab() {
                 title={option.title}
                 description={option.description}
                 selected={g.hotkey.hotkey_type === option.value}
-                onClick={() =>
-                  update({
-                    hotkey: {
-                      ...g.hotkey,
-                      hotkey_type: option.value,
-                    },
-                  })
-                }
+                onClick={() => update({ hotkey: { ...g.hotkey, hotkey_type: option.value } })}
               />
             ))}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="hotkey-key" className={fieldLabelCls}>
-                {t("general.key")}
-              </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="hotkey-key" className={labelCls}>{t("general.key")}</label>
               <input
                 id="hotkey-key"
                 name="hotkey-key"
                 value={g.hotkey.key}
                 onChange={(e) => update({ hotkey: { ...g.hotkey, key: e.target.value } })}
-                className="app-input"
+                className="field-input"
                 placeholder={platform === "macos" ? "RCmd" : "RCtrl"}
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={fieldHintCls}>{t("general.keyHint")}</p>
+              <p className={hintCls}>{t("general.keyHint")}</p>
             </div>
 
             {g.hotkey.hotkey_type === "combo" ? (
-              <div className="space-y-2">
-                <label htmlFor="hotkey-modifier" className={fieldLabelCls}>
-                  {t("general.modifier")}
-                </label>
+              <div className="space-y-1.5">
+                <label htmlFor="hotkey-modifier" className={labelCls}>{t("general.modifier")}</label>
                 <input
                   id="hotkey-modifier"
                   name="hotkey-modifier"
                   value={g.hotkey.modifier ?? ""}
-                  onChange={(e) =>
-                    update({
-                      hotkey: { ...g.hotkey, modifier: e.target.value || null },
-                    })
-                  }
-                  className="app-input"
+                  onChange={(e) => update({ hotkey: { ...g.hotkey, modifier: e.target.value || null } })}
+                  className="field-input"
                   placeholder="Ctrl"
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <p className={fieldHintCls}>{t("general.modifierHint")}</p>
+                <p className={hintCls}>{t("general.modifierHint")}</p>
               </div>
             ) : g.hotkey.hotkey_type === "double_tap" ? (
-              <div className="space-y-2">
-                <label htmlFor="hotkey-double-tap" className={fieldLabelCls}>
-                  {t("general.doubleTapInterval")}
-                </label>
-                <div className="flex items-center gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="hotkey-double-tap" className={labelCls}>{t("general.doubleTapInterval")}</label>
+                <div className="flex items-center gap-2">
                   <input
                     id="hotkey-double-tap"
                     name="hotkey-double-tap"
                     type="number"
                     value={g.hotkey.double_tap_interval_ms}
-                    onChange={(e) =>
-                      update({
-                        hotkey: {
-                          ...g.hotkey,
-                          double_tap_interval_ms: Number(e.target.value),
-                        },
-                      })
-                    }
-                    className="app-input max-w-32"
+                    onChange={(e) => update({ hotkey: { ...g.hotkey, double_tap_interval_ms: Number(e.target.value) } })}
+                    className="field-input max-w-28"
                     min={100}
                     max={1000}
                     step={50}
                     inputMode="numeric"
                   />
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{t("general.ms")}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{t("general.ms")}</span>
                 </div>
-                <p className={fieldHintCls}>{t("general.doubleTapHint")}</p>
+                <p className={hintCls}>{t("general.doubleTapHint")}</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                <p className={fieldLabelCls}>{t("general.hotkeyPreviewTitle")}</p>
-                <div className="app-callout" data-tone="accent">
-                  <p className="text-sm font-semibold tracking-tight">{t("general.hotkeyPreview", { hotkey: hotkeySummary })}</p>
-                  <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                    {t("general.hotkeyBehaviorHint")}
-                  </p>
-                </div>
+              <div className="space-y-1.5">
+                <p className={labelCls}>{t("general.hotkeyPreviewTitle")}</p>
+                <p className="text-[13px] font-medium">{t("general.hotkeyPreview", { hotkey: hotkeySummary })}</p>
+                <p className={hintCls}>{t("general.hotkeyBehaviorHint")}</p>
               </div>
             )}
           </div>
 
           <Notice title={t(hotkeyAdvice.titleKey)} tone={hotkeyAdvice.tone}>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <p>{t(hotkeyAdvice.bodyKey, { recommended: recommendedHoldKey })}</p>
               {!isRecommendedHotkey ? (
                 <button
                   type="button"
-                  className="app-button-ghost"
+                  className="btn btn-ghost text-xs"
                   onClick={() =>
                     update({
-                      hotkey: {
-                        ...g.hotkey,
-                        hotkey_type: "hold",
-                        key: recommendedKeyToken,
-                        modifier: null,
-                      },
+                      hotkey: { ...g.hotkey, hotkey_type: "hold", key: recommendedKeyToken, modifier: null },
                     })
                   }
                 >
@@ -199,106 +172,89 @@ export default function GeneralTab() {
             {t("general.hotkeyWindowPauseBody")}
           </Notice>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title={t("general.sectionRecording")} description={t("general.recordingDesc")}>
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="microphone-device" className={fieldLabelCls}>
-                  {t("general.microphoneDevice")}
-                </label>
-                <button
-                  type="button"
-                  onClick={refreshDevices}
-                  className="app-button-ghost px-3 py-2 text-xs"
-                  aria-label={t("general.refreshDevices")}
-                >
-                  {t("general.refreshDevices")}
-                </button>
-              </div>
-              <select
-                id="microphone-device"
-                name="microphone-device"
-                value={g.microphone_device ?? ""}
-                onChange={(e) => update({ microphone_device: e.target.value || null })}
-                className="app-select"
-              >
-                <option value="">{t("general.defaultDevice")}</option>
-                {audioDevices.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <p className={fieldHintCls}>{t("general.microphoneHint")}</p>
+      {/* Recording */}
+      <Section title={t("general.sectionRecording")} description={t("general.recordingDesc")}>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="microphone-device" className={labelCls}>{t("general.microphoneDevice")}</label>
+              <button type="button" onClick={refreshDevices} className="btn btn-ghost text-xs">
+                {t("general.refreshDevices")}
+              </button>
             </div>
-
-            <div className="space-y-2">
-              <label htmlFor="max-recording" className={fieldLabelCls}>
-                {t("general.maxRecording")}
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  id="max-recording"
-                  name="max-recording"
-                  type="number"
-                  value={g.max_recording_seconds}
-                  onChange={(e) => update({ max_recording_seconds: Number(e.target.value) })}
-                  className="app-input max-w-32"
-                  min={10}
-                  max={600}
-                  step={10}
-                  inputMode="numeric"
-                />
-                <span className="text-sm text-gray-500 dark:text-gray-400">{t("general.seconds")}</span>
-              </div>
-              <p className={fieldHintCls}>{t("general.maxRecordingHint")}</p>
-            </div>
+            <select
+              id="microphone-device"
+              name="microphone-device"
+              value={g.microphone_device ?? ""}
+              onChange={(e) => update({ microphone_device: e.target.value || null })}
+              className="field-select"
+            >
+              <option value="">{t("general.defaultDevice")}</option>
+              {audioDevices.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <p className={hintCls}>{t("general.microphoneHint")}</p>
           </div>
 
-          <div className="space-y-3">
-            <div className="app-subtle-surface flex items-center justify-between rounded-2xl border border-black/5 px-4 py-4 dark:border-white/8">
-              <div className="space-y-1">
-                <p id="sound-effects-label" className="text-sm font-semibold tracking-tight">{t("general.soundEffects")}</p>
-                <p className={fieldHintCls}>{t("general.soundEffectsHint")}</p>
-              </div>
-              <Toggle
-                checked={g.sound_effects}
-                onChange={(v) => update({ sound_effects: v })}
-                ariaLabelledBy="sound-effects-label"
+          <div className="space-y-1.5">
+            <label htmlFor="max-recording" className={labelCls}>{t("general.maxRecording")}</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="max-recording"
+                name="max-recording"
+                type="number"
+                value={g.max_recording_seconds}
+                onChange={(e) => update({ max_recording_seconds: Number(e.target.value) })}
+                className="field-input max-w-28"
+                min={10}
+                max={600}
+                step={10}
+                inputMode="numeric"
               />
+              <span className="text-xs text-[var(--text-muted)]">{t("general.seconds")}</span>
             </div>
-
-            <div className="app-subtle-surface flex items-center justify-between rounded-2xl border border-black/5 px-4 py-4 dark:border-white/8">
-              <div className="space-y-1">
-                <p id="auto-mute-label" className="text-sm font-semibold tracking-tight">{t("general.autoMute")}</p>
-                <p className={fieldHintCls}>{t("general.autoMuteHint")}</p>
-              </div>
-              <Toggle
-                checked={g.auto_mute}
-                onChange={(v) => update({ auto_mute: v })}
-                ariaLabelledBy="auto-mute-label"
-              />
-            </div>
-
-            {platform === "linux" ? (
-              <Notice title={t("general.autoMuteLinuxTitle")} tone="warning">
-                {t("general.autoMuteLinuxBody")}
-              </Notice>
-            ) : null}
+            <p className={hintCls}>{t("general.maxRecordingHint")}</p>
           </div>
+
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div>
+              <p id="sound-effects-label" className="text-[13px] font-medium">{t("general.soundEffects")}</p>
+              <p className={hintCls}>{t("general.soundEffectsHint")}</p>
+            </div>
+            <Toggle checked={g.sound_effects} onChange={(v) => update({ sound_effects: v })} ariaLabelledBy="sound-effects-label" />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div>
+              <p id="auto-mute-label" className="text-[13px] font-medium">{t("general.autoMute")}</p>
+              <p className={hintCls}>{t("general.autoMuteHint")}</p>
+            </div>
+            <Toggle checked={g.auto_mute} onChange={(v) => update({ auto_mute: v })} ariaLabelledBy="auto-mute-label" />
+          </div>
+
+          {platform === "linux" ? (
+            <Notice title={t("general.autoMuteLinuxTitle")} tone="warning">
+              {t("general.autoMuteLinuxBody")}
+            </Notice>
+          ) : null}
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
+      {/* Output */}
+      <Section
         title={t("general.sectionOutput")}
         description={t("general.outputDesc")}
-        aside={<StatusPill tone={g.output_mode === "auto_paste" ? "accent" : "default"}>{g.output_mode === "auto_paste" ? t("general.autoPaste") : t("general.clipboardOnly")}</StatusPill>}
+        aside={
+          <StatusDot tone={g.output_mode === "auto_paste" ? "accent" : "default"}>
+            {g.output_mode === "auto_paste" ? t("general.autoPaste") : t("general.clipboardOnly")}
+          </StatusDot>
+        }
       >
         <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <OptionCard
               title={t("general.autoPaste")}
               description={t("general.autoPasteDesc")}
@@ -314,25 +270,19 @@ export default function GeneralTab() {
           </div>
 
           {g.output_mode === "auto_paste" ? (
-            <div className="space-y-2">
-              <label htmlFor="clipboard-behavior" className={fieldLabelCls}>
-                {t("general.clipboardBehavior")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="clipboard-behavior" className={labelCls}>{t("general.clipboardBehavior")}</label>
               <select
                 id="clipboard-behavior"
                 name="clipboard-behavior"
                 value={g.clipboard_behavior}
-                onChange={(e) =>
-                  update({
-                    clipboard_behavior: e.target.value as "always" | "only_on_paste_fail",
-                  })
-                }
-                className="app-select max-w-xl"
+                onChange={(e) => update({ clipboard_behavior: e.target.value as "always" | "only_on_paste_fail" })}
+                className="field-select max-w-md"
               >
                 <option value="always">{t("general.alwaysCopy")}</option>
                 <option value="only_on_paste_fail">{t("general.onPasteFail")}</option>
               </select>
-              <p className={fieldHintCls}>{t("general.clipboardBehaviorHint")}</p>
+              <p className={hintCls}>{t("general.clipboardBehaviorHint")}</p>
             </div>
           ) : null}
 
@@ -340,20 +290,19 @@ export default function GeneralTab() {
             {platformNote}
           </Notice>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="theme-select" className={fieldLabelCls}>
-              {t("general.theme")}
-            </label>
+      {/* Appearance */}
+      <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="theme-select" className={labelCls}>{t("general.theme")}</label>
             <select
               id="theme-select"
               name="theme-select"
               value={g.theme}
               onChange={(e) => update({ theme: e.target.value })}
-              className="app-select"
+              className="field-select"
             >
               <option value="system">{t("general.system")}</option>
               <option value="light">{t("general.light")}</option>
@@ -361,10 +310,8 @@ export default function GeneralTab() {
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="language-select" className={fieldLabelCls}>
-              {t("general.language")}
-            </label>
+          <div className="space-y-1.5">
+            <label htmlFor="language-select" className={labelCls}>{t("general.language")}</label>
             <select
               id="language-select"
               name="language-select"
@@ -373,50 +320,47 @@ export default function GeneralTab() {
                 update({ language: e.target.value });
                 i18n.changeLanguage(e.target.value);
               }}
-              className="app-select"
+              className="field-select"
             >
               <option value="zh-TW">繁體中文</option>
               <option value="en">English</option>
             </select>
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title={t("general.sectionAdvanced")} description={t("general.advancedDesc")}>
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="timeout-ms" className={fieldLabelCls}>
-                {t("general.timeout")}
-              </label>
-              <div className="flex items-center gap-3">
+      {/* Advanced */}
+      <Section title={t("general.sectionAdvanced")} description={t("general.advancedDesc")}>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="timeout-ms" className={labelCls}>{t("general.timeout")}</label>
+              <div className="flex items-center gap-2">
                 <input
                   id="timeout-ms"
                   name="timeout-ms"
                   type="number"
                   value={g.timeout_ms}
                   onChange={(e) => update({ timeout_ms: Number(e.target.value) })}
-                  className="app-input"
+                  className="field-input"
                   min={5000}
                   max={120000}
                   step={1000}
                   inputMode="numeric"
                 />
-                <span className="text-sm text-gray-500 dark:text-gray-400">{t("general.ms")}</span>
+                <span className="text-xs text-[var(--text-muted)]">{t("general.ms")}</span>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="max-retries" className={fieldLabelCls}>
-                {t("general.maxRetries")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="max-retries" className={labelCls}>{t("general.maxRetries")}</label>
               <input
                 id="max-retries"
                 name="max-retries"
                 type="number"
                 value={g.max_retries}
                 onChange={(e) => update({ max_retries: Number(e.target.value) })}
-                className="app-input"
+                className="field-input"
                 min={0}
                 max={5}
                 step={1}
@@ -425,25 +369,27 @@ export default function GeneralTab() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="app-subtle-surface flex items-center justify-between rounded-2xl border border-black/5 px-4 py-4 dark:border-white/8">
-              <div className="space-y-1">
-                <p id="auto-start-label" className="text-sm font-semibold tracking-tight">{t("general.autoStart")}</p>
-                <p className={fieldHintCls}>{t("general.autoStartHint")}</p>
-              </div>
-              <Toggle
-                checked={g.auto_start}
-                onChange={(v) => update({ auto_start: v })}
-                ariaLabelledBy="auto-start-label"
-              />
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div>
+              <p id="auto-start-label" className="text-[13px] font-medium">{t("general.autoStart")}</p>
+              <p className={hintCls}>{t("general.autoStartHint")}</p>
             </div>
-
-            <Notice title={t("general.advancedNoteTitle")} tone="default">
-              {t("general.advancedNote")}
-            </Notice>
+            <Toggle checked={g.auto_start} onChange={(v) => update({ auto_start: v })} ariaLabelledBy="auto-start-label" />
           </div>
+
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div>
+              <p id="close-to-tray-label" className="text-[13px] font-medium">{t("general.closeToTray")}</p>
+              <p className={hintCls}>{t("general.closeToTrayHint")}</p>
+            </div>
+            <Toggle checked={g.close_to_tray} onChange={(v) => update({ close_to_tray: v })} ariaLabelledBy="close-to-tray-label" />
+          </div>
+
+          <Notice title={t("general.advancedNoteTitle")} tone="default">
+            {t("general.advancedNote")}
+          </Notice>
         </div>
-      </SectionCard>
+      </Section>
     </div>
   );
 }

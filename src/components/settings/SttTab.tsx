@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
-import { Notice, OptionCard, SectionCard, StatusPill } from "./SettingPrimitives";
+import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
 
-const fieldLabelCls = "text-sm font-medium text-gray-700 dark:text-gray-200";
-const fieldHintCls = "text-xs leading-5 text-gray-500 dark:text-gray-400";
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function SttTab() {
   const { t } = useTranslation();
@@ -25,23 +25,16 @@ export default function SttTab() {
 
   const applyPreset = (preset: "groq" | "openai") => {
     if (preset === "groq") {
-      update({
-        base_url: "https://api.groq.com/openai/v1",
-        model: "whisper-large-v3-turbo",
-      });
+      update({ base_url: "https://api.groq.com/openai/v1", model: "whisper-large-v3-turbo" });
       return;
     }
-
-    update({
-      base_url: "https://api.openai.com/v1",
-      model: "whisper-1",
-    });
+    update({ base_url: "https://api.openai.com/v1", model: "whisper-1" });
   };
 
   const testConnection = async () => {
     setTestStatus("testing");
     try {
-      const msg = await invoke<string>("test_stt", { config: stt });
+      const msg = await invoke<string>("test_stt", { sttConfig: stt });
       setTestStatus("ok");
       setTestMsg(msg);
     } catch (e) {
@@ -51,17 +44,14 @@ export default function SttTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <Notice title={t("stt.quickStartTitle")} tone="accent">
         {t("stt.quickStartDesc")}
       </Notice>
 
-      <SectionCard
-        title={t("stt.providersTitle")}
-        description={t("stt.providersDesc")}
-        aside={<StatusPill tone="accent">{t("stt.compatibleBadge")}</StatusPill>}
-      >
-        <div className="grid gap-3 md:grid-cols-2">
+      {/* Providers */}
+      <Section title={t("stt.providersTitle")} description={t("stt.providersDesc")}>
+        <div className="grid gap-3 sm:grid-cols-2">
           <OptionCard
             title="Groq"
             description={t("stt.groqPresetDesc")}
@@ -75,32 +65,29 @@ export default function SttTab() {
             onClick={() => applyPreset("openai")}
           />
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard title={t("stt.connectionTitle")} description={t("stt.connectionDesc")}>
-        <div className="grid gap-4 lg:grid-cols-2">
+      {/* Connection */}
+      <Section title={t("stt.connectionTitle")} description={t("stt.connectionDesc")}>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="stt-base-url" className={fieldLabelCls}>
-                {t("stt.baseUrl")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")}</label>
               <input
                 id="stt-base-url"
                 name="stt-base-url"
                 value={stt.base_url}
                 onChange={(e) => update({ base_url: e.target.value })}
-                className="app-input"
+                className="field-input"
                 placeholder="https://api.groq.com/openai/v1"
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={fieldHintCls}>{t("stt.baseUrlHint")}</p>
+              <p className={hintCls}>{t("stt.baseUrlHint")}</p>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="stt-api-key" className={fieldLabelCls}>
-                {t("stt.apiKey")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")}</label>
               <div className="relative">
                 <input
                   id="stt-api-key"
@@ -108,14 +95,14 @@ export default function SttTab() {
                   type={showKey ? "text" : "password"}
                   value={stt.api_key}
                   onChange={(e) => update({ api_key: e.target.value })}
-                  className="app-input pr-20"
+                  className="field-input pr-16"
                   autoComplete="off"
                   spellCheck={false}
                 />
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="app-button-ghost absolute right-2 top-2 px-3 py-1 text-xs"
+                  className="btn btn-ghost absolute right-1 top-1 px-2 py-1 text-xs"
                   aria-label={showKey ? t("stt.hideKey") : t("stt.showKey")}
                 >
                   {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
@@ -125,53 +112,58 @@ export default function SttTab() {
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="stt-model" className={fieldLabelCls}>
-                {t("stt.model")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
               <input
                 id="stt-model"
                 name="stt-model"
                 value={stt.model}
                 onChange={(e) => update({ model: e.target.value })}
-                className="app-input"
+                className="field-input"
                 placeholder="whisper-large-v3-turbo"
                 autoComplete="off"
                 spellCheck={false}
               />
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="stt-language" className={fieldLabelCls}>
-                {t("stt.language")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")}</label>
               <input
                 id="stt-language"
                 name="stt-language"
                 value={stt.language ?? ""}
                 onChange={(e) => update({ language: e.target.value || null })}
-                className="app-input"
+                className="field-input"
                 placeholder="zh"
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={fieldHintCls}>{t("stt.languageHint")}</p>
+              <p className={hintCls}>{t("stt.languageHint")}</p>
             </div>
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
+      {/* Validation */}
+      <Section
         title={t("stt.validationTitle")}
         description={t("stt.validationDesc")}
         aside={
-          <StatusPill tone={testStatus === "ok" ? "success" : testStatus === "fail" ? "danger" : "default"}>
-            {testStatus === "idle" ? t("stt.validationIdle") : testStatus === "testing" ? t("actions.testing") : testStatus === "ok" ? t("actions.connected") : t("stt.validationFailed")}
-          </StatusPill>
+          <StatusDot
+            tone={testStatus === "ok" ? "success" : testStatus === "fail" ? "danger" : "default"}
+          >
+            {testStatus === "idle"
+              ? t("stt.validationIdle")
+              : testStatus === "testing"
+                ? t("actions.testing")
+                : testStatus === "ok"
+                  ? t("actions.connected")
+                  : t("stt.validationFailed")}
+          </StatusDot>
         }
       >
-        <div className="space-y-4">
-          <button onClick={testConnection} disabled={testStatus === "testing"} className="app-button-primary">
+        <div className="space-y-3">
+          <button onClick={testConnection} disabled={testStatus === "testing"} className="btn btn-primary">
             {testStatus === "testing" ? t("actions.testing") : t("actions.testConnection")}
           </button>
 
@@ -187,7 +179,7 @@ export default function SttTab() {
             </Notice>
           ) : null}
         </div>
-      </SectionCard>
+      </Section>
     </div>
   );
 }

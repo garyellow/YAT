@@ -22,7 +22,6 @@ export default function App() {
     loadPlatform();
   }, [loadPlatform, loadSettings, init]);
 
-  // Sync language
   useEffect(() => {
     if (language) {
       i18n.changeLanguage(language);
@@ -30,7 +29,6 @@ export default function App() {
     }
   }, [language, i18n]);
 
-  // Sync theme
   useEffect(() => {
     const root = document.documentElement;
     const setColorScheme = (isDark: boolean) => {
@@ -44,7 +42,6 @@ export default function App() {
       root.classList.remove("dark");
       setColorScheme(false);
     } else {
-      // System
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       const update = () => {
         if (mq.matches) {
@@ -62,26 +59,18 @@ export default function App() {
 
   if (loading || !settings || !platformLoaded) {
     return (
-      <div className="app-loading-screen" aria-live="polite">
-        <div className="app-loading-orb" aria-hidden="true" />
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-semibold tracking-[0.18em] text-primary/80 uppercase">
-            YAT
-          </p>
-          <p className="text-base font-medium text-gray-700 dark:text-gray-200">
-            {t("status.loading")}
-          </p>
-        </div>
+      <div className="loading-screen" aria-live="polite">
+        <p className="text-sm text-[var(--text-muted)]">{t("status.loading")}</p>
       </div>
     );
   }
 
   return (
-    <div className="app-root text-gray-900 dark:text-gray-100">
+    <>
       <a href="#settings-content" className="skip-link">
         Skip to content
       </a>
       <Settings />
-    </div>
+    </>
   );
 }

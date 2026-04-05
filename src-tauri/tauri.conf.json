@@ -24,6 +24,7 @@
       }
     ],
     "trayIcon": {
+      "id": "yat-tray",
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true
     },

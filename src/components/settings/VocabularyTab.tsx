@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
-import type { VocabularyEntry } from "../../stores/settingsStore";
-import { EmptyState, Notice, SectionCard, StatusPill } from "./SettingPrimitives";
+import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function VocabularyTab() {
   const { t } = useTranslation();
@@ -11,142 +13,133 @@ export default function VocabularyTab() {
 
   const [wrong, setWrong] = useState("");
   const [correct, setCorrect] = useState("");
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [validationMsg, setValidationMsg] = useState("");
 
   if (!settings) return null;
-
   const vocab = settings.prompt.vocabulary;
 
   const addEntry = () => {
-    if (!wrong.trim() || !correct.trim()) {
-      setValidationMessage(t("vocabulary.validationRequired"));
+    const w = wrong.trim();
+    const c = correct.trim();
+    if (!w || !c) {
+      setValidationMsg(t("vocabulary.validationRequired"));
       return;
     }
-
-    if (
-      vocab.some(
-        (entry) => entry.wrong.trim().toLowerCase() === wrong.trim().toLowerCase()
-      )
-    ) {
-      setValidationMessage(t("vocabulary.validationDuplicate"));
+    if (vocab.some((e) => e.wrong.trim().toLowerCase() === w.toLowerCase())) {
+      setValidationMsg(t("vocabulary.validationDuplicate"));
       return;
     }
-
-    const entry: VocabularyEntry = { wrong: wrong.trim(), correct: correct.trim() };
-    updateSettings({
-      prompt: { ...settings.prompt, vocabulary: [...vocab, entry] },
-    });
-    setWrong("");
-    setCorrect("");
-    setValidationMessage(null);
-  };
-
-  const removeEntry = (idx: number) => {
+    setValidationMsg("");
     updateSettings({
       prompt: {
         ...settings.prompt,
-        vocabulary: vocab.filter((_, i) => i !== idx),
+        vocabulary: [...vocab, { wrong: w, correct: c }],
+      },
+    });
+    setWrong("");
+    setCorrect("");
+  };
+
+  const removeEntry = (index: number) => {
+    updateSettings({
+      prompt: {
+        ...settings.prompt,
+        vocabulary: vocab.filter((_, i) => i !== index),
       },
     });
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
       addEntry();
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <Notice title={t("vocabulary.safeCustomizationTitle")} tone="accent">
         {t("vocabulary.safeCustomizationBody")}
       </Notice>
 
-      <SectionCard title={t("vocabulary.addTitle")} description={t("vocabulary.addDesc")}>
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-            <div className="space-y-2">
-              <label htmlFor="wrong-form" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {t("vocabulary.wrongForm")}
-              </label>
+      {/* Add entry */}
+      <Section
+        title={t("vocabulary.addTitle")}
+        description={t("vocabulary.addDesc")}
+        aside={
+          <StatusDot tone="default">
+            {t("vocabulary.entryCount", { count: vocab.length })}
+          </StatusDot>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] items-end">
+            <div className="space-y-1.5">
+              <label htmlFor="vocab-wrong" className={labelCls}>{t("vocabulary.wrongForm")}</label>
               <input
-                id="wrong-form"
-                name="wrong-form"
+                id="vocab-wrong"
+                name="vocab-wrong"
                 value={wrong}
-                onChange={(e) => {
-                  setWrong(e.target.value);
-                  setValidationMessage(null);
-                }}
+                onChange={(e) => setWrong(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="app-input"
-                placeholder="eg: 台風"
+                className="field-input"
                 autoComplete="off"
+                spellCheck={false}
               />
             </div>
-
-            <div className="space-y-2">
-              <label htmlFor="correct-form" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {t("vocabulary.correctForm")}
-              </label>
+            <div className="space-y-1.5">
+              <label htmlFor="vocab-correct" className={labelCls}>{t("vocabulary.correctForm")}</label>
               <input
-                id="correct-form"
-                name="correct-form"
+                id="vocab-correct"
+                name="vocab-correct"
                 value={correct}
-                onChange={(e) => {
-                  setCorrect(e.target.value);
-                  setValidationMessage(null);
-                }}
+                onChange={(e) => setCorrect(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="app-input"
-                placeholder="eg: 颱風"
+                className="field-input"
                 autoComplete="off"
+                spellCheck={false}
               />
             </div>
-
-            <button onClick={addEntry} className="app-button-primary md:mb-0.5">
+            <button type="button" onClick={addEntry} className="btn btn-primary">
               {t("vocabulary.addEntry")}
             </button>
           </div>
 
-          {validationMessage ? (
-            <Notice title={t("vocabulary.validationTitle")} tone="warning">
-              {validationMessage}
-            </Notice>
-          ) : null}
+          {validationMsg ? (
+            <p className="text-xs text-[var(--red)]">{validationMsg}</p>
+          ) : (
+            <p className={hintCls}>{t("vocabulary.emptyHint")}</p>
+          )}
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
-        title={t("vocabulary.listTitle")}
-        description={t("vocabulary.listDesc")}
-        aside={<StatusPill tone={vocab.length > 0 ? "accent" : "default"}>{t("vocabulary.entryCount", { count: vocab.length })}</StatusPill>}
-      >
+      {/* Vocabulary list */}
+      <Section title={t("vocabulary.listTitle")} description={t("vocabulary.listDesc")}>
         {vocab.length === 0 ? (
           <EmptyState
-            icon="📖"
             title={t("vocabulary.noEntries")}
             description={t("vocabulary.emptyHint")}
           />
         ) : (
-          <div className="space-y-3">
-            {vocab.map((entry, idx) => (
-              <div key={`${entry.wrong}-${entry.correct}-${idx}`} className="app-subtle-surface flex flex-col gap-3 rounded-2xl border border-black/5 p-4 dark:border-white/8 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
-                    {t("vocabulary.correctionRule")}
-                  </p>
-                  <p className="text-sm font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-                    {entry.wrong} <span className="mx-2 text-gray-400">→</span> {entry.correct}
-                  </p>
+          <div className="space-y-0">
+            {vocab.map((entry, index) => (
+              <div
+                key={`${entry.wrong}-${index}`}
+                className="flex items-center justify-between gap-4 py-2 border-b border-[var(--border)] last:border-b-0"
+              >
+                <div className="min-w-0 flex items-center gap-2 text-[13px]">
+                  <span className="text-[var(--text-muted)] line-through">{entry.wrong}</span>
+                  <span className="text-[var(--text-muted)]">→</span>
+                  <span className="font-medium">{entry.correct}</span>
                 </div>
                 <button
+                  type="button"
+                  className="btn btn-danger text-xs shrink-0"
                   onClick={() => {
                     if (window.confirm(t("vocabulary.confirmDelete"))) {
-                      removeEntry(idx);
+                      removeEntry(index);
                     }
                   }}
-                  className="app-button-danger shrink-0 px-3 py-1.5 text-xs"
                 >
                   {t("actions.delete")}
                 </button>
@@ -154,7 +147,7 @@ export default function VocabularyTab() {
             ))}
           </div>
         )}
-      </SectionCard>
+      </Section>
     </div>
   );
 }

@@ -36,20 +36,22 @@ export default function Toast({
 
   if (phase === "hidden") return null;
 
-  const icon = tone === "error" ? "!" : "✓";
-  const iconClass = tone === "error" ? "text-rose-500" : "text-success";
   const role = tone === "error" ? "alert" : "status";
 
   return (
     <div
       role={role}
       aria-live="polite"
-      className={`fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-full border border-black/5 bg-white/90 px-5 py-2.5 text-sm font-semibold shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/90 ${
+      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-xs font-medium ${
         phase === "enter" ? "toast-enter" : "toast-exit"
       }`}
+      style={{ borderRadius: "4px" }}
     >
       <span className="flex items-center gap-2">
-        <span className={iconClass}>{icon}</span>
+        <span
+          className="dot"
+          data-tone={tone === "error" ? "danger" : "success"}
+        />
         {message}
       </span>
     </div>

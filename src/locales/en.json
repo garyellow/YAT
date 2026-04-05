@@ -214,6 +214,8 @@
     "system": "System",
     "autoStart": "Launch at login",
     "autoStartHint": "Let YAT wait in the background as soon as you sign in.",
+    "closeToTray": "Minimize to tray on close",
+    "closeToTrayHint": "Closing the window hides YAT to the system tray instead of quitting.",
     "maxRecording": "Max duration",
     "maxRecordingHint": "Lower values prevent runaway recordings; higher values work better for long dictation.",
     "seconds": "sec",

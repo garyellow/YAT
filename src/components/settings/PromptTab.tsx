@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
-import { Notice, SectionCard, StatusPill } from "./SettingPrimitives";
+import { Notice, Section } from "./SettingPrimitives";
 import type { SettingsTab } from "./tabs";
+
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 interface PromptTabProps {
   onNavigate?: (tab: SettingsTab) => void;
@@ -17,61 +20,40 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   if (!settings) return null;
-
   const prompt = settings.prompt;
 
-  const updateSystemPrompt = (system_prompt: string) => {
-    updateSettings({ prompt: { ...prompt, system_prompt } });
+  const update = (patch: Partial<typeof prompt>) => {
+    updateSettings({ prompt: { ...prompt, ...patch } });
   };
 
-  const updateUserInstructions = (user_instructions: string) => {
-    updateSettings({ prompt: { ...prompt, user_instructions } });
+  const previewText = buildPromptPreview(prompt);
+  const llmDisabled = !settings.llm.enabled;
+
+  const insertPreset = (preset: string) => {
+    const current = prompt.user_instructions;
+    const sep = current.trim().length > 0 ? "\n" : "";
+    update({ user_instructions: current + sep + preset });
   };
 
-  const appendInstruction = (instruction: string) => {
-    const existing = prompt.user_instructions
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (existing.includes(instruction.trim())) return;
-
-    updateUserInstructions([...existing, instruction.trim()].join("\n"));
-  };
-
-  const resetToDefault = async () => {
+  const resetSystemPrompt = async () => {
     try {
       const defaultPrompt = await invoke<string>("get_default_prompt");
-      updateSystemPrompt(defaultPrompt);
-    } catch (error) {
-      console.error("Failed to load default prompt:", error);
+      update({ system_prompt: defaultPrompt });
+    } catch (e) {
+      console.error("Failed to get default prompt:", e);
     }
   };
 
-  const instructionPresets = [
-    {
-      label: t("prompt.presets.keepToneLabel"),
-      value: t("prompt.presets.keepToneValue"),
-    },
-    {
-      label: t("prompt.presets.bulletsLabel"),
-      value: t("prompt.presets.bulletsValue"),
-    },
-    {
-      label: t("prompt.presets.formalLabel"),
-      value: t("prompt.presets.formalValue"),
-    },
-    {
-      label: t("prompt.presets.meetingLabel"),
-      value: t("prompt.presets.meetingValue"),
-    },
+  const presets = [
+    { key: "keepTone", label: t("prompt.presets.keepToneLabel"), value: t("prompt.presets.keepToneValue") },
+    { key: "bullets", label: t("prompt.presets.bulletsLabel"), value: t("prompt.presets.bulletsValue") },
+    { key: "formal", label: t("prompt.presets.formalLabel"), value: t("prompt.presets.formalValue") },
+    { key: "meeting", label: t("prompt.presets.meetingLabel"), value: t("prompt.presets.meetingValue") },
   ];
 
-  const preview = buildPromptPreview(prompt);
-
   return (
-    <div className="space-y-6">
-      {!settings.llm.enabled ? (
+    <div className="space-y-10">
+      {llmDisabled ? (
         <Notice title={t("prompt.llmDisabledTitle")} tone="warning">
           {t("prompt.llmDisabledBody")}
         </Notice>
@@ -81,138 +63,109 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         {t("prompt.simpleFirstBody")}
       </Notice>
 
-      <SectionCard
-        title={t("prompt.userInstructions")}
-        description={t("prompt.userInstructionsDesc")}
-        aside={
-          <StatusPill tone={prompt.user_instructions.trim() ? "accent" : "default"}>
-            {prompt.user_instructions.trim() ? t("prompt.customRulesOn") : t("prompt.customRulesOff")}
-          </StatusPill>
-        }
-      >
-        <div className="space-y-4">
+      {/* User Instructions */}
+      <Section title={t("prompt.userInstructions")} description={t("prompt.userInstructionsDesc")}>
+        <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            {instructionPresets.map((preset) => (
+            {presets.map((preset) => (
               <button
-                key={preset.label}
+                key={preset.key}
                 type="button"
-                onClick={() => appendInstruction(preset.value)}
-                className="app-button-secondary px-4 py-2 text-xs"
+                className="btn btn-secondary text-xs"
+                onClick={() => insertPreset(preset.value)}
               >
-                + {preset.label}
+                {preset.label}
               </button>
             ))}
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="user-instructions" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              {t("prompt.userInstructions")}
-            </label>
+          <div className="space-y-1.5">
+            <label htmlFor="user-instructions" className={labelCls}>{t("prompt.userInstructions")}</label>
             <textarea
               id="user-instructions"
               name="user-instructions"
               value={prompt.user_instructions}
-              onChange={(e) => updateUserInstructions(e.target.value)}
-              rows={8}
-              className="app-textarea"
+              onChange={(e) => update({ user_instructions: e.target.value })}
+              className="field-textarea"
               placeholder={t("prompt.userInstructionsPlaceholder")}
+              rows={5}
             />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs leading-5 text-gray-500 dark:text-gray-400">
-                {t("prompt.userInstructionsHint")}
-              </p>
-              {prompt.user_instructions.trim() ? (
-                <button type="button" className="app-button-ghost px-3 py-1.5 text-xs" onClick={() => updateUserInstructions("") }>
+            <div className="flex items-center justify-between">
+              <p className={hintCls}>{t("prompt.userInstructionsHint")}</p>
+              {prompt.user_instructions.trim().length > 0 ? (
+                <button type="button" className="btn btn-ghost text-xs" onClick={() => update({ user_instructions: "" })}>
                   {t("prompt.clearInstructions")}
                 </button>
               ) : null}
             </div>
           </div>
-
-          <Notice title={t("prompt.bestPracticeTitle")} tone="default">
-            {t("prompt.bestPracticeBody")}
-          </Notice>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
+      {/* Preview */}
+      <Section
         title={t("prompt.previewTitle")}
         description={t("prompt.previewDesc")}
-        aside={<StatusPill tone="default">{t("prompt.previewVocabularyCount", { count: prompt.vocabulary.length })}</StatusPill>}
+        aside={
+          <span className="text-xs text-[var(--text-muted)]">
+            {t("prompt.charCount", { count: previewText.length })}
+          </span>
+        }
       >
-        <div className="space-y-4">
-          <Notice title={t("prompt.previewHintTitle")} tone="default">
-            {t("prompt.previewHintBody")}
-          </Notice>
-
-          <div className="app-subtle-surface rounded-2xl border border-black/5 p-4 dark:border-white/8">
-            <pre className="app-pre-wrap max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-6 text-gray-700 dark:text-gray-200">
-              {preview}
+        <div className="space-y-3">
+          <div className="rounded bg-[var(--bg-subtle)] p-3">
+            <pre className="pre-wrap max-h-72 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
+              {previewText}
             </pre>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="app-button-secondary" onClick={() => onNavigate?.("vocabulary") }>
-              {t("prompt.openVocabulary")}
-            </button>
-            <button type="button" className="app-button-ghost" onClick={() => onNavigate?.("llm") }>
-              {t("prompt.openPolishSettings")}
-            </button>
+          <div className="flex gap-2">
+            {onNavigate ? (
+              <>
+                <button className="btn btn-ghost text-xs" onClick={() => onNavigate("vocabulary")}>
+                  {t("prompt.openVocabulary")}
+                </button>
+                <button className="btn btn-ghost text-xs" onClick={() => onNavigate("llm")}>
+                  {t("prompt.openPolishSettings")}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
-        title={t("prompt.advanced")}
-        description={t("prompt.systemPromptDesc")}
-        aside={<StatusPill tone="warning">{t("prompt.advancedWarningBadge")}</StatusPill>}
-      >
-        <div className="space-y-4">
+      {/* Advanced: System Prompt */}
+      <Section title={t("prompt.advanced")} description={t("prompt.systemPromptDesc")}>
+        <div className="space-y-3">
           <button
             type="button"
-            onClick={() => setShowAdvanced((value) => !value)}
-            className="app-button-ghost"
-            aria-expanded={showAdvanced}
-            aria-controls="advanced-system-prompt"
+            className="btn btn-secondary text-xs"
+            onClick={() => setShowAdvanced(!showAdvanced)}
           >
             {showAdvanced ? t("prompt.hideAdvanced") : t("prompt.showAdvanced")}
           </button>
 
           {showAdvanced ? (
-            <div id="advanced-system-prompt" className="space-y-4">
-              <Notice title={t("prompt.advancedWarningTitle")} tone="warning">
-                {t("prompt.advancedWarningBody")}
-              </Notice>
-
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="system-prompt" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    {t("prompt.systemPrompt")}
-                  </label>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {t("prompt.charCount", { count: prompt.system_prompt.length })}
-                  </span>
-                </div>
-                <textarea
-                  id="system-prompt"
-                  name="system-prompt"
-                  value={prompt.system_prompt}
-                  onChange={(e) => updateSystemPrompt(e.target.value)}
-                  rows={16}
-                  className="app-textarea font-mono"
-                  spellCheck={false}
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={resetToDefault} className="app-button-secondary">
+            <div className="space-y-3">
+              <textarea
+                id="system-prompt"
+                name="system-prompt"
+                value={prompt.system_prompt}
+                onChange={(e) => update({ system_prompt: e.target.value })}
+                className="field-textarea"
+                rows={10}
+              />
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-secondary text-xs" onClick={resetSystemPrompt}>
                   {t("prompt.resetToDefault")}
                 </button>
               </div>
+              <Notice title={t("prompt.advancedWarningTitle")} tone="warning">
+                {t("prompt.advancedWarningBody")}
+              </Notice>
             </div>
           ) : null}
         </div>
-      </SectionCard>
+      </Section>
     </div>
   );
 }

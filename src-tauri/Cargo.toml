@@ -6,7 +6,7 @@ authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "YAT_lib"
+name = "yat_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

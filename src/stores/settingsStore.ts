@@ -35,6 +35,7 @@ export interface GeneralConfig {
   sound_effects: boolean;
   auto_mute: boolean;
   microphone_device: string | null;
+  close_to_tray: boolean;
 }
 
 export interface VocabularyEntry {

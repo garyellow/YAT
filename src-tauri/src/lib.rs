@@ -694,24 +694,30 @@ fn load_settings(app: &AppHandle) -> AppSettings {
 }
 
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let show_item = MenuItemBuilder::with_id("toggle_window", "Show / 顯示").build(app)?;
     let settings_item = MenuItemBuilder::with_id("settings", "Settings / 設定").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)?;
 
     let menu = MenuBuilder::new(app)
+        .item(&show_item)
         .item(&settings_item)
         .separator()
         .item(&quit_item)
         .build()?;
 
-    let _tray = TrayIconBuilder::new()
+    let _tray = TrayIconBuilder::with_id("yat-tray")
         .menu(&menu)
         .tooltip("YAT – Voice to Text")
         .on_menu_event(move |app, event| match event.id().as_ref() {
+            "toggle_window" => {
+                toggle_main_window(app);
+            }
             "settings" => {
                 if let Some(win) = app.get_webview_window("main") {
                     win.show().ok();
                     win.set_focus().ok();
                 }
+                refresh_tray_menu(app);
             }
             "quit" => {
                 app.exit(0);
@@ -719,17 +725,66 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click { .. } = event {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
                 let app = tray.app_handle();
-                if let Some(win) = app.get_webview_window("main") {
-                    win.show().ok();
-                    win.set_focus().ok();
-                }
+                toggle_main_window(app);
             }
         })
         .build(app)?;
 
     Ok(())
+}
+
+fn toggle_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        if win.is_visible().unwrap_or(false) {
+            win.hide().ok();
+        } else {
+            win.show().ok();
+            win.set_focus().ok();
+        }
+        refresh_tray_menu(app);
+    }
+}
+
+fn refresh_tray_menu(app: &AppHandle) {
+    if let Some(tray) = app.tray_by_id("yat-tray") {
+        let visible = app
+            .get_webview_window("main")
+            .map(|w| w.is_visible().unwrap_or(false))
+            .unwrap_or(false);
+
+        let label = if visible {
+            "Hide / 隱藏"
+        } else {
+            "Show / 顯示"
+        };
+
+        if let Ok(show_item) = MenuItemBuilder::with_id("toggle_window", label).build(app) {
+            if let Ok(settings_item) =
+                MenuItemBuilder::with_id("settings", "Settings / 設定").build(app)
+            {
+                if let Ok(quit_item) =
+                    MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)
+                {
+                    if let Ok(menu) = MenuBuilder::new(app)
+                        .item(&show_item)
+                        .item(&settings_item)
+                        .separator()
+                        .item(&quit_item)
+                        .build()
+                    {
+                        tray.set_menu(Some(menu)).ok();
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub fn run() {
@@ -781,9 +836,24 @@ pub fn run() {
 
             if let Some(main_window) = handle.get_webview_window("main") {
                 let hotkey_triggers_enabled = Arc::clone(&hotkey_triggers_enabled);
+                let handle_for_events = handle.clone();
                 main_window.on_window_event(move |event| {
-                    if let WindowEvent::Focused(focused) = event {
-                        hotkey_triggers_enabled.store(!focused, Ordering::SeqCst);
+                    match event {
+                        WindowEvent::Focused(focused) => {
+                            hotkey_triggers_enabled.store(!focused, Ordering::SeqCst);
+                        }
+                        WindowEvent::CloseRequested { api, .. } => {
+                            let state = handle_for_events.state::<AppState>();
+                            let close_to_tray = state.settings.lock().general.close_to_tray;
+                            if close_to_tray {
+                                api.prevent_close();
+                                if let Some(win) = handle_for_events.get_webview_window("main") {
+                                    win.hide().ok();
+                                }
+                                refresh_tray_menu(&handle_for_events);
+                            }
+                        }
+                        _ => {}
                     }
                 });
             }

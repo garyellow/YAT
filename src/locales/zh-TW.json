@@ -214,6 +214,8 @@
     "system": "跟隨系統",
     "autoStart": "開機自動啟動",
     "autoStartHint": "登入後讓 YAT 直接在背景待命。",
+    "closeToTray": "關閉時縮小到系統匣",
+    "closeToTrayHint": "按下關閉按鈕時不會結束程式，而是隱藏到系統匣繼續待命。",
     "maxRecording": "最長錄音",
     "maxRecordingHint": "較短的上限可避免忘記停止；較長則適合長段講述。",
     "seconds": "秒",

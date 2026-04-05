@@ -1,190 +1,219 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useHistoryStore, type HistoryEntry } from "../../stores/historyStore";
+import { useHistoryStore } from "../../stores/historyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { EmptyState, Notice, SectionCard, StatCard, StatusPill } from "./SettingPrimitives";
+import type { AppSettings } from "../../stores/settingsStore";
+import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
+
+const dtf = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 export default function HistoryTab() {
-  const { t, i18n } = useTranslation();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const {
-    entries,
-    loading,
-    searchQuery,
-    setSearchQuery,
-    loadHistory,
-    deleteEntry,
-    retryEntry,
-    clearOld,
-  } = useHistoryStore();
-
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const entries = useHistoryStore((s) => s.entries);
+  const loading = useHistoryStore((s) => s.loading);
+  const searchQuery = useHistoryStore((s) => s.searchQuery);
+  const setSearchQuery = useHistoryStore((s) => s.setSearchQuery);
+  const loadHistory = useHistoryStore((s) => s.loadHistory);
+  const deleteEntry = useHistoryStore((s) => s.deleteEntry);
+  const retryEntry = useHistoryStore((s) => s.retryEntry);
+  const clearOld = useHistoryStore((s) => s.clearOld);
+
+  const [query, setQuery] = useState(searchQuery);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const didMountSearchRef = useRef(false);
 
   useEffect(() => {
-    loadHistory();
+    void loadHistory();
   }, [loadHistory]);
 
-  // Debounced search: reload history 400ms after user stops typing
   useEffect(() => {
-    if (searchQuery === "") return;
-    const timer = setTimeout(() => loadHistory(), 400);
-    return () => clearTimeout(timer);
-  }, [searchQuery, loadHistory]);
+    if (!didMountSearchRef.current) {
+      didMountSearchRef.current = true;
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearchQuery(query);
+      void loadHistory();
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, loadHistory, setSearchQuery]);
 
   if (!settings) return null;
+  const history = settings.history;
 
-  const retention = settings.history.retention_hours;
-
-  const copyText = (text: string, id: string) => {
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }).catch((e) => {
-      console.error("clipboard write failed:", e);
-    });
+  const updateHistory = (patch: Partial<AppSettings["history"]>) => {
+    updateSettings({ history: { ...history, ...patch } });
   };
 
-  const formatter = new Intl.DateTimeFormat(i18n.language, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const copyText = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      /* clipboard fallback not needed in tauri */
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <Notice title={t("history.summaryTitle")} tone="accent">
         {t("history.summaryBody")}
       </Notice>
 
-      <div className="app-metric-grid">
-        <StatCard
-          label={t("history.metrics.entries")}
-          value={String(entries.length)}
-          hint={searchQuery ? t("history.metrics.filtered") : t("history.metrics.all")}
-          tone="accent"
-        />
-        <StatCard
-          label={t("history.metrics.retention")}
-          value={`${retention}${t("history.hours")}`}
-          hint={t("history.metrics.retentionHint")}
-          tone="default"
-        />
-      </div>
-
-      <SectionCard title={t("history.controlsTitle")} description={t("history.controlsDesc")}>
-        <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.9fr)_minmax(0,1.4fr)_auto] lg:items-end">
-          <div className="space-y-2">
-            <label htmlFor="history-retention" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              {t("history.retention")}
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="history-retention"
-                name="history-retention"
-                type="number"
-                value={retention}
-                onChange={(e) =>
-                  updateSettings({
-                    history: {
-                      ...settings.history,
-                      retention_hours: Number(e.target.value),
-                    },
-                  })
-                }
-                className="app-input max-w-36"
-                min={1}
-                max={8760}
-                step={1}
-                inputMode="numeric"
-              />
-              <span className="text-sm text-gray-500 dark:text-gray-400">{t("history.hours")}</span>
+      {/* Retention & Search */}
+      <Section title={t("history.controlsTitle")} description={t("history.controlsDesc")}>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="retention-hours" className={labelCls}>{t("history.retention")}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="retention-hours"
+                  name="retention-hours"
+                  type="number"
+                  value={history.retention_hours}
+                  onChange={(e) => updateHistory({ retention_hours: Number(e.target.value) })}
+                  className="field-input max-w-28"
+                  min={1}
+                  max={8760}
+                  step={1}
+                  inputMode="numeric"
+                />
+                <span className="text-xs text-[var(--text-muted)]">{t("history.hours")}</span>
+              </div>
+              <p className={hintCls}>{t("history.metrics.retentionHint")}</p>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <label htmlFor="history-search" className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              {t("history.search")}
-            </label>
-            <div className="flex gap-2">
+            <div className="space-y-1.5">
+              <label htmlFor="history-search" className={labelCls}>{t("history.search")}</label>
               <input
                 id="history-search"
                 name="history-search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && loadHistory()}
-                className="app-input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="field-input"
                 placeholder={t("history.searchPlaceholder")}
                 autoComplete="off"
+                spellCheck={false}
               />
-              <button onClick={() => loadHistory()} className="app-button-secondary shrink-0">
-                {t("history.searchButton")}
-              </button>
             </div>
           </div>
 
-          <button onClick={() => clearOld()} className="app-button-danger shrink-0">
+          <button
+            type="button"
+            className="btn btn-danger text-xs"
+            onClick={() => clearOld()}
+          >
             {t("history.clearOld")}
           </button>
         </div>
-      </SectionCard>
+      </Section>
 
-      <SectionCard
+      {/* Entries */}
+      <Section
         title={t("history.resultsTitle")}
         description={t("history.resultsDesc")}
-        aside={<StatusPill tone={loading ? "accent" : "default"}>{loading ? t("status.loading") : t("history.resultsReady")}</StatusPill>}
+        aside={
+          <StatusDot tone={loading ? "accent" : "default"}>
+            {loading ? t("status.loading") : `${entries.length} ${t("history.metrics.entries")}`}
+          </StatusDot>
+        }
       >
         {loading ? (
-          <Notice title={t("history.loadingTitle")} tone="default">
-            {t("status.loading")}
-          </Notice>
+          <p className="py-4 text-xs text-[var(--text-muted)]">{t("status.loading")}</p>
         ) : entries.length === 0 ? (
-          <EmptyState icon="📝" title={t("history.noHistory")} description={t("history.emptyHint")} />
+          <EmptyState
+            title={t("history.noHistory")}
+            description={t("history.emptyHint")}
+          />
         ) : (
-          <div className="space-y-3">
-            {entries.map((entry: HistoryEntry) => (
-              <div key={entry.id} className="app-subtle-surface rounded-2xl border border-black/5 p-4 dark:border-white/8">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <p className="text-sm leading-7 text-gray-800 dark:text-gray-100">
-                      {entry.polished_text || entry.raw_text}
+          <div className="space-y-0">
+            {entries.map((entry) => (
+              <div
+                key={entry.id}
+                className="py-3 border-b border-[var(--border)] last:border-b-0"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <StatusDot tone={entry.status === "success" ? "success" : entry.status === "error" ? "danger" : "default"}>
+                        {entry.status === "success"
+                          ? t("status.done")
+                          : entry.status === "error"
+                            ? t("status.error")
+                            : t("status.loading")}
+                      </StatusDot>
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        {dtf.format(new Date(entry.created_at))}
+                      </span>
+                      {entry.duration_seconds > 0 ? (
+                        <span className="text-[11px] text-[var(--text-muted)]">{entry.duration_seconds.toFixed(1)}s</span>
+                      ) : null}
+                    </div>
+                    <p className="pre-wrap text-[13px] text-[var(--text-secondary)]">
+                      {entry.polished_text || entry.raw_text || "-"}
                     </p>
-                    {entry.polished_text && entry.raw_text !== entry.polished_text ? (
-                      <p className="text-xs leading-6 text-gray-500 line-through dark:text-gray-400">
+                    {entry.polished_text && entry.raw_text && entry.raw_text !== entry.polished_text ? (
+                      <p className="pre-wrap mt-2 text-xs text-[var(--text-muted)] line-through">
                         {entry.raw_text}
                       </p>
                     ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <button onClick={() => copyText(entry.polished_text || entry.raw_text, entry.id)} className="app-button-ghost px-3 py-1.5 text-xs">
-                      {copiedId === entry.id ? t("actions.copied") : t("actions.copy")}
-                    </button>
-                    <button onClick={() => retryEntry(entry.id)} className="app-button-secondary px-3 py-1.5 text-xs">
-                      {t("actions.retry")}
-                    </button>
+                  <div className="flex shrink-0 gap-1">
+                    {(entry.polished_text || entry.raw_text) ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost text-xs"
+                        onClick={() => copyText(entry.id, entry.polished_text || entry.raw_text)}
+                      >
+                        {copiedId === entry.id ? t("actions.copied") : t("actions.copy")}
+                      </button>
+                    ) : null}
+                    {settings.llm.enabled && entry.raw_text.trim().length > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        onClick={() => void retryEntry(entry.id)}
+                      >
+                        {t("actions.retry")}
+                      </button>
+                    ) : null}
                     <button
+                      type="button"
+                      className="btn btn-danger text-xs"
                       onClick={() => {
                         if (window.confirm(t("history.confirmDelete"))) {
                           void deleteEntry(entry.id);
                         }
                       }}
-                      className="app-button-danger px-3 py-1.5 text-xs"
                     >
                       {t("actions.delete")}
                     </button>
                   </div>
                 </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span>{formatter.format(new Date(entry.created_at))}</span>
-                  {entry.duration_seconds > 0 ? <span>{entry.duration_seconds.toFixed(1)}s</span> : null}
-                  <StatusPill tone={entry.status === "success" ? "success" : "danger"}>{entry.status}</StatusPill>
-                </div>
               </div>
             ))}
           </div>
         )}
-      </SectionCard>
+      </Section>
     </div>
   );
 }

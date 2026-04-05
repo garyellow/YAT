@@ -6,7 +6,13 @@ interface ToggleProps {
   ariaLabelledBy?: string;
 }
 
-export default function Toggle({ checked, onChange, disabled, ariaLabel, ariaLabelledBy }: ToggleProps) {
+export default function Toggle({
+  checked,
+  onChange,
+  disabled,
+  ariaLabel,
+  ariaLabelledBy,
+}: ToggleProps) {
   return (
     <button
       type="button"
@@ -16,13 +22,18 @@ export default function Toggle({ checked, onChange, disabled, ariaLabel, ariaLab
       aria-labelledby={ariaLabelledBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-primary" : "bg-gray-300 dark:bg-gray-600"
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center border transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-35 ${
+        checked
+          ? "border-[var(--accent)] bg-[var(--accent)]"
+          : "border-[var(--border)] bg-[var(--bg-subtle)]"
       }`}
+      style={{ borderRadius: "10px" }}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
-          checked ? "translate-x-5" : "translate-x-0"
+        className={`pointer-events-none inline-block h-3 w-3 rounded-full transition-transform duration-100 ${
+          checked
+            ? "translate-x-[18px] bg-[var(--accent-fg)]"
+            : "translate-x-[3px] bg-[var(--text-muted)]"
         }`}
       />
     </button>

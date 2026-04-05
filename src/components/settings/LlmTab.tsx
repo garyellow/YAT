@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
-import { Notice, OptionCard, SectionCard, StatusPill } from "./SettingPrimitives";
+import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
 
-const fieldLabelCls = "text-sm font-medium text-gray-700 dark:text-gray-200";
-const fieldHintCls = "text-xs leading-5 text-gray-500 dark:text-gray-400";
+const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function LlmTab() {
   const { t } = useTranslation();
@@ -26,23 +26,16 @@ export default function LlmTab() {
 
   const applyPreset = (preset: "groq" | "openai") => {
     if (preset === "groq") {
-      update({
-        base_url: "https://api.groq.com/openai/v1",
-        model: "llama-3.3-70b-versatile",
-      });
+      update({ base_url: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" });
       return;
     }
-
-    update({
-      base_url: "https://api.openai.com/v1",
-      model: "gpt-4o-mini",
-    });
+    update({ base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" });
   };
 
   const testConnection = async () => {
     setTestStatus("testing");
     try {
-      const msg = await invoke<string>("test_llm", { config: llm });
+      const msg = await invoke<string>("test_llm", { llmConfig: llm });
       setTestStatus("ok");
       setTestMsg(msg);
     } catch (e) {
@@ -52,37 +45,35 @@ export default function LlmTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <Notice title={t("llm.quickStartTitle")} tone="accent">
         {t("llm.quickStartDesc")}
       </Notice>
 
-      <SectionCard
+      {/* Enable/Disable */}
+      <Section
         title={t("llm.modeTitle")}
         description={t("llm.modeDesc")}
-        aside={<StatusPill tone={llm.enabled ? "accent" : "default"}>{llm.enabled ? t("llm.enabledStateOn") : t("llm.enabledStateOff")}</StatusPill>}
+        aside={
+          <StatusDot tone={llm.enabled ? "accent" : "default"}>
+            {llm.enabled ? t("llm.enabledStateOn") : t("llm.enabledStateOff")}
+          </StatusDot>
+        }
       >
-        <div className="app-subtle-surface flex items-center justify-between rounded-2xl border border-black/5 px-4 py-4 dark:border-white/8">
-          <div className="space-y-1">
-            <p id="llm-enabled-label" className="text-sm font-semibold tracking-tight">{t("llm.enabled")}</p>
-            <p className={fieldHintCls}>{t("llm.enabledHint")}</p>
+        <div className="flex items-center justify-between gap-4 py-1">
+          <div>
+            <p id="llm-enabled-label" className="text-[13px] font-medium">{t("llm.enabled")}</p>
+            <p className={hintCls}>{t("llm.enabledHint")}</p>
           </div>
-          <Toggle
-            checked={llm.enabled}
-            onChange={(v) => update({ enabled: v })}
-            ariaLabelledBy="llm-enabled-label"
-          />
+          <Toggle checked={llm.enabled} onChange={(v) => update({ enabled: v })} ariaLabelledBy="llm-enabled-label" />
         </div>
-      </SectionCard>
+      </Section>
 
       {llm.enabled ? (
         <>
-          <SectionCard
-            title={t("llm.providersTitle")}
-            description={t("llm.providersDesc")}
-            aside={<StatusPill tone="accent">{t("llm.compatibleBadge")}</StatusPill>}
-          >
-            <div className="grid gap-3 md:grid-cols-2">
+          {/* Providers */}
+          <Section title={t("llm.providersTitle")} description={t("llm.providersDesc")}>
+            <div className="grid gap-3 sm:grid-cols-2">
               <OptionCard
                 title="Groq"
                 description={t("llm.groqPresetDesc")}
@@ -96,31 +87,28 @@ export default function LlmTab() {
                 onClick={() => applyPreset("openai")}
               />
             </div>
-          </SectionCard>
+          </Section>
 
-          <SectionCard title={t("llm.connectionTitle")} description={t("llm.connectionDesc")}>
-            <div className="grid gap-4 lg:grid-cols-2">
+          {/* Connection */}
+          <Section title={t("llm.connectionTitle")} description={t("llm.connectionDesc")}>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="llm-base-url" className={fieldLabelCls}>
-                    {t("llm.baseUrl")}
-                  </label>
+                <div className="space-y-1.5">
+                  <label htmlFor="llm-base-url" className={labelCls}>{t("llm.baseUrl")}</label>
                   <input
                     id="llm-base-url"
                     name="llm-base-url"
                     value={llm.base_url}
                     onChange={(e) => update({ base_url: e.target.value })}
-                    className="app-input"
+                    className="field-input"
                     placeholder="https://api.groq.com/openai/v1"
                     autoComplete="off"
                     spellCheck={false}
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label htmlFor="llm-api-key" className={fieldLabelCls}>
-                    {t("llm.apiKey")}
-                  </label>
+                <div className="space-y-1.5">
+                  <label htmlFor="llm-api-key" className={labelCls}>{t("llm.apiKey")}</label>
                   <div className="relative">
                     <input
                       id="llm-api-key"
@@ -128,14 +116,14 @@ export default function LlmTab() {
                       type={showKey ? "text" : "password"}
                       value={llm.api_key}
                       onChange={(e) => update({ api_key: e.target.value })}
-                      className="app-input pr-20"
+                      className="field-input pr-16"
                       autoComplete="off"
                       spellCheck={false}
                     />
                     <button
                       type="button"
                       onClick={() => setShowKey(!showKey)}
-                      className="app-button-ghost absolute right-2 top-2 px-3 py-1 text-xs"
+                      className="btn btn-ghost absolute right-1 top-1 px-2 py-1 text-xs"
                       aria-label={showKey ? t("llm.hideKey") : t("llm.showKey")}
                     >
                       {showKey ? t("llm.hideKeyShort") : t("llm.showKeyShort")}
@@ -145,16 +133,14 @@ export default function LlmTab() {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="llm-model" className={fieldLabelCls}>
-                    {t("llm.model")}
-                  </label>
+                <div className="space-y-1.5">
+                  <label htmlFor="llm-model" className={labelCls}>{t("llm.model")}</label>
                   <input
                     id="llm-model"
                     name="llm-model"
                     value={llm.model}
                     onChange={(e) => update({ model: e.target.value })}
-                    className="app-input"
+                    className="field-input"
                     placeholder="llama-3.3-70b-versatile"
                     autoComplete="off"
                     spellCheck={false}
@@ -166,19 +152,28 @@ export default function LlmTab() {
                 </Notice>
               </div>
             </div>
-          </SectionCard>
+          </Section>
 
-          <SectionCard
+          {/* Validation */}
+          <Section
             title={t("llm.validationTitle")}
             description={t("llm.validationDesc")}
             aside={
-              <StatusPill tone={testStatus === "ok" ? "success" : testStatus === "fail" ? "danger" : "default"}>
-                {testStatus === "idle" ? t("llm.validationIdle") : testStatus === "testing" ? t("actions.testing") : testStatus === "ok" ? t("actions.connected") : t("llm.validationFailed")}
-              </StatusPill>
+              <StatusDot
+                tone={testStatus === "ok" ? "success" : testStatus === "fail" ? "danger" : "default"}
+              >
+                {testStatus === "idle"
+                  ? t("llm.validationIdle")
+                  : testStatus === "testing"
+                    ? t("actions.testing")
+                    : testStatus === "ok"
+                      ? t("actions.connected")
+                      : t("llm.validationFailed")}
+              </StatusDot>
             }
           >
-            <div className="space-y-4">
-              <button onClick={testConnection} disabled={testStatus === "testing"} className="app-button-primary">
+            <div className="space-y-3">
+              <button onClick={testConnection} disabled={testStatus === "testing"} className="btn btn-primary">
                 {testStatus === "testing" ? t("actions.testing") : t("actions.testConnection")}
               </button>
 
@@ -194,7 +189,7 @@ export default function LlmTab() {
                 </Notice>
               ) : null}
             </div>
-          </SectionCard>
+          </Section>
         </>
       ) : (
         <Notice title={t("llm.disabledNoticeTitle")} tone="default">
