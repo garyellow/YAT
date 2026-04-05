@@ -9,7 +9,7 @@
   --text: #1a1a1a;
   --text-secondary: #5f5f5f;
   --text-muted: #9a9a9a;
-  --accent: #1a1a1a;
+  --accent: #6344df;
   --accent-fg: #ffffff;
   --red: #e5484d;
   --green: #2ea44f;
@@ -23,7 +23,7 @@
   --text: #ececec;
   --text-secondary: #8b8b8b;
   --text-muted: #555555;
-  --accent: #ececec;
+  --accent: #a78bfa;
   --accent-fg: #0c0c0c;
   --red: #e5484d;
   --green: #3fb950;
@@ -121,7 +121,7 @@ button {
   justify-content: center;
   gap: 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 5px 12px;
   font-size: 13px;
   font-weight: 500;
@@ -198,7 +198,7 @@ button {
 .field-select {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--bg);
   color: var(--text);
   padding: 6px 10px;
@@ -281,7 +281,7 @@ button {
 .option-btn {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--bg);
   padding: 10px 12px;
   cursor: pointer;
@@ -341,7 +341,7 @@ button {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

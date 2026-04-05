@@ -95,14 +95,14 @@ export function OptionCard({
     >
       <div className="flex items-start gap-2.5">
         <span
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
             selected
               ? "border-[var(--accent)] bg-[var(--accent)]"
               : "border-[var(--border)]"
           }`}
         >
           {selected ? (
-            <span className="block h-1.5 w-1.5 rounded-full bg-[var(--accent-fg)]" />
+            <span className="block h-1.5 w-1.5 rounded-sm bg-[var(--accent-fg)]" />
           ) : null}
         </span>
         <div className="min-w-0">

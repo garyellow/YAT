@@ -10,42 +10,42 @@ const statusConfig: Record<
   { shell: string; dot: string; pulse: boolean }
 > = {
   idle: {
-    shell: "border-white/10 bg-slate-900/60",
-    dot: "bg-slate-300",
+    shell: "border-white/8 bg-neutral-900/70",
+    dot: "bg-neutral-400",
     pulse: false,
   },
   recording: {
-    shell: "border-red-300/30 bg-red-500/85",
+    shell: "border-white/12 bg-neutral-900/85",
     dot: "bg-white",
     pulse: true,
   },
   transcribing: {
-    shell: "border-violet-300/30 bg-violet-500/85",
+    shell: "border-white/10 bg-neutral-900/80",
     dot: "bg-white",
     pulse: true,
   },
   polishing: {
-    shell: "border-sky-300/30 bg-sky-500/85",
+    shell: "border-white/10 bg-neutral-900/80",
     dot: "bg-white",
     pulse: true,
   },
   done: {
-    shell: "border-emerald-300/30 bg-emerald-500/85",
+    shell: "border-white/10 bg-neutral-900/80",
     dot: "bg-white",
     pulse: false,
   },
   clipboardFallback: {
-    shell: "border-amber-300/30 bg-amber-500/85",
-    dot: "bg-white",
+    shell: "border-white/10 bg-neutral-900/80",
+    dot: "bg-white/60",
     pulse: false,
   },
   error: {
-    shell: "border-rose-300/30 bg-rose-500/85",
-    dot: "bg-white",
+    shell: "border-white/10 bg-neutral-900/80",
+    dot: "bg-white/60",
     pulse: false,
   },
   busy: {
-    shell: "border-amber-300/30 bg-amber-500/85",
+    shell: "border-white/10 bg-neutral-900/80",
     dot: "bg-white",
     pulse: true,
   },
@@ -111,11 +111,11 @@ export default function CapsuleApp() {
   return (
     <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
       <div
-        className={`flex min-w-[220px] items-center gap-3 rounded-[22px] border px-4 py-3 text-white shadow-2xl backdrop-blur-xl ${cfg.shell}`}
+        className={`flex min-w-[220px] items-center gap-3 rounded-sm border px-4 py-3 text-white shadow-md backdrop-blur-md ${cfg.shell}`}
         aria-live="polite"
       >
         <span
-          className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
+          className={`mt-0.5 h-2 w-2 shrink-0 rounded-sm ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
           aria-hidden="true"
         />
 
@@ -132,9 +132,9 @@ export default function CapsuleApp() {
           </div>
 
           {status === "recording" ? (
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-white/15">
               <div
-                className="h-full rounded-full bg-white transition-[width] duration-100"
+                className="h-full rounded-sm bg-white transition-[width] duration-100"
                 style={{ width: `${Math.min(micLevel * 420, 100)}%` }}
               />
             </div>
@@ -143,7 +143,7 @@ export default function CapsuleApp() {
 
         {status === "recording" && (
           <span
-            className="rounded-full border border-white/25 px-3 py-1 text-xs font-semibold text-white/60"
+            className="rounded-sm border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white/50"
             aria-label={t("capsule.escHint")}
           >
             Esc

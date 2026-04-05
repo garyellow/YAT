@@ -42,10 +42,9 @@ export default function Toast({
     <div
       role={role}
       aria-live="polite"
-      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-xs font-medium ${
+      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-sm border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-xs font-medium ${
         phase === "enter" ? "toast-enter" : "toast-exit"
       }`}
-      style={{ borderRadius: "4px" }}
     >
       <span className="flex items-center gap-2">
         <span

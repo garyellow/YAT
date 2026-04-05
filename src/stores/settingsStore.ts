@@ -80,12 +80,34 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   loadSettings: async () => {
     set({ loading: true });
-    const settings = await invoke<AppSettings>("get_settings");
-    set({ settings, loading: false });
+    try {
+      const settings = await invoke<AppSettings>("get_settings");
+      set({ settings, loading: false });
+    } catch {
+      // Fallback for browser testing (outside Tauri)
+      const mock: AppSettings = {
+        stt: { base_url: "https://api.groq.com/openai/v1", api_key: "", model: "whisper-large-v3-turbo", language: "zh" },
+        llm: { enabled: true, base_url: "https://api.groq.com/openai/v1", api_key: "", model: "llama-3.3-70b-versatile" },
+        general: {
+          hotkey: { hotkey_type: "hold", key: "RCtrl", modifier: null, double_tap_interval_ms: 300 },
+          theme: "system", auto_start: false, max_recording_seconds: 120,
+          output_mode: "auto_paste", clipboard_behavior: "always", language: "zh-TW",
+          timeout_ms: 30000, max_retries: 2, sound_effects: true, auto_mute: false,
+          microphone_device: null, close_to_tray: true,
+        },
+        prompt: { system_prompt: "", user_instructions: "", vocabulary: [] },
+        history: { retention_hours: 72, context_window_minutes: 5 },
+      };
+      set({ settings: mock, loading: false });
+    }
   },
 
   saveSettings: async (settings: AppSettings) => {
-    await invoke("save_settings", { settings });
+    try {
+      await invoke("save_settings", { settings });
+    } catch {
+      // Browser fallback: no-op
+    }
     set({ settings, saved: true, dirty: false });
     setTimeout(() => set({ saved: false }), 2000);
   },
