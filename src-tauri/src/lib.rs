@@ -729,7 +729,13 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .expect("default window icon not found");
     let _tray = TrayIconBuilder::with_id("yat-tray")
+        .icon(icon)
+        .icon_as_template(false)
         .menu(&menu)
         .tooltip("YAT – Voice to Text")
         .on_menu_event(move |app, event| match event.id().as_ref() {

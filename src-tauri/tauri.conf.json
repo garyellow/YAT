@@ -23,11 +23,6 @@
         "minHeight": 620
       }
     ],
-    "trayIcon": {
-      "id": "yat-tray",
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*"
     }
@@ -35,6 +30,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "shortDescription": "AI voice-to-text input tool",
+    "longDescription": "YAT (Yet Another Typeless) is an AI-powered voice-to-text desktop input tool that converts speech to text and types it into any application.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
