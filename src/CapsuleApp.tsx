@@ -15,33 +15,33 @@ const statusConfig: Record<
     pulse: false,
   },
   recording: {
-    shell: "border-white/12 bg-neutral-900/85",
+    shell: "border-white/14 bg-neutral-900/88",
     dot: "bg-white",
     pulse: true,
   },
   transcribing: {
-    shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white",
+    shell: "border-white/10 bg-neutral-900/82",
+    dot: "bg-white/80",
     pulse: true,
   },
   polishing: {
-    shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white",
+    shell: "border-white/10 bg-neutral-900/82",
+    dot: "bg-white/80",
     pulse: true,
   },
   done: {
     shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white",
+    dot: "bg-emerald-400",
     pulse: false,
   },
   clipboardFallback: {
     shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white/60",
+    dot: "bg-amber-400",
     pulse: false,
   },
   error: {
     shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white/60",
+    dot: "bg-red-400",
     pulse: false,
   },
   busy: {
@@ -111,11 +111,11 @@ export default function CapsuleApp() {
   return (
     <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
       <div
-        className={`flex min-w-[220px] items-center gap-3 rounded-sm border px-4 py-3 text-white shadow-md backdrop-blur-md ${cfg.shell}`}
+        className={`flex min-w-[220px] items-center gap-3 rounded-xl border px-4 py-3 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
         aria-live="polite"
       >
         <span
-          className={`mt-0.5 h-2 w-2 shrink-0 rounded-sm ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
+          className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
           aria-hidden="true"
         />
 
@@ -132,10 +132,10 @@ export default function CapsuleApp() {
           </div>
 
           {status === "recording" ? (
-            <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-white/15">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full rounded-sm bg-white transition-[width] duration-100"
-                style={{ width: `${Math.min(micLevel * 420, 100)}%` }}
+                className="h-full rounded-full bg-white transition-[width] duration-100"
+                style={{ width: `${Math.min(Math.sqrt(micLevel) * 200, 100)}%` }}
               />
             </div>
           ) : null}
@@ -143,7 +143,7 @@ export default function CapsuleApp() {
 
         {status === "recording" && (
           <span
-            className="rounded-sm border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white/50"
+            className="rounded-md border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white/50"
             aria-label={t("capsule.escHint")}
           >
             Esc

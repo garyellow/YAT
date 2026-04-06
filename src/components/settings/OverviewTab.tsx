@@ -133,7 +133,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                 </div>
                 <p className="mt-0.5 pl-[18px] text-xs text-[var(--text-muted)]">{item.detail}</p>
               </div>
-              <button className="btn btn-ghost shrink-0 text-xs" onClick={item.action}>
+              <button className="btn btn-secondary shrink-0 text-xs" onClick={item.action}>
                 {item.actionLabel}
               </button>
             </div>
@@ -164,7 +164,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         ) : null}
 
         {lastText ? (
-          <div className="rounded bg-[var(--bg-subtle)] p-3 text-[13px] text-[var(--text-secondary)]">
+          <div className="rounded-lg bg-[var(--bg-subtle)] p-3 text-[13px] text-[var(--text-secondary)]">
             {lastText}
           </div>
         ) : (
@@ -172,7 +172,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
             title={t("overview.recent.emptyTitle")}
             description={t("overview.recent.emptyDesc")}
             action={
-              <button className="btn btn-ghost text-xs" onClick={() => onNavigate("history")}>
+              <button className="btn btn-secondary text-xs" onClick={() => onNavigate("history")}>
                 {t("overview.actions.openHistory")}
               </button>
             }
@@ -188,7 +188,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
               ? t("overview.prompt.enabledHint")
               : t("overview.prompt.disabledHint")}
           </p>
-          <div className="rounded bg-[var(--bg-subtle)] p-3">
+          <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
             <pre className="pre-wrap max-h-60 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
               {promptSnippet}
             </pre>
@@ -197,7 +197,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
             <button className="btn btn-secondary text-xs" onClick={() => onNavigate("prompt")}>
               {t("overview.actions.reviewPrompt")}
             </button>
-            <button className="btn btn-ghost text-xs" onClick={() => onNavigate("vocabulary")}>
+            <button className="btn btn-secondary text-xs" onClick={() => onNavigate("vocabulary")}>
               {t("overview.actions.openVocabulary")}
             </button>
           </div>

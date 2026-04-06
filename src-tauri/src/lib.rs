@@ -89,6 +89,11 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
         return Err("Hotkey key cannot be empty".into());
     }
 
+    // ESC is reserved as the cancel key and cannot be used as a hotkey.
+    if key_name.eq_ignore_ascii_case("Esc") || key_name.eq_ignore_ascii_case("Escape") {
+        return Err("Escape key is reserved and cannot be used as a hotkey".into());
+    }
+
     let key_matcher = hotkey::parse_key_match(key_name).ok_or_else(|| {
         format!(
             "Unsupported hotkey key '{key_name}'. Use a single letter, F1-F12, Alt, Ctrl, Shift, Meta, Space, Esc, Tab, CapsLock, Backspace, or Enter"
@@ -109,6 +114,10 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or("Combo hotkey requires a modifier")?;
+
+        if modifier_name.eq_ignore_ascii_case("Esc") || modifier_name.eq_ignore_ascii_case("Escape") {
+            return Err("Escape key is reserved and cannot be used as a hotkey modifier".into());
+        }
 
         let modifier_matcher = hotkey::parse_key_match(modifier_name).ok_or_else(|| {
             format!(
@@ -513,6 +522,235 @@ async fn save_settings(
     Ok(())
 }
 
+/// Result of the smart hotkey recording flow.
+#[derive(Debug, Clone, Serialize)]
+struct RecordedHotkey {
+    hotkey_type: config::HotkeyType,
+    key: String,
+    modifier: Option<String>,
+    double_tap_interval_ms: u64,
+}
+
+/// Key event with timing info, sent from the rdev listener thread.
+#[derive(Debug, Clone)]
+enum KeyEvent {
+    Press(String, std::time::Instant),
+    Release(String, std::time::Instant),
+}
+
+#[tauri::command]
+async fn capture_hotkey(
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    // Backwards compat: still returns a single key name (used nowhere new,
+    // but kept so the handler list doesn't break during migration).
+    let result = record_hotkey_inner(&state).await?;
+    Ok(result.key)
+}
+
+#[tauri::command]
+async fn record_hotkey(
+    state: tauri::State<'_, AppState>,
+) -> Result<RecordedHotkey, String> {
+    record_hotkey_inner(&state).await
+}
+
+/// Shared implementation for hotkey recording.
+///
+/// Listens to raw key events via rdev and auto-detects the gesture:
+/// - **Combo**: two or more keys held simultaneously (modifier + action key)
+/// - **Hold**: a single key held for ≥ 400 ms
+/// - **Double-tap**: the same key pressed twice within 400 ms
+/// - **Single**: a single short key press (fallback)
+async fn record_hotkey_inner(
+    state: &tauri::State<'_, AppState>,
+) -> Result<RecordedHotkey, String> {
+    state.hotkey_triggers_enabled.store(false, Ordering::SeqCst);
+
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<KeyEvent>();
+
+    std::thread::spawn(move || {
+        let callback = move |event: rdev::Event| {
+            match event.event_type {
+                rdev::EventType::KeyPress(key) => {
+                    if let Some(name) = hotkey::key_to_name(&key) {
+                        let _ = tx.send(KeyEvent::Press(name, std::time::Instant::now()));
+                    }
+                }
+                rdev::EventType::KeyRelease(key) => {
+                    if let Some(name) = hotkey::key_to_name(&key) {
+                        let _ = tx.send(KeyEvent::Release(name, std::time::Instant::now()));
+                    }
+                }
+                _ => {}
+            }
+        };
+        let _ = rdev::listen(callback);
+    });
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        analyse_key_events(rx),
+    )
+    .await
+    .map_err(|_| "Hotkey capture timed out".to_string())?;
+
+    state.hotkey_triggers_enabled.store(true, Ordering::SeqCst);
+    result
+}
+
+/// Consumes the key event stream and decides what gesture the user performed.
+async fn analyse_key_events(
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<KeyEvent>,
+) -> Result<RecordedHotkey, String> {
+    use std::collections::HashMap;
+
+    const HOLD_THRESHOLD_MS: u128 = 400;
+    const DOUBLE_TAP_WINDOW_MS: u128 = 400;
+
+    // ESC is reserved as the cancel key and cannot be recorded as a hotkey.
+    const RESERVED_CANCEL_KEY: &str = "Esc";
+
+    // Currently held keys: name → press instant
+    let mut held: HashMap<String, std::time::Instant> = HashMap::new();
+    // The very first key press
+    let mut first_key: Option<(String, std::time::Instant)> = None;
+    // Track first complete tap for double-tap detection
+    let mut first_tap: Option<(String, std::time::Instant)> = None; // (key, release_instant)
+
+    loop {
+        // If we already completed a tap and are waiting for a potential second
+        // tap, use a short timeout so we don't hang forever.
+        let timeout = if first_tap.is_some() && held.is_empty() {
+            std::time::Duration::from_millis(DOUBLE_TAP_WINDOW_MS as u64 + 50)
+        } else {
+            std::time::Duration::from_secs(10)
+        };
+
+        match tokio::time::timeout(timeout, rx.recv()).await {
+            Ok(Some(KeyEvent::Press(name, instant))) => {
+                // ESC cancels the recording session immediately
+                if name == RESERVED_CANCEL_KEY {
+                    return Err("cancelled".to_string());
+                }
+
+                // ── Check for double-tap ───────────────────────────
+                if let Some((ref tap_key, tap_released)) = first_tap {
+                    if *tap_key == name
+                        && instant.duration_since(tap_released).as_millis()
+                            < DOUBLE_TAP_WINDOW_MS
+                    {
+                        return Ok(RecordedHotkey {
+                            hotkey_type: config::HotkeyType::DoubleTap,
+                            key: name,
+                            modifier: None,
+                            double_tap_interval_ms: instant
+                                .duration_since(tap_released)
+                                .as_millis()
+                                as u64
+                                + 100, // add small buffer
+                        });
+                    }
+                }
+
+                if first_key.is_none() {
+                    first_key = Some((name.clone(), instant));
+                }
+                held.insert(name, instant);
+
+                // ── Combo detection: 2+ keys held at once ──────────
+                if held.len() >= 2 {
+                    // Wait for all keys to be released, then return combo
+                    let combo_keys: Vec<(String, std::time::Instant)> =
+                        held.iter().map(|(k, &v)| (k.clone(), v)).collect();
+                    // Drain remaining events until all released
+                    loop {
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(5),
+                            rx.recv(),
+                        )
+                        .await
+                        {
+                            Ok(Some(KeyEvent::Release(ref rk, _))) => {
+                                held.remove(rk);
+                                if held.is_empty() {
+                                    break;
+                                }
+                            }
+                            Ok(Some(KeyEvent::Press(pk, _))) => {
+                                held.insert(pk, std::time::Instant::now());
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    // Sort: modifier first (earliest press), action key last
+                    let mut sorted = combo_keys;
+                    sorted.sort_by_key(|(_, t)| *t);
+                    let modifier = sorted.first().map(|(k, _)| k.clone());
+                    let key = sorted.last().map(|(k, _)| k.clone()).unwrap();
+                    return Ok(RecordedHotkey {
+                        hotkey_type: config::HotkeyType::Combo,
+                        key,
+                        modifier,
+                        double_tap_interval_ms: 300,
+                    });
+                }
+            }
+
+            Ok(Some(KeyEvent::Release(name, instant))) => {
+                if let Some(press_time) = held.remove(&name) {
+                    let duration = instant.duration_since(press_time).as_millis();
+
+                    if duration >= HOLD_THRESHOLD_MS {
+                        // ── Hold detected ──────────────────────────
+                        return Ok(RecordedHotkey {
+                            hotkey_type: config::HotkeyType::Hold,
+                            key: name,
+                            modifier: None,
+                            double_tap_interval_ms: 300,
+                        });
+                    }
+
+                    // Short press — could be start of double-tap
+                    if first_tap.is_none() {
+                        first_tap = Some((name, instant));
+                        // Continue loop; the timeout will catch if no second tap comes
+                    } else {
+                        // Second release of a different key → single
+                        return Ok(RecordedHotkey {
+                            hotkey_type: config::HotkeyType::Single,
+                            key: name,
+                            modifier: None,
+                            double_tap_interval_ms: 300,
+                        });
+                    }
+                }
+            }
+
+            Ok(None) => {
+                // Channel closed
+                break;
+            }
+
+            Err(_) => {
+                // Timeout — if we have a pending first tap, return single
+                if let Some((tap_key, _)) = first_tap {
+                    return Ok(RecordedHotkey {
+                        hotkey_type: config::HotkeyType::Single,
+                        key: tap_key,
+                        modifier: None,
+                        double_tap_interval_ms: 300,
+                    });
+                }
+                return Err("Hotkey capture timed out".to_string());
+            }
+        }
+    }
+
+    Err("Hotkey capture cancelled".to_string())
+}
+
 #[tauri::command]
 async fn test_stt(stt_config: config::SttConfig) -> Result<String, String> {
     stt::test_connection(&stt_config)
@@ -825,7 +1063,15 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .level_for("reqwest", log::LevelFilter::Warn)
+                .level_for("hyper", log::LevelFilter::Warn)
+                .level_for("rustls", log::LevelFilter::Warn)
+                .level_for("tungstenite", log::LevelFilter::Warn)
+                .build(),
+        )
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -957,6 +1203,8 @@ pub fn run() {
             save_settings,
             get_default_prompt,
             get_platform_context,
+            capture_hotkey,
+            record_hotkey,
             test_stt,
             test_llm,
             fetch_models,

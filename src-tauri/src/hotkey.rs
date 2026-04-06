@@ -124,6 +124,47 @@ pub(crate) fn parse_key_match(name: &str) -> Option<KeyMatcher> {
     }
 }
 
+/// Convert an rdev Key to the canonical string name used in settings.
+pub fn key_to_name(key: &Key) -> Option<String> {
+    match key {
+        Key::Alt => Some("Alt".into()),
+        Key::AltGr => Some("RAlt".into()),
+        Key::ControlLeft => Some("LCtrl".into()),
+        Key::ControlRight => Some("RCtrl".into()),
+        Key::ShiftLeft => Some("LShift".into()),
+        Key::ShiftRight => Some("RShift".into()),
+        Key::MetaLeft => Some("LMeta".into()),
+        Key::MetaRight => Some("RMeta".into()),
+        Key::F1 => Some("F1".into()),
+        Key::F2 => Some("F2".into()),
+        Key::F3 => Some("F3".into()),
+        Key::F4 => Some("F4".into()),
+        Key::F5 => Some("F5".into()),
+        Key::F6 => Some("F6".into()),
+        Key::F7 => Some("F7".into()),
+        Key::F8 => Some("F8".into()),
+        Key::F9 => Some("F9".into()),
+        Key::F10 => Some("F10".into()),
+        Key::F11 => Some("F11".into()),
+        Key::F12 => Some("F12".into()),
+        Key::Space => Some("Space".into()),
+        Key::Escape => Some("Escape".into()),
+        Key::Tab => Some("Tab".into()),
+        Key::CapsLock => Some("CapsLock".into()),
+        Key::Backspace => Some("Backspace".into()),
+        Key::Return => Some("Enter".into()),
+        Key::Unknown(code) => {
+            if let Some(ch) = char::from_u32(*code) {
+                if ch.is_ascii_alphanumeric() || ch.is_ascii_punctuation() {
+                    return Some(ch.to_uppercase().to_string());
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn key_patterns_overlap(a: &KeyMatcher, b: &KeyMatcher) -> bool {
     match (a, b) {
         (KeyMatcher::EitherCtrl, KeyMatcher::EitherCtrl)

@@ -148,7 +148,7 @@ export default function HistoryTab() {
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="py-3 border-b border-[var(--border)] last:border-b-0"
+                className="group py-3 border-b border-[var(--border)] last:border-b-0 transition-colors duration-100 hover:bg-[var(--bg-subtle)] -mx-2 px-2 rounded-[var(--radius-sm)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -177,7 +177,7 @@ export default function HistoryTab() {
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
                     {(entry.polished_text || entry.raw_text) ? (
                       <button
                         type="button"

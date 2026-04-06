@@ -23,7 +23,7 @@ export function Section({
     <section className={className} {...props}>
       <div className="flex items-start justify-between gap-4 pb-3 mb-4 border-b border-[var(--border)]">
         <div className="min-w-0">
-          <h2 className="text-[13px] font-medium">{title}</h2>
+          <h2 className="text-sm font-semibold">{title}</h2>
           {description ? (
             <p className="mt-0.5 text-xs text-[var(--text-muted)]">{description}</p>
           ) : null}
@@ -95,14 +95,14 @@ export function OptionCard({
     >
       <div className="flex items-start gap-2.5">
         <span
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-150 ${
             selected
               ? "border-[var(--accent)] bg-[var(--accent)]"
               : "border-[var(--border)]"
           }`}
         >
           {selected ? (
-            <span className="block h-1.5 w-1.5 rounded-sm bg-[var(--accent-fg)]" />
+            <span className="block h-1.5 w-1.5 rounded-full bg-[var(--accent-fg)]" />
           ) : null}
         </span>
         <div className="min-w-0">
@@ -132,8 +132,3 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
     </div>
   );
 }
-
-/* ─── Backwards compat aliases (used in Settings.tsx sidebar) ─── */
-
-export const SectionCard = Section;
-export const StatusPill = StatusDot;

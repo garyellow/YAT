@@ -72,6 +72,8 @@ interface SettingsState {
   updateSettings: (partial: Partial<AppSettings>) => void;
 }
 
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   loading: false,
@@ -87,16 +89,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       // Fallback for browser testing (outside Tauri)
       const mock: AppSettings = {
         stt: { base_url: "", api_key: "", model: "", language: "zh" },
-        llm: { enabled: true, base_url: "", api_key: "", model: "" },
+        llm: { enabled: false, base_url: "", api_key: "", model: "" },
         general: {
           hotkey: { hotkey_type: "hold", key: "RCtrl", modifier: null, double_tap_interval_ms: 300 },
-          theme: "system", auto_start: false, max_recording_seconds: 120,
+          theme: "system", auto_start: false, max_recording_seconds: 180,
           output_mode: "auto_paste", clipboard_behavior: "always", language: "zh-TW",
-          timeout_ms: 30000, max_retries: 2, sound_effects: true, auto_mute: false,
+          timeout_ms: 30000, max_retries: 2, sound_effects: true, auto_mute: true,
           microphone_device: null, close_to_tray: true,
         },
         prompt: { system_prompt: "", user_instructions: "", vocabulary: [] },
-        history: { retention_hours: 72, context_window_minutes: 5 },
+        history: { retention_hours: 720, context_window_minutes: 10 },
       };
       set({ settings: mock, loading: false });
     }
@@ -115,7 +117,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   updateSettings: (partial) => {
     const current = get().settings;
     if (current) {
-      set({ settings: { ...current, ...partial }, saved: false, dirty: true });
+      const merged = { ...current, ...partial };
+      set({ settings: merged, saved: false, dirty: true });
+
+      // Debounced auto-save: sync to backend after 1.5s of inactivity
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        autoSaveTimer = null;
+        get().saveSettings(merged);
+      }, 1500);
     }
   },
 }));

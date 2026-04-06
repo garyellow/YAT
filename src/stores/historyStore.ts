@@ -30,26 +30,43 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   loadHistory: async () => {
     set({ loading: true });
-    const q = get().searchQuery || null;
-    const entries = await invoke<HistoryEntry[]>("get_history", {
-      query: q,
-      limit: 200,
-    });
-    set({ entries, loading: false });
+    try {
+      const q = get().searchQuery || null;
+      const entries = await invoke<HistoryEntry[]>("get_history", {
+        query: q,
+        limit: 200,
+      });
+      set({ entries, loading: false });
+    } catch (e) {
+      console.error("Failed to load history:", e);
+      set({ loading: false });
+    }
   },
 
   deleteEntry: async (id: string) => {
-    await invoke("delete_history", { id });
-    await get().loadHistory();
+    try {
+      await invoke("delete_history", { id });
+      await get().loadHistory();
+    } catch (e) {
+      console.error("Failed to delete history entry:", e);
+    }
   },
 
   retryEntry: async (id: string) => {
-    await invoke("retry_history", { id });
-    await get().loadHistory();
+    try {
+      await invoke("retry_history", { id });
+      await get().loadHistory();
+    } catch (e) {
+      console.error("Failed to retry history entry:", e);
+    }
   },
 
   clearOld: async () => {
-    await invoke("clear_old_history");
-    await get().loadHistory();
+    try {
+      await invoke("clear_old_history");
+      await get().loadHistory();
+    } catch (e) {
+      console.error("Failed to clear old history:", e);
+    }
   },
 }));

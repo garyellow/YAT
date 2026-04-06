@@ -51,6 +51,22 @@ pub async fn polish(
     timeout_ms: u64,
     max_retries: u32,
 ) -> Result<String, LlmError> {
+    if config.base_url.trim().is_empty() {
+        return Err(LlmError::Request(
+            "LLM base URL is not configured. Please set it in Settings → LLM.".into(),
+        ));
+    }
+    if config.api_key.trim().is_empty() {
+        return Err(LlmError::Request(
+            "LLM API key is not configured. Please set it in Settings → LLM.".into(),
+        ));
+    }
+    if config.model.trim().is_empty() {
+        return Err(LlmError::Request(
+            "LLM model is not configured. Please set it in Settings → LLM.".into(),
+        ));
+    }
+
     let url = format!(
         "{}/chat/completions",
         config.base_url.trim_end_matches('/')

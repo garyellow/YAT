@@ -27,6 +27,22 @@ pub async fn transcribe(
     timeout_ms: u64,
     max_retries: u32,
 ) -> Result<String, SttError> {
+    if config.base_url.trim().is_empty() {
+        return Err(SttError::Request(
+            "STT base URL is not configured. Please set it in Settings → STT.".into(),
+        ));
+    }
+    if config.api_key.trim().is_empty() {
+        return Err(SttError::Request(
+            "STT API key is not configured. Please set it in Settings → STT.".into(),
+        ));
+    }
+    if config.model.trim().is_empty() {
+        return Err(SttError::Request(
+            "STT model is not configured. Please set it in Settings → STT.".into(),
+        ));
+    }
+
     let url = format!(
         "{}/audio/transcriptions",
         config.base_url.trim_end_matches('/')

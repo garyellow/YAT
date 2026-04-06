@@ -4,9 +4,9 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Notice, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
+import { HintTip } from "../ui/Tooltip";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function LlmTab() {
   const { t } = useTranslation();
@@ -27,7 +27,10 @@ export default function LlmTab() {
   };
 
   const fetchModels = async () => {
-    if (!llm.base_url) return;
+    if (!llm.base_url || !llm.api_key) {
+      setFetchStatus("fail");
+      return;
+    }
     setFetchStatus("loading");
     try {
       const list = await invoke<string[]>("fetch_models", {
@@ -72,8 +75,7 @@ export default function LlmTab() {
       >
         <div className="flex items-center justify-between gap-4 py-1">
           <div>
-            <p id="llm-enabled-label" className="text-[13px] font-medium">{t("llm.enabled")}</p>
-            <p className={hintCls}>{t("llm.enabledHint")}</p>
+              <p id="llm-enabled-label" className="text-[13px] font-medium">{t("llm.enabled")} <HintTip text={t("llm.enabledHint")} /></p>
           </div>
           <Toggle checked={llm.enabled} onChange={(v) => update({ enabled: v })} ariaLabelledBy="llm-enabled-label" />
         </div>
@@ -86,7 +88,7 @@ export default function LlmTab() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="llm-base-url" className={labelCls}>{t("llm.baseUrl")}</label>
+                  <label htmlFor="llm-base-url" className={labelCls}>{t("llm.baseUrl")} <span className="text-[var(--red)]">*</span></label>
                   <input
                     id="llm-base-url"
                     name="llm-base-url"
@@ -100,7 +102,7 @@ export default function LlmTab() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="llm-api-key" className={labelCls}>{t("llm.apiKey")}</label>
+                  <label htmlFor="llm-api-key" className={labelCls}>{t("llm.apiKey")} <span className="text-[var(--red)]">*</span></label>
                   <div className="relative">
                     <input
                       id="llm-api-key"
@@ -115,7 +117,7 @@ export default function LlmTab() {
                     <button
                       type="button"
                       onClick={() => setShowKey(!showKey)}
-                      className="btn btn-ghost absolute right-1 top-1 px-2 py-1 text-xs"
+                      className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
                       aria-label={showKey ? t("llm.hideKey") : t("llm.showKey")}
                     >
                       {showKey ? t("llm.hideKeyShort") : t("llm.showKeyShort")}
@@ -126,7 +128,7 @@ export default function LlmTab() {
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="llm-model" className={labelCls}>{t("llm.model")}</label>
+                  <label htmlFor="llm-model" className={labelCls}>{t("llm.model")} <span className="text-[var(--red)]">*</span> <HintTip text={t("llm.modelHint")} /></label>
                   <div className="flex gap-2">
                     <input
                       id="llm-model"
@@ -142,7 +144,7 @@ export default function LlmTab() {
                     <button
                       type="button"
                       onClick={fetchModels}
-                      disabled={!llm.base_url || fetchStatus === "loading"}
+                      disabled={!llm.base_url || !llm.api_key || fetchStatus === "loading"}
                       className="btn btn-ghost shrink-0 text-xs"
                     >
                       {fetchStatus === "loading" ? t("llm.fetchingModels") : t("llm.fetchModels")}
@@ -154,9 +156,9 @@ export default function LlmTab() {
                     </datalist>
                   )}
                   {fetchStatus === "fail" && (
-                    <p className="text-[11px] text-[var(--danger)]">{t("llm.fetchModelsFail")}</p>
+                    <p className="text-[11px] text-[var(--red)]">{t("llm.fetchModelsFail")}</p>
                   )}
-                  <p className={hintCls}>{t("llm.modelHint")}</p>
+
                 </div>
 
                 <Notice title={t("llm.bestUseTitle")} tone="default">

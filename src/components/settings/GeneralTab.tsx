@@ -5,21 +5,23 @@ import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   formatHotkeyCombo,
+  formatHotkeyKey,
   getHotkeyAdvice,
   getRecommendedHotkeyLabel,
 } from "../../lib/settingsFormatters";
-import type { AppSettings } from "../../stores/settingsStore";
+import type { AppSettings, HotkeyConfig } from "../../stores/settingsStore";
 import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
+import { HintTip } from "../ui/Tooltip";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function GeneralTab() {
   const { t, i18n } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [audioDevices, setAudioDevices] = useState<string[]>([]);
+  const [recording, setRecording] = useState(false);
   const platform = useAppStore((s) => s.platform);
 
   useEffect(() => {
@@ -50,6 +52,18 @@ export default function GeneralTab() {
       .catch((e) => console.error("Failed to list audio devices:", e));
   };
 
+  const recordHotkey = async () => {
+    setRecording(true);
+    try {
+      const result = await invoke<HotkeyConfig>("record_hotkey");
+      update({ hotkey: result });
+    } catch {
+      // timeout or cancel — do nothing
+    } finally {
+      setRecording(false);
+    }
+  };
+
   const platformNote =
     platform === "macos"
       ? t("general.platformHelpMac")
@@ -72,82 +86,38 @@ export default function GeneralTab() {
         aside={<StatusDot tone={hotkeyAdvice.tone}>{hotkeySummary}</StatusDot>}
       >
         <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {([
-              { value: "single", title: t("general.single"), description: t("general.singleDesc") },
-              { value: "double_tap", title: t("general.doubleTap"), description: t("general.doubleTapDesc") },
-              { value: "combo", title: t("general.combo"), description: t("general.comboDesc") },
-              { value: "hold", title: t("general.hold"), description: t("general.holdDesc") },
-            ] as const).map((option) => (
-              <OptionCard
-                key={option.value}
-                title={option.title}
-                description={option.description}
-                selected={g.hotkey.hotkey_type === option.value}
-                onClick={() => update({ hotkey: { ...g.hotkey, hotkey_type: option.value } })}
-              />
-            ))}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Current hotkey display + record button */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1.5">
-              <label htmlFor="hotkey-key" className={labelCls}>{t("general.key")}</label>
-              <input
-                id="hotkey-key"
-                name="hotkey-key"
-                value={g.hotkey.key}
-                onChange={(e) => update({ hotkey: { ...g.hotkey, key: e.target.value } })}
-                className="field-input"
-                placeholder={platform === "macos" ? "RCmd" : "RCtrl"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <p className={hintCls}>{t("general.keyHint")}</p>
+              <p className={labelCls}>{t("general.currentHotkey")}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {g.hotkey.hotkey_type === "combo" && g.hotkey.modifier ? (
+                  <>
+                    <kbd className="inline-flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2.5 py-1 text-sm font-semibold text-[var(--text-primary)] shadow-sm">{formatHotkeyKey(g.hotkey.modifier)}</kbd>
+                    <span className="text-xs text-[var(--text-muted)]">+</span>
+                  </>
+                ) : null}
+                <kbd className="inline-flex items-center rounded-md border border-[var(--border)] bg-[var(--surface-raised)] px-2.5 py-1 text-sm font-semibold text-[var(--text-primary)] shadow-sm">{formatHotkeyKey(g.hotkey.key)}</kbd>
+                <span className="rounded-full bg-[var(--surface-raised)] px-2.5 py-0.5 text-xs text-[var(--text-secondary)]">
+                  {t(`general.modeLabel_${g.hotkey.hotkey_type}`)}
+                </span>
+              </div>
             </div>
-
-            {g.hotkey.hotkey_type === "combo" ? (
-              <div className="space-y-1.5">
-                <label htmlFor="hotkey-modifier" className={labelCls}>{t("general.modifier")}</label>
-                <input
-                  id="hotkey-modifier"
-                  name="hotkey-modifier"
-                  value={g.hotkey.modifier ?? ""}
-                  onChange={(e) => update({ hotkey: { ...g.hotkey, modifier: e.target.value || null } })}
-                  className="field-input"
-                  placeholder="Ctrl"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <p className={hintCls}>{t("general.modifierHint")}</p>
-              </div>
-            ) : g.hotkey.hotkey_type === "double_tap" ? (
-              <div className="space-y-1.5">
-                <label htmlFor="hotkey-double-tap" className={labelCls}>{t("general.doubleTapInterval")}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="hotkey-double-tap"
-                    name="hotkey-double-tap"
-                    type="number"
-                    value={g.hotkey.double_tap_interval_ms}
-                    onChange={(e) => update({ hotkey: { ...g.hotkey, double_tap_interval_ms: Number(e.target.value) } })}
-                    className="field-input max-w-28"
-                    min={100}
-                    max={1000}
-                    step={50}
-                    inputMode="numeric"
-                  />
-                  <span className="text-xs text-[var(--text-muted)]">{t("general.ms")}</span>
-                </div>
-                <p className={hintCls}>{t("general.doubleTapHint")}</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <p className={labelCls}>{t("general.hotkeyPreviewTitle")}</p>
-                <p className="text-[13px] font-medium">{t("general.hotkeyPreview", { hotkey: hotkeySummary })}</p>
-                <p className={hintCls}>{t("general.hotkeyBehaviorHint")}</p>
-              </div>
-            )}
+            <button
+              type="button"
+              className={`btn shrink-0 ${recording ? "btn-primary animate-pulse" : "btn-secondary"}`}
+              onClick={recordHotkey}
+              disabled={recording}
+            >
+              {recording ? t("general.recordingHotkey") : t("general.recordHotkey")}
+            </button>
           </div>
+
+          {recording ? (
+            <Notice title={t("general.recordingHotkeyTitle")} tone="accent">
+              {t("general.recordingHotkeyBody")}
+            </Notice>
+          ) : null}
 
           <Notice title={t(hotkeyAdvice.titleKey)} tone={hotkeyAdvice.tone}>
             <div className="space-y-2">
@@ -179,7 +149,7 @@ export default function GeneralTab() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="microphone-device" className={labelCls}>{t("general.microphoneDevice")}</label>
+              <label htmlFor="microphone-device" className={labelCls}>{t("general.microphoneDevice")} <HintTip text={t("general.microphoneHint")} /></label>
               <button type="button" onClick={refreshDevices} className="btn btn-ghost text-xs">
                 {t("general.refreshDevices")}
               </button>
@@ -196,11 +166,10 @@ export default function GeneralTab() {
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
-            <p className={hintCls}>{t("general.microphoneHint")}</p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="max-recording" className={labelCls}>{t("general.maxRecording")}</label>
+            <label htmlFor="max-recording" className={labelCls}>{t("general.maxRecording")} <HintTip text={t("general.maxRecordingHint")} /></label>
             <div className="flex items-center gap-2">
               <input
                 id="max-recording"
@@ -216,21 +185,18 @@ export default function GeneralTab() {
               />
               <span className="text-xs text-[var(--text-muted)]">{t("general.seconds")}</span>
             </div>
-            <p className={hintCls}>{t("general.maxRecordingHint")}</p>
           </div>
 
           <div className="flex items-center justify-between gap-4 py-2">
             <div>
-              <p id="sound-effects-label" className="text-[13px] font-medium">{t("general.soundEffects")}</p>
-              <p className={hintCls}>{t("general.soundEffectsHint")}</p>
+              <p id="sound-effects-label" className="text-[13px] font-medium">{t("general.soundEffects")} <HintTip text={t("general.soundEffectsHint")} /></p>
             </div>
             <Toggle checked={g.sound_effects} onChange={(v) => update({ sound_effects: v })} ariaLabelledBy="sound-effects-label" />
           </div>
 
           <div className="flex items-center justify-between gap-4 py-2">
             <div>
-              <p id="auto-mute-label" className="text-[13px] font-medium">{t("general.autoMute")}</p>
-              <p className={hintCls}>{t("general.autoMuteHint")}</p>
+              <p id="auto-mute-label" className="text-[13px] font-medium">{t("general.autoMute")} <HintTip text={t("general.autoMuteHint")} /></p>
             </div>
             <Toggle checked={g.auto_mute} onChange={(v) => update({ auto_mute: v })} ariaLabelledBy="auto-mute-label" />
           </div>
@@ -271,7 +237,7 @@ export default function GeneralTab() {
 
           {g.output_mode === "auto_paste" ? (
             <div className="space-y-1.5">
-              <label htmlFor="clipboard-behavior" className={labelCls}>{t("general.clipboardBehavior")}</label>
+              <label htmlFor="clipboard-behavior" className={labelCls}>{t("general.clipboardBehavior")} <HintTip text={t("general.clipboardBehaviorHint")} /></label>
               <select
                 id="clipboard-behavior"
                 name="clipboard-behavior"
@@ -282,7 +248,7 @@ export default function GeneralTab() {
                 <option value="always">{t("general.alwaysCopy")}</option>
                 <option value="only_on_paste_fail">{t("general.onPasteFail")}</option>
               </select>
-              <p className={hintCls}>{t("general.clipboardBehaviorHint")}</p>
+
             </div>
           ) : null}
 
@@ -325,15 +291,15 @@ export default function GeneralTab() {
                   id="timeout-ms"
                   name="timeout-ms"
                   type="number"
-                  value={g.timeout_ms}
-                  onChange={(e) => update({ timeout_ms: Number(e.target.value) })}
+                  value={Math.round(g.timeout_ms / 1000)}
+                  onChange={(e) => update({ timeout_ms: Number(e.target.value) * 1000 })}
                   className="field-input"
-                  min={5000}
-                  max={120000}
-                  step={1000}
+                  min={5}
+                  max={120}
+                  step={1}
                   inputMode="numeric"
                 />
-                <span className="text-xs text-[var(--text-muted)]">{t("general.ms")}</span>
+                <span className="text-xs text-[var(--text-muted)]">{t("general.seconds")}</span>
               </div>
             </div>
 
@@ -356,16 +322,14 @@ export default function GeneralTab() {
 
           <div className="flex items-center justify-between gap-4 py-2">
             <div>
-              <p id="auto-start-label" className="text-[13px] font-medium">{t("general.autoStart")}</p>
-              <p className={hintCls}>{t("general.autoStartHint")}</p>
+              <p id="auto-start-label" className="text-[13px] font-medium">{t("general.autoStart")} <HintTip text={t("general.autoStartHint")} /></p>
             </div>
             <Toggle checked={g.auto_start} onChange={(v) => update({ auto_start: v })} ariaLabelledBy="auto-start-label" />
           </div>
 
           <div className="flex items-center justify-between gap-4 py-2">
             <div>
-              <p id="close-to-tray-label" className="text-[13px] font-medium">{t("general.closeToTray")}</p>
-              <p className={hintCls}>{t("general.closeToTrayHint")}</p>
+              <p id="close-to-tray-label" className="text-[13px] font-medium">{t("general.closeToTray")} <HintTip text={t("general.closeToTrayHint")} /></p>
             </div>
             <Toggle checked={g.close_to_tray} onChange={(v) => update({ close_to_tray: v })} ariaLabelledBy="close-to-tray-label" />
           </div>

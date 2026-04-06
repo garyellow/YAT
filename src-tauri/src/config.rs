@@ -32,7 +32,7 @@ pub struct LlmConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             base_url: String::new(),
             api_key: String::new(),
             model: String::new(),

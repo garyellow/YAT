@@ -111,6 +111,7 @@ export default function Settings() {
   const [toastMessage, setToastMessage] = useState("");
   const [toastTone, setToastTone] = useState<"success" | "error">("success");
   const [isSaving, setIsSaving] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
   const saved = useSettingsStore((s) => s.saved);
@@ -212,11 +213,29 @@ export default function Settings() {
     <div className="shell mx-auto flex max-md:flex-col">
       <Toast message={toastMessage} visible={toastVisible} onDone={hideToast} tone={toastTone} />
 
-      <aside className="sidebar shrink-0 flex flex-col p-3">
-        <div className="px-2 pt-2 pb-4">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside className="sidebar shrink-0 flex flex-col p-3" data-open={sidebarOpen}>
+        <div className="flex items-center justify-between px-2 pt-2 pb-4">
           <p className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">
             YAT
           </p>
+          <button
+            type="button"
+            className="btn btn-ghost p-1 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label={t("settings.closeSidebar")}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
 
         <nav className="flex-1 space-y-4" aria-label={t("settings.navigationLabel")}>
@@ -230,7 +249,10 @@ export default function Settings() {
                   key={tab}
                   type="button"
                   aria-current={active === tab ? "page" : undefined}
-                  onClick={() => setActive(tab)}
+                  onClick={() => {
+                    setActive(tab);
+                    setSidebarOpen(false);
+                  }}
                   className="nav-item"
                   data-active={active === tab ? "true" : "false"}
                 >
@@ -254,7 +276,19 @@ export default function Settings() {
       <section className="min-h-0 min-w-0 flex-1 border-l border-[var(--border)] max-md:border-l-0 max-md:border-t">
         <div className="flex h-full min-h-0 flex-col">
           <header className="main-header flex items-center justify-between gap-4 px-6 py-3">
-            <h2 className="text-[14px] font-medium">{tabTitle}</h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="btn btn-ghost p-1 md:hidden"
+                onClick={() => setSidebarOpen(true)}
+                aria-label={t("settings.openSidebar")}
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+                </svg>
+              </button>
+              <h2 className="text-[14px] font-medium">{tabTitle}</h2>
+            </div>
             <div className="flex items-center gap-3" aria-live="polite">
               <button
                 type="button"
@@ -279,7 +313,7 @@ export default function Settings() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={!dirty}
-                className={`btn ${dirty ? "btn-primary" : "btn-secondary opacity-50"}`}
+                className={`btn transition-all duration-150 ${dirty ? "btn-primary" : "btn-secondary opacity-50"}`}
                 title={t("actions.saveHint")}
               >
                 {dirty ? t("actions.save") : saved ? t("actions.saved") : t("settings.noChanges")}

@@ -4,10 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { Notice, Section } from "./SettingPrimitives";
+import { HintTip } from "../ui/Tooltip";
 import type { SettingsTab } from "./tabs";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 interface PromptTabProps {
   onNavigate?: (tab: SettingsTab) => void;
@@ -80,7 +80,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="user-instructions" className={labelCls}>{t("prompt.userInstructions")}</label>
+            <label htmlFor="user-instructions" className={labelCls}>{t("prompt.userInstructions")} <HintTip text={t("prompt.userInstructionsHint")} /></label>
             <textarea
               id="user-instructions"
               name="user-instructions"
@@ -91,7 +91,6 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
               rows={5}
             />
             <div className="flex items-center justify-between">
-              <p className={hintCls}>{t("prompt.userInstructionsHint")}</p>
               {prompt.user_instructions.trim().length > 0 ? (
                 <button type="button" className="btn btn-ghost text-xs" onClick={() => update({ user_instructions: "" })}>
                   {t("prompt.clearInstructions")}
@@ -113,7 +112,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         }
       >
         <div className="space-y-3">
-          <div className="rounded bg-[var(--bg-subtle)] p-3">
+          <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
             <pre className="pre-wrap max-h-72 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
               {previewText}
             </pre>
@@ -121,10 +120,10 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
           <div className="flex gap-2">
             {onNavigate ? (
               <>
-                <button className="btn btn-ghost text-xs" onClick={() => onNavigate("vocabulary")}>
+                <button className="btn btn-secondary text-xs" onClick={() => onNavigate("vocabulary")}>
                   {t("prompt.openVocabulary")}
                 </button>
-                <button className="btn btn-ghost text-xs" onClick={() => onNavigate("llm")}>
+                <button className="btn btn-secondary text-xs" onClick={() => onNavigate("llm")}>
                   {t("prompt.openPolishSettings")}
                 </button>
               </>

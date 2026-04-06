@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Notice, Section, StatusDot } from "./SettingPrimitives";
+import { HintTip } from "../ui/Tooltip";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function SttTab() {
   const { t } = useTranslation();
@@ -26,7 +26,10 @@ export default function SttTab() {
   };
 
   const fetchModels = async () => {
-    if (!stt.base_url) return;
+    if (!stt.base_url || !stt.api_key) {
+      setFetchStatus("fail");
+      return;
+    }
     setFetchStatus("loading");
     try {
       const list = await invoke<string[]>("fetch_models", {
@@ -64,7 +67,7 @@ export default function SttTab() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")}</label>
+              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")} <span className="text-[var(--red)]">*</span> <HintTip text={t("stt.baseUrlHint")} /></label>
               <input
                 id="stt-base-url"
                 name="stt-base-url"
@@ -75,11 +78,10 @@ export default function SttTab() {
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={hintCls}>{t("stt.baseUrlHint")}</p>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")}</label>
+              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")} <span className="text-[var(--red)]">*</span></label>
               <div className="relative">
                 <input
                   id="stt-api-key"
@@ -94,7 +96,7 @@ export default function SttTab() {
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="btn btn-ghost absolute right-1 top-1 px-2 py-1 text-xs"
+                  className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
                   aria-label={showKey ? t("stt.hideKey") : t("stt.showKey")}
                 >
                   {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
@@ -105,7 +107,7 @@ export default function SttTab() {
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
+              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")} <span className="text-[var(--red)]">*</span> <HintTip text={t("stt.modelHint")} /></label>
               <div className="flex gap-2">
                 <input
                   id="stt-model"
@@ -121,7 +123,7 @@ export default function SttTab() {
                 <button
                   type="button"
                   onClick={fetchModels}
-                  disabled={!stt.base_url || fetchStatus === "loading"}
+                  disabled={!stt.base_url || !stt.api_key || fetchStatus === "loading"}
                   className="btn btn-ghost shrink-0 text-xs"
                 >
                   {fetchStatus === "loading" ? t("stt.fetchingModels") : t("stt.fetchModels")}
@@ -133,13 +135,13 @@ export default function SttTab() {
                 </datalist>
               )}
               {fetchStatus === "fail" && (
-                <p className="text-[11px] text-[var(--danger)]">{t("stt.fetchModelsFail")}</p>
+                <p className="text-[11px] text-[var(--red)]">{t("stt.fetchModelsFail")}</p>
               )}
-              <p className={hintCls}>{t("stt.modelHint")}</p>
+
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")}</label>
+              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")} <HintTip text={t("stt.languageHint")} /></label>
               <input
                 id="stt-language"
                 name="stt-language"
@@ -150,7 +152,6 @@ export default function SttTab() {
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={hintCls}>{t("stt.languageHint")}</p>
             </div>
           </div>
         </div>
