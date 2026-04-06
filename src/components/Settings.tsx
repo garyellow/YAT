@@ -163,13 +163,26 @@ export default function Settings() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (saveStatus !== "saving" && dirty && settings && !validationError) {
-          void handleSave();
+          void flushSettings()
+            .then(() => {
+              setToastTone("success");
+              setToastMessage(t("actions.saveSuccess"));
+              setToastVisible(true);
+            })
+            .catch((error) => {
+              console.error("Failed to save settings:", error);
+              setToastTone("error");
+              setToastMessage(
+                `${t("actions.saveFailed")}: ${error instanceof Error ? error.message : String(error)}`
+              );
+              setToastVisible(true);
+            });
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dirty, saveStatus, settings, validationError]);
+  }, [dirty, saveStatus, settings, validationError, flushSettings, t]);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;

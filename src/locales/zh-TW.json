@@ -1,8 +1,4 @@
 {
-  "app": {
-    "name": "YAT",
-    "desc": "語音轉文字輸入工具"
-  },
   "tabs": {
     "overview": "總覽",
     "general": "一般設定",
@@ -25,7 +21,6 @@
   },
   "settings": {
     "navigationLabel": "設定導覽",
-    "windowLabel": "設定工作台",
     "allChangesSaved": "所有變更都已同步",
     "autoSaveActive": "變更會自動儲存",
     "autoSavePending": "停止輸入後會自動儲存",
@@ -34,75 +29,37 @@
     "fixValidationErrors": "請先修正畫面上的設定問題",
     "closeSaveBlocked": "目前還不能關閉，因為有設定仍需處理",
     "noChanges": "沒有待儲存變更",
-    "sidebarSpeech": "語音",
-    "sidebarPolish": "潤飾",
-    "quickSummary": "快速摘要",
-    "hotkeySummary": "目前熱鍵：{{key}}",
-    "outputAutoPasteSummary": "完成後會先嘗試直接貼到目前游標位置；若貼上失敗，結果仍會留在剪貼簿。",
-    "outputClipboardSummary": "完成後只會複製到剪貼簿，適合保守工作流。",
-    "loadingSummary": "正在載入目前設定…",
     "groups": {
       "workspace": "工作台",
       "capture": "輸入與模型",
       "customize": "客製化",
       "data": "資料"
-    },
-    "tabDescriptions": {
-      "overview": "先確認這個 App 是否已準備就緒，以及目前最值得調整的地方。",
-      "general": "設定熱鍵、輸出模式、錄音行為與系統偏好。",
-      "stt": "連接語音辨識服務，確保音訊能順利變成文字。",
-      "llm": "決定是否要對轉錄文字做額外潤飾與格式整理。",
-      "prompt": "用簡單規則或進階 prompt 來調整輸出風格。",
-      "vocabulary": "管理專有名詞與常見誤辨識的修正規則。",
-      "history": "搜尋、複製與重試先前的轉錄結果。"
-    },
-    "navDescriptions": {
-      "overview": "檢查可用狀態、權限與下一步。",
-      "general": "熱鍵、輸出與系統層設定。",
-      "stt": "語音轉文字 API 設定。",
-      "llm": "文字潤飾與格式化模型。",
-      "prompt": "自訂輸出風格與規則。",
-      "vocabulary": "專有名詞與修正對照。",
-      "history": "搜尋與回用先前輸出。"
     }
   },
   "overview": {
-    "eyebrow": "使用體驗總覽",
     "title": "讓 YAT 真的進入可用狀態",
     "desc": "先把語音輸入、潤飾、權限與輸出路徑整理好，後面的每一次說話才會自然、穩定、不打斷工作流。",
     "badges": {
       "ready": "核心已就緒",
-      "setupNeeded": "仍需設定",
-      "coreReady": "可開始使用",
-      "finishSetup": "建議先完成設定",
-      "done": "已完成",
-      "needsReview": "建議檢查"
+      "setupNeeded": "仍需設定"
     },
     "actions": {
       "configureSpeech": "設定語音辨識",
       "reviewPrompt": "檢查 Prompt",
       "adjustOutput": "調整輸出",
-      "reviewPermissions": "檢查權限",
       "openHistory": "查看歷史紀錄",
       "openVocabulary": "打開詞彙表"
     },
     "stats": {
       "speech": "語音輸入",
       "polish": "文字潤飾",
-      "hotkey": "熱鍵",
-      "vocabulary": "詞彙規則"
+      "hotkey": "熱鍵"
     },
     "metricValues": {
       "ready": "已就緒",
       "pending": "待完成",
       "active": "啟用中",
       "off": "已關閉"
-    },
-    "metricHints": {
-      "addSpeechProvider": "先設定一組 STT 服務。",
-      "optional": "可選功能，不一定要開。",
-      "customRulesEnabled": "目前已有自訂規則。",
-      "noRulesYet": "目前仍使用預設規則。"
     },
     "setup": {
       "title": "目前最值得先做的事",
@@ -116,9 +73,7 @@
       "promptTitle": "整理你的文字風格",
       "promptReady": "目前已加上 {{count}} 個詞彙規則或自訂指令。",
       "promptPending": "目前仍是預設規則，可以視需求再微調。",
-      "promptOptional": "文字潤飾目前關閉，Prompt 可之後再設定。",
-      "permissionsTitle": "確認平台權限",
-      "outputTitleShort": "輸出方式"
+      "promptOptional": "文字潤飾目前關閉，Prompt 可之後再設定。"
     },
     "permissions": {
       "title": "平台權限與風險提醒",
@@ -127,55 +82,25 @@
       "accessibilityTitle": "輔助使用 / 自動貼上",
       "hotkeyTitle": "背景熱鍵",
       "autoPasteTitle": "自動貼上注意事項",
-      "installTitle": "安裝與系統提示",
       "unknownTitle": "請手動確認目前平台權限",
       "macosMicrophoneBody": "如果第一次拒絕麥克風，請到「系統設定 → 隱私權與安全性 → 麥克風」重新開啟。",
       "macosAccessibilityBody": "若你要自動貼上，通常需要在「系統設定 → 隱私權與安全性 → 輔助使用」允許 YAT。",
-      "macosHotkeyBody": "macOS 的全域熱鍵同樣依賴『輔助使用』權限；若熱鍵突然失效，請重新確認授權並重開 YAT。",
       "windowsMicrophoneBody": "請到「設定 → 隱私權與安全性 → 麥克風」確認已允許桌面應用程式使用麥克風。",
       "windowsAutoPasteBody": "若目標 App 以系統管理員權限執行，而 YAT 沒有同等權限，自動貼上可能失敗；此時建議改用『僅複製』。",
-      "windowsInstallBody": "若安裝或啟動時出現系統防護提示，可在確認來源可信後選擇繼續執行。",
       "linuxMicrophoneBody": "請確認桌面環境、套件格式或 portal 已允許麥克風存取。",
       "linuxHotkeyBody": "YAT 目前使用以 X11 為基礎的全域熱鍵監聽；在原生 Wayland 工作階段中，熱鍵可能完全無法觸發，除非桌面環境提供相容層。此外，Linux 版本在執行中也不會像 macOS / Windows 一樣把 Esc 從前景 App 手上攔下來。",
-      "linuxAutoPasteBody": "Linux 各桌面環境對鍵盤模擬支援差異很大；若行為不穩，建議改為『僅複製』。",
       "unknownBody": "如果錄音、熱鍵或貼上行為異常，請優先檢查麥克風、鍵盤監聽與輔助使用權限。"
-    },
-    "platformSummary": {
-      "windows": "建議檢查麥克風與自動貼上相容性。",
-      "macos": "建議檢查麥克風與輔助使用權限。",
-      "linux": "建議檢查桌面環境對熱鍵與貼上的支援。",
-      "unknown": "請手動檢查目前平台權限。"
-    },
-    "platformLabel": {
-      "windows": "Windows",
-      "macos": "macOS",
-      "linux": "Linux",
-      "unknown": "Unknown"
-    },
-    "flow": {
-      "title": "YAT 的完整生命週期",
-      "desc": "當你按下熱鍵後，整個流程其實很簡單：先抓到聲音、再轉文字、必要時潤飾、最後送到你真正要工作的地方。",
-      "capture": "按下熱鍵開始錄音",
-      "transcribe": "把音訊送到 STT 服務",
-      "polish": "用 LLM 整理內容與格式",
-      "skipPolish": "直接輸出原始轉錄結果",
-      "paste": "完成後直接貼到目前游標位置",
-      "clipboard": "完成後寫入剪貼簿",
-      "stepNumber": "步驟 {{count}}"
     },
     "recent": {
       "title": "最近一次狀態",
       "desc": "確認目前錄音流程停在哪裡，出錯時也能第一時間看見原因。",
       "errorTitle": "最近一次流程回報錯誤",
-      "latestOutput": "最近輸出",
       "emptyTitle": "還沒有最近輸出",
       "emptyDesc": "先錄一段語音，這裡就會顯示最新結果與流程狀態。"
     },
     "prompt": {
       "title": "Prompt 與詞彙規則預覽",
       "desc": "把預設 prompt、你的自訂指令和詞彙表一起看，才知道模型最後真正收到的是什麼。",
-      "customized": "已客製",
-      "default": "預設狀態",
       "enabledHint": "現在的規則會直接影響潤飾後的最終輸出。",
       "disabledHint": "文字潤飾目前關閉，這些規則暫時不會套用。"
     }
@@ -322,10 +247,6 @@
     "apiKeyHintLocal": "若是 localhost 或內網的本地 LLM 端點，而且沒有啟用驗證，API 金鑰可以留白。",
     "model": "模型名稱",
     "modelHint": "例如 llama-3.3-70b-versatile、gpt-4o-mini",
-    "test": "測試",
-    "testing": "測試中…",
-    "connected": "連線成功",
-    "failed": "連線失敗",
     "quickStartTitle": "潤飾不是必需，但要開就要穩",
     "quickStartDesc": "把它想成第二層品質保證：整理標點、刪除贅詞、修正文風。若你的目標是最快速度，也可以先關掉。",
     "modeTitle": "潤飾模式",
@@ -349,7 +270,6 @@
     "hideKeyShort": "隱藏"
   },
   "prompt": {
-    "systemPrompt": "系統提示詞",
     "resetToDefault": "還原為預設",
     "userInstructions": "你的自訂指令",
     "userInstructionsDesc": "從最簡單的規則開始，例如「保留口語感」或「整理成條列」。大多數使用者其實不需要改到 system prompt。",
@@ -362,24 +282,15 @@
     "llmDisabledBody": "Prompt 與詞彙規則只有在開啟 LLM 時才會生效；若你現在只想快速輸出文字，先保持關閉也沒問題。",
     "simpleFirstTitle": "先從簡單規則開始",
     "simpleFirstBody": "參考 OpenTypeless 與 Whispering 這類工具的做法，最好的 Prompt UX 不是把所有人都推進進階設定，而是先讓你用幾句簡單規則就能得到明顯改善。",
-    "customRulesOn": "已加上自訂規則",
-    "customRulesOff": "仍使用預設規則",
-    "bestPracticeTitle": "比較穩的寫法",
-    "bestPracticeBody": "優先描述你想要的輸出，例如「保留原本語氣」、「若有多點請轉為條列」。避免讓模型回答內容本身，而不是整理原文。",
     "previewTitle": "模型實際會看到的內容",
     "previewDesc": "這裡會把預設 system prompt、你的自訂指令與詞彙規則整合起來，讓你看見真正送出去的最終版本。",
-    "previewVocabularyCount": "{{count}} 個詞彙規則",
-    "previewHintTitle": "為什麼這很重要",
-    "previewHintBody": "很多 Prompt 問題其實不是模型不夠好，而是使用者不知道規則最後是怎麼被拼接起來的。先看預覽，調整會更有方向。",
     "openVocabulary": "前往詞彙表",
     "openPolishSettings": "前往文字潤飾設定",
-    "advancedWarningBadge": "進階模式",
     "hideAdvanced": "收合進階設定",
     "showAdvanced": "展開進階設定",
     "advancedWarningTitle": "只有在你真的要改底層策略時再動這裡",
     "advancedWarningBody": "system prompt 會強烈影響每一次輸出，修改過度時，往往比沒有客製化更難用。除非你已經試過簡單指令仍不夠，否則不要急著動這裡。",
     "charCount": "{{count}} 字元",
-    "default": "預設規則",
     "presets": {
       "keepToneLabel": "保留口語感",
       "keepToneValue": "保留原本語氣，不要過度正式化。",
@@ -401,22 +312,18 @@
     "safeCustomizationBody": "如果你只是想修正品牌名稱、專案代號、團隊術語或常見錯字，先用詞彙表，通常比直接改 Prompt 更穩。",
     "addTitle": "新增修正規則",
     "addDesc": "每條規則都會在潤飾時一起考慮，適合建立你自己的術語字典。",
-    "validationTitle": "還差一點",
     "validationRequired": "請同時填入錯誤寫法與正確寫法。",
     "validationDuplicate": "這個錯誤寫法已經存在，不需要再加一次。",
     "listTitle": "目前詞彙規則",
     "listDesc": "建立得越完整，模型就越能穩定修正專有名詞。",
     "entryCount": "{{count}} 筆規則",
-    "correctionRule": "修正規則",
     "confirmDelete": "確定刪除這筆修正規則？"
   },
   "history": {
     "search": "搜尋",
     "searchPlaceholder": "搜尋轉錄紀錄…",
-    "searchButton": "搜尋",
     "retention": "保留期限",
     "hours": "小時",
-    "days": "天",
     "noHistory": "尚無紀錄",
     "emptyHint": "開始錄音後紀錄會顯示在這裡",
     "confirmDelete": "確定刪除此筆紀錄？",
@@ -426,24 +333,16 @@
     "summaryBody": "當你要回頭複製、重試或比對原始結果時，歷史紀錄應該是快速而不雜亂的。",
     "metrics": {
       "entries": "目前清單",
-      "filtered": "已套用搜尋條件",
-      "all": "顯示目前載入的全部結果",
-      "retention": "資料保留",
       "retentionHint": "超過這個時間的資料可定期清理。"
     },
     "controlsTitle": "搜尋與清理",
     "controlsDesc": "保留期限屬於設定的一部分。修改後會自動儲存；若你想立刻確認，也可以手動儲存一次。",
     "resultsTitle": "歷史結果",
-    "resultsDesc": "每一筆都能快速複製、重試或刪除，讓你把好內容留下來、把失敗快速補救。",
-    "resultsReady": "結果已載入",
-    "loadingTitle": "正在讀取歷史資料"
+    "resultsDesc": "每一筆都能快速複製、重試或刪除，讓你把好內容留下來、把失敗快速補救。"
   },
   "actions": {
-    "save": "儲存",
     "saveNow": "立即儲存",
     "saved": "已儲存",
-    "cancel": "取消",
-    "close": "關閉",
     "testConnection": "測試連線",
     "testing": "測試中…",
     "connected": "連線成功",
@@ -452,7 +351,6 @@
     "retry": "重試",
     "delete": "刪除",
     "retrySave": "重新儲存",
-    "unsaved": "有未儲存的變更",
     "saveSuccess": "設定已儲存",
     "saveFailed": "設定儲存失敗",
     "saveHint": "立即儲存 (Ctrl+S)"

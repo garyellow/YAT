@@ -39,13 +39,37 @@ const statusConfig: Record<
     dot: "bg-amber-400",
     pulse: false,
   },
+  busy: {
+    shell: "border-white/10 bg-neutral-900/82",
+    dot: "bg-white/80",
+    pulse: true,
+  },
   error: {
     shell: "border-white/10 bg-neutral-900/80",
     dot: "bg-red-400",
     pulse: false,
   },
-
 };
+
+/**
+ * Convert raw RMS amplitude (0–1) to a display percentage for the mic bar.
+ *
+ * Design goals:
+ *  - Ambient room noise (RMS ≤ 0.01) → 0 % so the bar stays still when silent.
+ *  - Soft speech (~0.02)              → ~15 % — just enough to notice.
+ *  - Normal speech (~0.05–0.10)       → 35–50 % — clear visual feedback.
+ *  - Loud speech (≥ 0.20)            → 65 %+   — prominent but not pinned.
+ *
+ * The conversion uses dB above the noise floor, linearly mapped to 0–100 %:
+ *   dB = 20 · log₁₀(rms / NOISE_FLOOR)
+ * Full-scale (rms = 1) is 40 dB above a 0.01 floor → 40 × 2.5 = 100 %.
+ */
+function micLevelToBar(rms: number): number {
+  const NOISE_FLOOR = 0.01;
+  if (rms < NOISE_FLOOR) return 0;
+  const db = 20 * Math.log10(rms / NOISE_FLOOR);
+  return Math.min(db * 2.5, 100);
+}
 
 export default function CapsuleApp() {
   const { t, i18n } = useTranslation();
@@ -141,7 +165,7 @@ export default function CapsuleApp() {
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
               <div
                 className="h-full rounded-full bg-white transition-[width] duration-100"
-                style={{ width: `${Math.min(micLevel > 0 ? (1 + Math.log10(Math.max(micLevel, 1e-4)) / 4) * 100 : 0, 100)}%` }}
+                style={{ width: `${micLevelToBar(micLevel)}%` }}
               />
             </div>
           ) : null}

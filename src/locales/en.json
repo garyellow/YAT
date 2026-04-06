@@ -1,8 +1,4 @@
 {
-  "app": {
-    "name": "YAT",
-    "desc": "Voice-to-text input tool"
-  },
   "tabs": {
     "overview": "Overview",
     "general": "General",
@@ -25,7 +21,6 @@
   },
   "settings": {
     "navigationLabel": "Settings navigation",
-    "windowLabel": "Settings workspace",
     "allChangesSaved": "Everything is in sync",
     "autoSaveActive": "Changes save automatically",
     "autoSavePending": "Saving after you pause typing",
@@ -34,75 +29,37 @@
     "fixValidationErrors": "Fix the highlighted settings before saving",
     "closeSaveBlocked": "Could not close yet because some settings still need attention",
     "noChanges": "No pending changes",
-    "sidebarSpeech": "Speech",
-    "sidebarPolish": "Polish",
-    "quickSummary": "Quick summary",
-    "hotkeySummary": "Current hotkey: {{key}}",
-    "outputAutoPasteSummary": "YAT will try to paste directly into the focused app, with the clipboard as a fallback if paste fails.",
-    "outputClipboardSummary": "YAT will only copy to the clipboard for a safer workflow.",
-    "loadingSummary": "Loading current settings…",
     "groups": {
       "workspace": "Workspace",
       "capture": "Capture & models",
       "customize": "Customize",
       "data": "Data"
-    },
-    "tabDescriptions": {
-      "overview": "Check readiness, permission risk, and the highest-impact next steps.",
-      "general": "Tune hotkeys, output behavior, recording, and system-level preferences.",
-      "stt": "Connect the speech-to-text service that turns audio into text.",
-      "llm": "Decide whether you want a second pass for cleanup and formatting.",
-      "prompt": "Customize the output style with simple rules or an advanced prompt.",
-      "vocabulary": "Manage proper nouns and recurring correction rules.",
-      "history": "Search, copy, retry, and clean up past outputs."
-    },
-    "navDescriptions": {
-      "overview": "See readiness, permissions, and next actions.",
-      "general": "Hotkey, output, and system behavior.",
-      "stt": "Speech-to-text provider settings.",
-      "llm": "Cleanup and formatting model settings.",
-      "prompt": "Output style and instruction rules.",
-      "vocabulary": "Term corrections and dictionaries.",
-      "history": "Search and reuse previous outputs."
     }
   },
   "overview": {
-    "eyebrow": "Experience overview",
     "title": "Get YAT into a truly usable state",
     "desc": "Dial in speech capture, polishing, permissions, and output flow first. Once those are solid, every recording feels natural instead of fragile.",
     "badges": {
       "ready": "Core ready",
-      "setupNeeded": "Setup needed",
-      "coreReady": "Ready to use",
-      "finishSetup": "Finish setup first",
-      "done": "Done",
-      "needsReview": "Needs review"
+      "setupNeeded": "Setup needed"
     },
     "actions": {
       "configureSpeech": "Configure speech",
       "reviewPrompt": "Review prompt",
       "adjustOutput": "Adjust output",
-      "reviewPermissions": "Review permissions",
       "openHistory": "Open history",
       "openVocabulary": "Open vocabulary"
     },
     "stats": {
       "speech": "Speech",
       "polish": "Polish",
-      "hotkey": "Hotkey",
-      "vocabulary": "Rules"
+      "hotkey": "Hotkey"
     },
     "metricValues": {
       "ready": "Ready",
       "pending": "Pending",
       "active": "Active",
       "off": "Off"
-    },
-    "metricHints": {
-      "addSpeechProvider": "Add an STT provider first.",
-      "optional": "Optional feature.",
-      "customRulesEnabled": "Custom rules are enabled.",
-      "noRulesYet": "Still using default rules."
     },
     "setup": {
       "title": "Highest-impact next steps",
@@ -116,9 +73,7 @@
       "promptTitle": "Shape the final writing style",
       "promptReady": "You already have {{count}} vocabulary rules or custom instructions.",
       "promptPending": "You are still on the default rules, which is fine for now.",
-      "promptOptional": "Polishing is off, so prompt work can wait.",
-      "permissionsTitle": "Review platform permissions",
-      "outputTitleShort": "Output mode"
+      "promptOptional": "Polishing is off, so prompt work can wait."
     },
     "permissions": {
       "title": "Platform permissions & edge cases",
@@ -127,55 +82,25 @@
       "accessibilityTitle": "Accessibility / auto-paste",
       "hotkeyTitle": "Background hotkeys",
       "autoPasteTitle": "Auto-paste caveat",
-      "installTitle": "Install & system prompts",
       "unknownTitle": "Manually review platform permissions",
       "macosMicrophoneBody": "If you denied microphone access the first time, reopen it under System Settings → Privacy & Security → Microphone.",
       "macosAccessibilityBody": "Auto-paste usually requires YAT to be allowed under System Settings → Privacy & Security → Accessibility.",
-      "macosHotkeyBody": "Global hotkeys rely on the same Accessibility path on macOS. If they stop firing, re-check Accessibility permission and restart YAT.",
       "windowsMicrophoneBody": "Open Settings → Privacy & security → Microphone and confirm desktop apps are allowed to use the mic.",
       "windowsAutoPasteBody": "If the target app runs elevated and YAT does not, simulated paste can fail. Clipboard-only mode is usually the safest fallback.",
-      "windowsInstallBody": "If Windows shows a protection prompt on install or first launch, only continue after confirming the build source is trusted.",
       "linuxMicrophoneBody": "Make sure your desktop environment, package format, or portal setup allows microphone access.",
       "linuxHotkeyBody": "YAT currently uses an X11-based global hotkey listener. In native Wayland sessions, hotkeys may not fire at all unless your environment provides compatibility. Linux builds also do not currently consume Esc away from the foreground app during an active operation.",
-      "linuxAutoPasteBody": "Keyboard simulation varies a lot by desktop environment. Clipboard-only is usually the most stable fallback on Linux.",
       "unknownBody": "If recording, hotkeys, or paste behavior feels unreliable, check microphone, keyboard monitoring, and accessibility-related permissions first."
-    },
-    "platformSummary": {
-      "windows": "Review microphone access and paste compatibility.",
-      "macos": "Review microphone and accessibility permissions.",
-      "linux": "Review desktop support for hotkeys and simulated paste.",
-      "unknown": "Review platform permissions manually."
-    },
-    "platformLabel": {
-      "windows": "Windows",
-      "macos": "macOS",
-      "linux": "Linux",
-      "unknown": "Unknown"
-    },
-    "flow": {
-      "title": "The full YAT lifecycle",
-      "desc": "Once you press the hotkey, the product should feel predictable: capture audio, transcribe it, optionally polish it, then send it where you actually work.",
-      "capture": "Press the hotkey to start recording",
-      "transcribe": "Send audio to the STT provider",
-      "polish": "Use the LLM to clean up structure and wording",
-      "skipPolish": "Output the raw transcript directly",
-      "paste": "Paste into the focused app",
-      "clipboard": "Copy into the clipboard",
-      "stepNumber": "Step {{count}}"
     },
     "recent": {
       "title": "Latest pipeline status",
       "desc": "Check where the workflow is right now, and surface errors as soon as they happen.",
       "errorTitle": "Latest pipeline error",
-      "latestOutput": "Latest output",
       "emptyTitle": "No recent output yet",
       "emptyDesc": "Record a short sample and the latest result will show up here."
     },
     "prompt": {
       "title": "Prompt & vocabulary preview",
       "desc": "Seeing the final combined rules matters. It tells you what the model is actually getting, not just what you think you configured.",
-      "customized": "Customized",
-      "default": "Default",
       "enabledHint": "These rules will directly shape the polished output.",
       "disabledHint": "Polishing is disabled, so these rules are currently inactive."
     }
@@ -322,10 +247,6 @@
     "apiKeyHintLocal": "Optional for localhost or private-network LLM endpoints that do not require auth.",
     "model": "Model",
     "modelHint": "e.g. llama-3.3-70b-versatile, gpt-4o-mini",
-    "test": "Test",
-    "testing": "Testing…",
-    "connected": "Connected",
-    "failed": "Failed",
     "quickStartTitle": "Polishing is optional, but it should feel solid when enabled",
     "quickStartDesc": "Think of polishing as a second-pass quality layer: punctuation, cleanup, formatting, and tone smoothing. Keep it off if speed matters most.",
     "modeTitle": "Polishing mode",
@@ -349,7 +270,6 @@
     "hideKeyShort": "Hide"
   },
   "prompt": {
-    "systemPrompt": "System Prompt",
     "resetToDefault": "Reset to default",
     "userInstructions": "Your instructions",
     "userInstructionsDesc": "Start with simple rules like “keep the casual tone” or “turn lists into bullets.” Most users never need to edit the system prompt.",
@@ -362,24 +282,15 @@
     "llmDisabledBody": "Prompt and vocabulary rules only matter when the LLM pass is enabled. If you just want raw speech output, it is fine to leave polishing off for now.",
     "simpleFirstTitle": "Start simple first",
     "simpleFirstBody": "Projects like OpenTypeless and Whispering handle this well: the best prompt UX does not push everyone into advanced config. It lets you get real value from a few simple instructions first.",
-    "customRulesOn": "Custom rules on",
-    "customRulesOff": "Using defaults",
-    "bestPracticeTitle": "A steadier way to write instructions",
-    "bestPracticeBody": "Describe the shape of the output you want, like “keep the original tone” or “convert lists into bullets.” Avoid asking the model to answer the content itself.",
     "previewTitle": "What the model will actually see",
     "previewDesc": "This merges the default system prompt, your custom instructions, and vocabulary rules so you can inspect the final payload instead of guessing.",
-    "previewVocabularyCount": "{{count}} vocabulary rules",
-    "previewHintTitle": "Why this matters",
-    "previewHintBody": "A lot of prompt problems are really visibility problems. Once you can see the final combined prompt, tuning gets much easier.",
     "openVocabulary": "Go to vocabulary",
     "openPolishSettings": "Open polish settings",
-    "advancedWarningBadge": "Advanced",
     "hideAdvanced": "Hide advanced settings",
     "showAdvanced": "Show advanced settings",
     "advancedWarningTitle": "Only edit this when you truly need to change the base strategy",
     "advancedWarningBody": "The system prompt strongly affects every single output. Over-editing it often makes the app worse, not better. Try simple instructions first.",
     "charCount": "{{count}} chars",
-    "default": "Default rules",
     "presets": {
       "keepToneLabel": "Keep natural tone",
       "keepToneValue": "Keep the original tone. Do not over-formalize the writing.",
@@ -401,22 +312,18 @@
     "safeCustomizationBody": "If you mainly want to fix product names, project codes, brand spelling, or team terminology, vocabulary rules are usually safer than editing prompts directly.",
     "addTitle": "Add a correction rule",
     "addDesc": "Each rule becomes part of the polishing pass and helps you build a lightweight personal dictionary.",
-    "validationTitle": "Almost there",
     "validationRequired": "Please fill in both the wrong form and the correct form.",
     "validationDuplicate": "That wrong form already exists, so you do not need to add it again.",
     "listTitle": "Current rules",
     "listDesc": "The more complete this list is, the more stable proper noun correction becomes.",
     "entryCount": "{{count}} rules",
-    "correctionRule": "Correction rule",
     "confirmDelete": "Delete this correction rule?"
   },
   "history": {
     "search": "Search",
     "searchPlaceholder": "Search transcriptions…",
-    "searchButton": "Search",
     "retention": "Keep for",
     "hours": "h",
-    "days": "d",
     "noHistory": "No records yet",
     "emptyHint": "Start recording to see results here",
     "confirmDelete": "Delete this entry?",
@@ -426,24 +333,16 @@
     "summaryBody": "This should be the place you revisit when you want to copy, retry, compare, or recover good output quickly.",
     "metrics": {
       "entries": "Entries",
-      "filtered": "Filtered results",
-      "all": "Showing all currently loaded results",
-      "retention": "Retention",
       "retentionHint": "Entries older than this can be cleaned up regularly."
     },
     "controlsTitle": "Search & cleanup",
     "controlsDesc": "Retention is part of app settings. Changes save automatically, and you can still save manually if you want immediate confirmation.",
     "resultsTitle": "History results",
-    "resultsDesc": "Each item should be easy to copy, retry, or delete so good output stays useful and failed output is easy to recover.",
-    "resultsReady": "Results loaded",
-    "loadingTitle": "Loading history"
+    "resultsDesc": "Each item should be easy to copy, retry, or delete so good output stays useful and failed output is easy to recover."
   },
   "actions": {
-    "save": "Save",
     "saveNow": "Save now",
     "saved": "Saved",
-    "cancel": "Cancel",
-    "close": "Close",
     "testConnection": "Test connection",
     "testing": "Testing…",
     "connected": "Connected",
@@ -452,7 +351,6 @@
     "retry": "Retry",
     "delete": "Delete",
     "retrySave": "Retry save",
-    "unsaved": "Unsaved changes",
     "saveSuccess": "Settings saved",
     "saveFailed": "Failed to save settings",
     "saveHint": "Save now (Ctrl+S)"
