@@ -27,6 +27,8 @@ export default function HistoryTab() {
   const deleteEntry = useHistoryStore((s) => s.deleteEntry);
   const retryEntry = useHistoryStore((s) => s.retryEntry);
   const clearOld = useHistoryStore((s) => s.clearOld);
+  const retryingId = useHistoryStore((s) => s.retryingId);
+  const retryError = useHistoryStore((s) => s.retryError);
 
   const [query, setQuery] = useState(searchQuery);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -136,6 +138,11 @@ export default function HistoryTab() {
           </StatusDot>
         }
       >
+        {retryError ? (
+          <Notice title={t("history.retryFailed")} tone="danger">
+            {retryError}
+          </Notice>
+        ) : null}
         {loading ? (
           <p className="py-4 text-xs text-[var(--text-muted)]">{t("status.loading")}</p>
         ) : entries.length === 0 ? (
@@ -148,7 +155,7 @@ export default function HistoryTab() {
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="group py-3 border-b border-[var(--border)] last:border-b-0 transition-colors duration-100 hover:bg-[var(--bg-subtle)] -mx-2 px-2 rounded-[var(--radius-sm)]"
+                className="group py-3 border-b border-[var(--border)] last:border-b-0 transition-colors duration-100 hover:bg-[var(--bg-subtle)] -mx-2 px-2 rounded"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -191,9 +198,10 @@ export default function HistoryTab() {
                       <button
                         type="button"
                         className="btn btn-secondary text-xs"
+                        disabled={retryingId === entry.id}
                         onClick={() => void retryEntry(entry.id)}
                       >
-                        {t("actions.retry")}
+                        {retryingId === entry.id ? t("status.polishing") : t("actions.retry")}
                       </button>
                     ) : null}
                     <button

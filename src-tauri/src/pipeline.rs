@@ -129,7 +129,11 @@ pub async fn run(
         )
         .await
         {
-            Ok(polished) => Some(polished),
+            Ok(polished) if !polished.trim().is_empty() => Some(polished),
+            Ok(_) => {
+                log::warn!("LLM returned empty polish, using raw text");
+                None
+            }
             Err(e) => {
                 log::warn!("LLM polish failed, using raw text: {e}");
                 None // Fall back to raw text
@@ -190,4 +194,52 @@ pub async fn run(
         duration_seconds: start.elapsed().as_secs_f64(),
         suppressed: false,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_system_prompt_base_only() {
+        let result = build_system_prompt("You are a transcription assistant.", "", &[]);
+        assert_eq!(result, "You are a transcription assistant.");
+    }
+
+    #[test]
+    fn build_system_prompt_with_instructions() {
+        let result = build_system_prompt("Base.", "Always use formal tone.", &[]);
+        assert!(result.starts_with("Base."));
+        assert!(result.contains("Additional user instructions:"));
+        assert!(result.contains("Always use formal tone."));
+    }
+
+    #[test]
+    fn build_system_prompt_with_vocabulary() {
+        let vocab = vec![
+            VocabularyEntry { wrong: "teh".into(), correct: "the".into() },
+            VocabularyEntry { wrong: "recieve".into(), correct: "receive".into() },
+        ];
+        let result = build_system_prompt("Base.", "", &vocab);
+        assert!(result.contains("Vocabulary corrections"));
+        assert!(result.contains("\"teh\" → \"the\""));
+        assert!(result.contains("\"recieve\" → \"receive\""));
+        assert!(!result.contains("Additional user instructions:"));
+    }
+
+    #[test]
+    fn build_system_prompt_with_both() {
+        let vocab = vec![VocabularyEntry { wrong: "x".into(), correct: "y".into() }];
+        let result = build_system_prompt("Base.", "Be concise.", &vocab);
+        assert!(result.contains("Additional user instructions:"));
+        assert!(result.contains("Be concise."));
+        assert!(result.contains("\"x\" → \"y\""));
+    }
+
+    #[test]
+    fn build_system_prompt_trims_whitespace_only_instructions() {
+        let result = build_system_prompt("Base.", "   \n  ", &[]);
+        assert_eq!(result, "Base.");
+        assert!(!result.contains("Additional user instructions:"));
+    }
 }

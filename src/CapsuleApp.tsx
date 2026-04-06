@@ -44,11 +44,7 @@ const statusConfig: Record<
     dot: "bg-red-400",
     pulse: false,
   },
-  busy: {
-    shell: "border-white/10 bg-neutral-900/80",
-    dot: "bg-white",
-    pulse: true,
-  },
+
 };
 
 export default function CapsuleApp() {
@@ -56,6 +52,7 @@ export default function CapsuleApp() {
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     invoke<AppSettings>("get_settings")
@@ -69,14 +66,17 @@ export default function CapsuleApp() {
 
   useEffect(() => {
     let mounted = true;
-    const unlisten = listen<{ status: RecordingStatus; text?: string }>(
+    const unlisten = listen<{ status: RecordingStatus; text?: string; error?: string }>(
       "pipeline-status",
       (e) => {
-        // Ignore "busy" — that status is only for the sound effect (via
-        // recordingStore in the main window).  Showing it in the capsule
-        // would cause a confusing visual flicker during pipeline processing.
-        if (mounted && e.payload.status !== "busy")
+        if (mounted && e.payload.status !== "busy") {
           setStatus(e.payload.status);
+          if (e.payload.status === "error") {
+            setErrorMsg(e.payload.error ?? e.payload.text ?? "");
+          } else {
+            setErrorMsg("");
+          }
+        }
       }
     );
     const unlisten2 = listen<string>("capsule-status", (e) => {
@@ -106,12 +106,18 @@ export default function CapsuleApp() {
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const cfg = statusConfig[status] ?? statusConfig.idle;
+  const detailMessage =
+    status === "error"
+      ? errorMsg
+      : status === "clipboardFallback"
+        ? t("capsule.clipboardFallbackHint")
+        : "";
   if (status === "idle") return null;
 
   return (
     <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
       <div
-        className={`flex min-w-[220px] items-center gap-3 rounded-xl border px-4 py-3 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
+        className={`flex min-w-[240px] max-w-[360px] items-center gap-3 rounded-xl border px-4 py-3 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
         aria-live="polite"
       >
         <span
@@ -135,9 +141,20 @@ export default function CapsuleApp() {
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
               <div
                 className="h-full rounded-full bg-white transition-[width] duration-100"
-                style={{ width: `${Math.min(Math.sqrt(micLevel) * 200, 100)}%` }}
+                style={{ width: `${Math.min(micLevel > 0 ? (1 + Math.log10(Math.max(micLevel, 1e-4)) / 4) * 100 : 0, 100)}%` }}
               />
             </div>
+          ) : null}
+
+          {detailMessage ? (
+            <p
+              className={`mt-1 text-[11px] leading-4 break-words ${
+                status === "error" ? "text-red-300/90" : "text-white/70"
+              }`}
+              title={detailMessage}
+            >
+              {detailMessage}
+            </p>
           ) : null}
         </div>
 

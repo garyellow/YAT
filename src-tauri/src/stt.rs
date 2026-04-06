@@ -27,17 +27,16 @@ pub async fn transcribe(
     timeout_ms: u64,
     max_retries: u32,
 ) -> Result<String, SttError> {
-    if config.base_url.trim().is_empty() {
+    let base_url = config.base_url.trim();
+    let api_key = config.api_key.trim();
+    let model = config.model.trim();
+
+    if base_url.is_empty() {
         return Err(SttError::Request(
             "STT base URL is not configured. Please set it in Settings → STT.".into(),
         ));
     }
-    if config.api_key.trim().is_empty() {
-        return Err(SttError::Request(
-            "STT API key is not configured. Please set it in Settings → STT.".into(),
-        ));
-    }
-    if config.model.trim().is_empty() {
+    if model.is_empty() {
         return Err(SttError::Request(
             "STT model is not configured. Please set it in Settings → STT.".into(),
         ));
@@ -45,7 +44,7 @@ pub async fn transcribe(
 
     let url = format!(
         "{}/audio/transcriptions",
-        config.base_url.trim_end_matches('/')
+        base_url.trim_end_matches('/')
     );
 
     let client = reqwest::Client::builder()
@@ -73,23 +72,24 @@ pub async fn transcribe(
                 .map_err(|e| SttError::Request(e.to_string()))?;
 
         let mut form = multipart::Form::new()
-            .text("model", config.model.clone())
+            .text("model", model.to_string())
             .text("temperature", "0")
             .text("response_format", "json")
             .part("file", file_part);
 
         if let Some(ref lang) = config.language {
-            if !lang.is_empty() {
-                form = form.text("language", lang.clone());
+            let trimmed = lang.trim();
+            if !trimmed.is_empty() {
+                form = form.text("language", trimmed.to_string());
             }
         }
 
-        let result = client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", config.api_key))
-            .multipart(form)
-            .send()
-            .await;
+        let mut request = client.post(&url).multipart(form);
+        if !api_key.is_empty() {
+            request = request.header("Authorization", format!("Bearer {api_key}"));
+        }
+
+        let result = request.send().await;
 
         match result {
             Ok(resp) => {

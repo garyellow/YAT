@@ -33,15 +33,11 @@ YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT tu
 
 ### 1. Download and install
 
-| Platform | What to get | Notes |
-|---|---|---|
-| Windows | `YAT_x.x.x_x64-setup.exe` | Double-click to install; choose path and scope |
-| Windows (enterprise) | `YAT_x.x.x_x64_en-US.msi` | For GPO / SCCM silent deployment |
-| macOS (Apple Silicon) | `YAT_x.x.x_aarch64.dmg` | Open and drag to Applications |
-| macOS (Intel) | `YAT_x.x.x_x64.dmg` | Open and drag to Applications |
-| Linux (universal) | `YAT_x.x.x_amd64.AppImage` | `chmod +x` and run directly |
-| Linux (Debian/Ubuntu) | `YAT_x.x.x_amd64.deb` | `sudo apt install ./YAT*.deb` |
-| Linux (Fedora/RHEL) | `YAT_x.x.x_x86_64.rpm` | `sudo dnf install ./YAT*.rpm` |
+| Platform | What to get |
+|---|---|
+| Windows | Windows build |
+| macOS | macOS build |
+| Linux | Linux build |
 
 - Go to [Releases](../../releases)
 - Install YAT
@@ -150,17 +146,6 @@ YAT uses your own API keys (BYOK). Requests go directly to the provider you conf
 | **Linux** | Global hotkeys currently need X11 or a compatibility layer; if paste feels unreliable, use **Clipboard only**; auto-mute is not supported on Linux |
 
 - Extra note: on Linux, pressing **Esc** to cancel may still send that key to the foreground app.
-
-### Installation and uninstallation
-
-| Platform | Install | Uninstall |
-|---|---|---|
-| **Windows (EXE)** | Double-click `-setup.exe`; choose "Just me" or "All users" and install path | Remove from Settings → Apps; prompted whether to delete user data |
-| **Windows (MSI)** | Double-click `.msi` or use `msiexec` for silent install | Remove from Settings → Apps |
-| **macOS** | Open `.dmg`, drag YAT to Applications | Drag YAT.app to Trash (user data stays in `~/Library/Application Support/com.garyellow.yat/`) |
-| **Linux (AppImage)** | `chmod +x` and run directly — no installation needed | Delete the `.AppImage` file |
-| **Linux (deb)** | `sudo apt install ./YAT*.deb` | `sudo apt remove yat` (add `purge` to remove system config) |
-| **Linux (rpm)** | `sudo dnf install ./YAT*.rpm` | `sudo dnf remove yat` |
 
 ## FAQ
 

@@ -4,10 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { Notice, Section } from "./SettingPrimitives";
-import { HintTip } from "../ui/Tooltip";
 import type { SettingsTab } from "./tabs";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 interface PromptTabProps {
   onNavigate?: (tab: SettingsTab) => void;
@@ -80,7 +80,8 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="user-instructions" className={labelCls}>{t("prompt.userInstructions")} <HintTip text={t("prompt.userInstructionsHint")} /></label>
+            <label htmlFor="user-instructions" className={labelCls}>{t("prompt.userInstructions")}</label>
+            <p className={hintCls}>{t("prompt.userInstructionsHint")}</p>
             <textarea
               id="user-instructions"
               name="user-instructions"

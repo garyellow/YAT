@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Notice, Section, StatusDot } from "./SettingPrimitives";
-import { HintTip } from "../ui/Tooltip";
+import { isLocalEndpointUrl } from "../../lib/settingsFormatters";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 export default function SttTab() {
   const { t } = useTranslation();
@@ -15,33 +16,15 @@ export default function SttTab() {
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testMsg, setTestMsg] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [models, setModels] = useState<string[]>([]);
-  const [fetchStatus, setFetchStatus] = useState<"idle" | "loading" | "fail">("idle");
 
   if (!settings) return null;
   const stt = settings.stt;
+  const apiKeyHint = isLocalEndpointUrl(stt.base_url)
+    ? t("stt.apiKeyHintLocal")
+    : t("stt.apiKeyHintRemote");
 
   const update = (patch: Partial<typeof stt>) => {
     updateSettings({ stt: { ...stt, ...patch } });
-  };
-
-  const fetchModels = async () => {
-    if (!stt.base_url || !stt.api_key) {
-      setFetchStatus("fail");
-      return;
-    }
-    setFetchStatus("loading");
-    try {
-      const list = await invoke<string[]>("fetch_models", {
-        baseUrl: stt.base_url,
-        apiKey: stt.api_key,
-      });
-      setModels(list);
-      setFetchStatus("idle");
-    } catch {
-      setModels([]);
-      setFetchStatus("fail");
-    }
   };
 
   const testConnection = async () => {
@@ -67,21 +50,24 @@ export default function SttTab() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")} <span className="text-[var(--red)]">*</span> <HintTip text={t("stt.baseUrlHint")} /></label>
+              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")}</label>
               <input
                 id="stt-base-url"
                 name="stt-base-url"
+                type="url"
                 value={stt.base_url}
                 onChange={(e) => update({ base_url: e.target.value })}
                 className="field-input"
                 placeholder="https://api.openai.com/v1"
                 autoComplete="off"
+                inputMode="url"
                 spellCheck={false}
               />
+              <p className={hintCls}>{t("stt.baseUrlHint")}</p>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")} <span className="text-[var(--red)]">*</span></label>
+              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")}</label>
               <div className="relative">
                 <input
                   id="stt-api-key"
@@ -102,46 +88,28 @@ export default function SttTab() {
                   {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
                 </button>
               </div>
+              <p className={hintCls}>{apiKeyHint}</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")} <span className="text-[var(--red)]">*</span> <HintTip text={t("stt.modelHint")} /></label>
-              <div className="flex gap-2">
-                <input
-                  id="stt-model"
-                  name="stt-model"
-                  list="stt-model-list"
-                  value={stt.model}
-                  onChange={(e) => update({ model: e.target.value })}
-                  className="field-input flex-1"
-                  placeholder="whisper-1"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  onClick={fetchModels}
-                  disabled={!stt.base_url || !stt.api_key || fetchStatus === "loading"}
-                  className="btn btn-ghost shrink-0 text-xs"
-                >
-                  {fetchStatus === "loading" ? t("stt.fetchingModels") : t("stt.fetchModels")}
-                </button>
-              </div>
-              {models.length > 0 && (
-                <datalist id="stt-model-list">
-                  {models.map((m) => <option key={m} value={m} />)}
-                </datalist>
-              )}
-              {fetchStatus === "fail" && (
-                <p className="text-[11px] text-[var(--red)]">{t("stt.fetchModelsFail")}</p>
-              )}
-
+              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
+              <input
+                id="stt-model"
+                name="stt-model"
+                value={stt.model}
+                onChange={(e) => update({ model: e.target.value })}
+                className="field-input"
+                placeholder="whisper-1"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className={hintCls}>{t("stt.modelHint")}</p>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")} <HintTip text={t("stt.languageHint")} /></label>
+              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")}</label>
               <input
                 id="stt-language"
                 name="stt-language"
@@ -152,6 +120,7 @@ export default function SttTab() {
                 autoComplete="off"
                 spellCheck={false}
               />
+              <p className={hintCls}>{t("stt.languageHint")}</p>
             </div>
           </div>
         </div>
@@ -176,7 +145,12 @@ export default function SttTab() {
         }
       >
         <div className="space-y-3">
-          <button onClick={testConnection} disabled={testStatus === "testing"} className="btn btn-primary">
+          <button
+            type="button"
+            onClick={testConnection}
+            disabled={testStatus === "testing" || !stt.base_url.trim() || !stt.model.trim()}
+            className="btn btn-primary"
+          >
             {testStatus === "testing" ? t("actions.testing") : t("actions.testConnection")}
           </button>
 

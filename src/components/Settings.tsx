@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../stores/settingsStore";
 import { isSttConfigured } from "../lib/settingsFormatters";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 import OverviewTab from "./settings/OverviewTab";
 import GeneralTab from "./settings/GeneralTab";
 import SttTab from "./settings/SttTab";
@@ -110,12 +111,14 @@ export default function Settings() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastTone, setToastTone] = useState<"success" | "error">("success");
-  const [isSaving, setIsSaving] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const allowCloseRef = useRef(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
   const saved = useSettingsStore((s) => s.saved);
-  const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const saveStatus = useSettingsStore((s) => s.saveStatus);
+  const lastSaveError = useSettingsStore((s) => s.lastSaveError);
+  const validationError = useSettingsStore((s) => s.validationError);
+  const flushSettings = useSettingsStore((s) => s.flushSettings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   const tabTitle = useMemo(() => t(`tabs.${active}`), [active, t]);
@@ -135,34 +138,91 @@ export default function Settings() {
   }, [active]);
 
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
+    const handler = () => {
       if (dirty) {
-        e.preventDefault();
-        e.returnValue = "";
+        void flushSettings().catch(() => {});
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
+  }, [dirty, flushSettings]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && dirty) {
+        void flushSettings().catch(() => {});
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [dirty, flushSettings]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (!isSaving && dirty && settings) {
+        if (saveStatus !== "saving" && dirty && settings && !validationError) {
           void handleSave();
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dirty, isSaving, saveSettings, settings]);
+  }, [dirty, saveStatus, settings, validationError]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const currentWindow = getCurrentWindow();
+
+      unlisten = await currentWindow.onCloseRequested(async (event) => {
+        if (allowCloseRef.current) {
+          allowCloseRef.current = false;
+          return;
+        }
+
+        if (!dirty && saveStatus !== "saving") {
+          return;
+        }
+
+        event.preventDefault();
+
+        try {
+          await flushSettings();
+          allowCloseRef.current = true;
+          await currentWindow.close();
+        } catch (error) {
+          setToastTone("error");
+          setToastMessage(
+            `${t("settings.closeSaveBlocked")}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          setToastVisible(true);
+        }
+      });
+
+      if (disposed) {
+        unlisten?.();
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [dirty, flushSettings, saveStatus, t]);
 
   const handleSave = async () => {
-    if (settings && dirty && !isSaving) {
-      setIsSaving(true);
+    if (dirty && saveStatus !== "saving" && !validationError) {
       try {
-        await saveSettings(settings);
+        await flushSettings();
         setToastTone("success");
         setToastMessage(t("actions.saveSuccess"));
         setToastVisible(true);
@@ -173,13 +233,66 @@ export default function Settings() {
           `${t("actions.saveFailed")}: ${error instanceof Error ? error.message : String(error)}`
         );
         setToastVisible(true);
-      } finally {
-        setIsSaving(false);
       }
     }
   };
 
   const hideToast = useCallback(() => setToastVisible(false), []);
+
+  const saveIndicator = useMemo(() => {
+    if (validationError) {
+      return {
+        label: t("settings.fixValidationErrors"),
+        className: "text-[var(--red)]",
+        title: validationError,
+      };
+    }
+
+    if (saveStatus === "error") {
+      return {
+        label: t("settings.autoSaveFailed"),
+        className: "text-[var(--red)]",
+        title: lastSaveError ?? undefined,
+      };
+    }
+
+    if (saveStatus === "saving") {
+      return {
+        label: t("settings.saving"),
+        className: "text-[var(--text-secondary)]",
+      };
+    }
+
+    if (dirty || saveStatus === "pending") {
+      return {
+        label: t("settings.autoSavePending"),
+        className: "text-[var(--text-secondary)]",
+      };
+    }
+
+    if (saved || saveStatus === "saved") {
+      return {
+        label: t("settings.allChangesSaved"),
+        className: "text-[var(--green)]",
+      };
+    }
+
+    return {
+      label: t("settings.autoSaveActive"),
+      className: "text-[var(--text-muted)]",
+    };
+  }, [dirty, lastSaveError, saveStatus, saved, t, validationError]);
+
+  const saveButtonLabel =
+    saveStatus === "saving"
+      ? t("settings.saving")
+      : saveStatus === "error"
+        ? t("actions.retrySave")
+        : dirty
+          ? t("actions.saveNow")
+          : saved
+            ? t("actions.saved")
+            : t("settings.noChanges");
 
   const renderActivePanel = () => {
     const panel = (() => {
@@ -213,29 +326,11 @@ export default function Settings() {
     <div className="shell mx-auto flex max-md:flex-col">
       <Toast message={toastMessage} visible={toastVisible} onDone={hideToast} tone={toastTone} />
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside className="sidebar shrink-0 flex flex-col p-3" data-open={sidebarOpen}>
-        <div className="flex items-center justify-between px-2 pt-2 pb-4">
+      <aside className="sidebar shrink-0 flex flex-col p-3">
+        <div className="px-2 pt-2 pb-4">
           <p className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">
             YAT
           </p>
-          <button
-            type="button"
-            className="btn btn-ghost p-1 md:hidden"
-            onClick={() => setSidebarOpen(false)}
-            aria-label={t("settings.closeSidebar")}
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-            </svg>
-          </button>
         </div>
 
         <nav className="flex-1 space-y-4" aria-label={t("settings.navigationLabel")}>
@@ -249,10 +344,7 @@ export default function Settings() {
                   key={tab}
                   type="button"
                   aria-current={active === tab ? "page" : undefined}
-                  onClick={() => {
-                    setActive(tab);
-                    setSidebarOpen(false);
-                  }}
+                  onClick={() => setActive(tab)}
                   className="nav-item"
                   data-active={active === tab ? "true" : "false"}
                 >
@@ -276,19 +368,7 @@ export default function Settings() {
       <section className="min-h-0 min-w-0 flex-1 border-l border-[var(--border)] max-md:border-l-0 max-md:border-t">
         <div className="flex h-full min-h-0 flex-col">
           <header className="main-header flex items-center justify-between gap-4 px-6 py-3">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="btn btn-ghost p-1 md:hidden"
-                onClick={() => setSidebarOpen(true)}
-                aria-label={t("settings.openSidebar")}
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
-                </svg>
-              </button>
-              <h2 className="text-[14px] font-medium">{tabTitle}</h2>
-            </div>
+            <h2 className="text-[14px] font-medium">{tabTitle}</h2>
             <div className="flex items-center gap-3" aria-live="polite">
               <button
                 type="button"
@@ -306,17 +386,17 @@ export default function Settings() {
                 <ThemeIcon theme={settings?.general.theme ?? "system"} />
                 <span className="text-xs">{t(`general.${settings?.general.theme === "light" ? "light" : settings?.general.theme === "dark" ? "dark" : "system"}`)}</span>
               </button>
-              {dirty ? (
-                <span className="text-xs text-[var(--text-muted)]">{t("actions.unsaved")}</span>
-              ) : null}
+              <span className={`text-xs ${saveIndicator.className}`} title={saveIndicator.title}>
+                {saveIndicator.label}
+              </span>
               <button
                 type="button"
                 onClick={() => void handleSave()}
-                disabled={!dirty}
-                className={`btn transition-all duration-150 ${dirty ? "btn-primary" : "btn-secondary opacity-50"}`}
-                title={t("actions.saveHint")}
+                disabled={!dirty || saveStatus === "saving" || Boolean(validationError)}
+                className={`btn ${dirty ? "btn-primary" : "btn-secondary opacity-50"}`}
+                title={validationError ?? lastSaveError ?? t("actions.saveHint")}
               >
-                {dirty ? t("actions.save") : saved ? t("actions.saved") : t("settings.noChanges")}
+                {saveButtonLabel}
               </button>
             </div>
           </header>

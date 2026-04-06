@@ -39,7 +39,16 @@ impl HistoryManager {
         std::fs::create_dir_all(&app_data_dir).ok();
         let db_path = app_data_dir.join("history.db");
         let conn = Connection::open(db_path)?;
+        Self::init_tables(conn)
+    }
 
+    #[cfg(test)]
+    pub fn new_in_memory() -> Result<Self, HistoryError> {
+        let conn = Connection::open_in_memory()?;
+        Self::init_tables(conn)
+    }
+
+    fn init_tables(conn: Connection) -> Result<Self, HistoryError> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS history (
                 id              TEXT PRIMARY KEY,
@@ -180,7 +189,119 @@ impl HistoryManager {
         })?;
         match rows.next() {
             Some(Ok(entry)) => Ok(Some(entry)),
-            _ => Ok(None),
+            Some(Err(e)) => Err(HistoryError::Db(e)),
+            None => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+
+    fn make_entry(id: &str, raw: &str, polished: Option<&str>, status: &str) -> HistoryEntry {
+        HistoryEntry {
+            id: id.into(),
+            raw_text: raw.into(),
+            polished_text: polished.map(String::from),
+            created_at: Utc::now(),
+            duration_seconds: 1.5,
+            status: status.into(),
+        }
+    }
+
+    #[test]
+    fn insert_and_get_by_id() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        let entry = make_entry("a1", "hello world", Some("Hello, world."), "success");
+        mgr.insert(&entry).unwrap();
+
+        let fetched = mgr.get_by_id("a1").unwrap().expect("should exist");
+        assert_eq!(fetched.raw_text, "hello world");
+        assert_eq!(fetched.polished_text.as_deref(), Some("Hello, world."));
+        assert_eq!(fetched.status, "success");
+    }
+
+    #[test]
+    fn get_by_id_missing_returns_none() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        assert!(mgr.get_by_id("nonexistent").unwrap().is_none());
+    }
+
+    #[test]
+    fn search_returns_matching() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        mgr.insert(&make_entry("s1", "apple pie", None, "success")).unwrap();
+        mgr.insert(&make_entry("s2", "banana split", None, "success")).unwrap();
+
+        let results = mgr.search(Some("apple"), 100).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "s1");
+
+        // Empty query returns all
+        let all = mgr.search(None, 100).unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn search_escapes_sql_wildcards() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        mgr.insert(&make_entry("w1", "100% done", None, "success")).unwrap();
+        mgr.insert(&make_entry("w2", "nothing here", None, "success")).unwrap();
+
+        let results = mgr.search(Some("100%"), 100).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "w1");
+    }
+
+    #[test]
+    fn delete_removes_entry() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        mgr.insert(&make_entry("d1", "to delete", None, "success")).unwrap();
+        mgr.delete("d1").unwrap();
+        assert!(mgr.get_by_id("d1").unwrap().is_none());
+    }
+
+    #[test]
+    fn clear_old_respects_retention() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+
+        let mut old = make_entry("old1", "old entry", None, "success");
+        old.created_at = Utc::now() - Duration::hours(50);
+        mgr.insert(&old).unwrap();
+
+        let recent = make_entry("new1", "new entry", None, "success");
+        mgr.insert(&recent).unwrap();
+
+        let deleted = mgr.clear_old(48).unwrap();
+        assert_eq!(deleted, 1);
+        assert!(mgr.get_by_id("old1").unwrap().is_none());
+        assert!(mgr.get_by_id("new1").unwrap().is_some());
+    }
+
+    #[test]
+    fn recent_context_only_success() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+
+        mgr.insert(&make_entry("c1", "good text", Some("Good text."), "success")).unwrap();
+        mgr.insert(&make_entry("c2", "", Some("[Error] something"), "error")).unwrap();
+
+        let ctx = mgr.recent_context(60).unwrap();
+        assert_eq!(ctx.len(), 1);
+        assert_eq!(ctx[0], "Good text.");
+    }
+
+    #[test]
+    fn insert_or_replace_updates_existing() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+        mgr.insert(&make_entry("r1", "original", None, "success")).unwrap();
+
+        let mut updated = make_entry("r1", "original", Some("Polished."), "success");
+        updated.duration_seconds = 2.0;
+        mgr.insert(&updated).unwrap();
+
+        let fetched = mgr.get_by_id("r1").unwrap().unwrap();
+        assert_eq!(fetched.polished_text.as_deref(), Some("Polished."));
     }
 }

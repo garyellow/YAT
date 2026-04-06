@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
+import {
+  cloneSettings,
+  loadMockSettings,
+  saveMockSettings,
+} from "../lib/defaultSettings";
+import { validateSettings } from "../lib/settingsFormatters";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 
 export interface SttConfig {
   base_url: string;
@@ -62,70 +69,190 @@ export interface AppSettings {
   history: HistoryConfig;
 }
 
+export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
+
 interface SettingsState {
   settings: AppSettings | null;
   loading: boolean;
   saved: boolean;
   dirty: boolean;
+  saveStatus: SaveStatus;
+  lastSaveError: string | null;
+  validationError: string | null;
+  revision: number;
   loadSettings: () => Promise<void>;
-  saveSettings: (settings: AppSettings) => Promise<void>;
+  saveSettings: (settings: AppSettings, revision?: number) => Promise<void>;
   updateSettings: (partial: Partial<AppSettings>) => void;
+  flushSettings: () => Promise<void>;
 }
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function sanitizeSettings(settings: AppSettings): AppSettings {
+  return {
+    ...cloneSettings(settings),
+    stt: {
+      ...settings.stt,
+      base_url: settings.stt.base_url.trim(),
+      api_key: settings.stt.api_key.trim(),
+      model: settings.stt.model.trim(),
+      language: settings.stt.language?.trim() || null,
+    },
+    llm: {
+      ...settings.llm,
+      base_url: settings.llm.base_url.trim(),
+      api_key: settings.llm.api_key.trim(),
+      model: settings.llm.model.trim(),
+    },
+    general: {
+      ...settings.general,
+      theme: settings.general.theme.trim(),
+      language: settings.general.language.trim(),
+      hotkey: {
+        ...settings.general.hotkey,
+        key: settings.general.hotkey.key.trim(),
+        modifier: settings.general.hotkey.modifier?.trim() || null,
+      },
+    },
+  };
+}
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   loading: false,
   saved: false,
   dirty: false,
+  saveStatus: "idle",
+  lastSaveError: null,
+  validationError: null,
+  revision: 0,
 
   loadSettings: async () => {
     set({ loading: true });
     try {
-      const settings = await invoke<AppSettings>("get_settings");
-      set({ settings, loading: false });
-    } catch {
-      // Fallback for browser testing (outside Tauri)
-      const mock: AppSettings = {
-        stt: { base_url: "", api_key: "", model: "", language: "zh" },
-        llm: { enabled: false, base_url: "", api_key: "", model: "" },
-        general: {
-          hotkey: { hotkey_type: "hold", key: "RCtrl", modifier: null, double_tap_interval_ms: 300 },
-          theme: "system", auto_start: false, max_recording_seconds: 180,
-          output_mode: "auto_paste", clipboard_behavior: "always", language: "zh-TW",
-          timeout_ms: 30000, max_retries: 2, sound_effects: true, auto_mute: true,
-          microphone_device: null, close_to_tray: true,
-        },
-        prompt: { system_prompt: "", user_instructions: "", vocabulary: [] },
-        history: { retention_hours: 720, context_window_minutes: 10 },
-      };
-      set({ settings: mock, loading: false });
+      const settings = isTauriRuntime()
+        ? await invoke<AppSettings>("get_settings")
+        : loadMockSettings();
+
+      set({
+        settings,
+        loading: false,
+        dirty: false,
+        saved: false,
+        saveStatus: "idle",
+        lastSaveError: null,
+        validationError: validateSettings(settings),
+        revision: 0,
+      });
+    } catch (error) {
+      set({ loading: false });
+      throw error;
     }
   },
 
-  saveSettings: async (settings: AppSettings) => {
-    try {
-      await invoke("save_settings", { settings });
-    } catch {
-      // Browser fallback: no-op
+  saveSettings: async (settings: AppSettings, revision = get().revision) => {
+    const sanitized = sanitizeSettings(settings);
+    const validationError = validateSettings(sanitized);
+
+    if (validationError) {
+      set({
+        validationError,
+        lastSaveError: null,
+        saveStatus: "idle",
+        saved: false,
+      });
+      throw new Error(validationError);
     }
-    set({ settings, saved: true, dirty: false });
-    setTimeout(() => set({ saved: false }), 2000);
+
+    set({ saveStatus: "saving", lastSaveError: null, validationError: null });
+
+    try {
+      if (isTauriRuntime()) {
+        await invoke("save_settings", { settings: sanitized });
+      } else {
+        saveMockSettings(sanitized);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (get().revision === revision) {
+        set({
+          saveStatus: "error",
+          lastSaveError: message,
+          saved: false,
+          dirty: true,
+        });
+      }
+      throw new Error(message);
+    }
+
+    const current = get();
+    if (current.revision !== revision) {
+      set({ saveStatus: current.validationError ? "idle" : "pending" });
+      return;
+    }
+
+    set({
+      settings: sanitized,
+      saved: true,
+      dirty: false,
+      saveStatus: "saved",
+      lastSaveError: null,
+      validationError: null,
+    });
+
+    setTimeout(() => {
+      const state = get();
+      if (!state.dirty && state.saveStatus === "saved") {
+        set({ saved: false, saveStatus: "idle" });
+      }
+    }, 2000);
   },
 
   updateSettings: (partial) => {
     const current = get().settings;
     if (current) {
       const merged = { ...current, ...partial };
-      set({ settings: merged, saved: false, dirty: true });
+      const nextRevision = get().revision + 1;
+      const validationError = validateSettings(sanitizeSettings(merged));
 
-      // Debounced auto-save: sync to backend after 1.5s of inactivity
+      set({
+        settings: merged,
+        saved: false,
+        dirty: true,
+        saveStatus: "pending",
+        lastSaveError: null,
+        validationError,
+        revision: nextRevision,
+      });
+
       if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      if (validationError) {
+        return;
+      }
+
       autoSaveTimer = setTimeout(() => {
         autoSaveTimer = null;
-        get().saveSettings(merged);
-      }, 1500);
+        const snapshot = get();
+        if (snapshot.settings) {
+          void get().saveSettings(snapshot.settings, snapshot.revision).catch(() => {});
+        }
+      }, 800);
+    }
+  },
+
+  flushSettings: async () => {
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+
+    const { dirty, settings, validationError, revision } = get();
+    if (validationError) {
+      throw new Error(validationError);
+    }
+
+    if (dirty && settings) {
+      await get().saveSettings(settings, revision);
     }
   },
 }));

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // ── STT Configuration ───────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SttConfig {
     pub base_url: String,
     pub api_key: String,
@@ -12,9 +13,9 @@ pub struct SttConfig {
 impl Default for SttConfig {
     fn default() -> Self {
         Self {
-            base_url: String::new(),
+            base_url: "https://api.groq.com/openai/v1".into(),
             api_key: String::new(),
-            model: String::new(),
+            model: "whisper-large-v3-turbo".into(),
             language: None,
         }
     }
@@ -22,6 +23,7 @@ impl Default for SttConfig {
 
 // ── LLM Configuration ──────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LlmConfig {
     pub enabled: bool,
     pub base_url: String,
@@ -33,9 +35,9 @@ impl Default for LlmConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            base_url: String::new(),
+            base_url: "https://api.groq.com/openai/v1".into(),
             api_key: String::new(),
-            model: String::new(),
+            model: "llama-3.3-70b-versatile".into(),
         }
     }
 }
@@ -51,6 +53,7 @@ pub enum HotkeyType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HotkeyConfig {
     pub hotkey_type: HotkeyType,
     pub key: String,
@@ -96,6 +99,7 @@ pub enum ClipboardBehavior {
 
 // ── General Configuration ───────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GeneralConfig {
     pub hotkey: HotkeyConfig,
     pub theme: String,
@@ -134,6 +138,7 @@ impl Default for GeneralConfig {
 
 // ── Prompt Configuration ────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PromptConfig {
     pub system_prompt: String,
     #[serde(default)]
@@ -183,6 +188,7 @@ CRITICAL CONSTRAINTS:
 
 // ── History Configuration ───────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HistoryConfig {
     pub retention_hours: u32,
     pub context_window_minutes: u32,
@@ -199,6 +205,7 @@ impl Default for HistoryConfig {
 
 // ── App Settings (top-level) ────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppSettings {
     pub stt: SttConfig,
     pub llm: LlmConfig,

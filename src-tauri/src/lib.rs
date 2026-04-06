@@ -18,7 +18,7 @@ use tauri::{
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
-use tauri_plugin_store::StoreExt;
+use tauri_plugin_store::{resolve_store_path, StoreExt};
 
 use audio::AudioRecorder;
 use config::AppSettings;
@@ -89,14 +89,13 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
         return Err("Hotkey key cannot be empty".into());
     }
 
-    // ESC is reserved as the cancel key and cannot be used as a hotkey.
-    if key_name.eq_ignore_ascii_case("Esc") || key_name.eq_ignore_ascii_case("Escape") {
-        return Err("Escape key is reserved and cannot be used as a hotkey".into());
+    if key_name.eq_ignore_ascii_case("Escape") || key_name.eq_ignore_ascii_case("Esc") {
+        return Err("Escape is reserved for cancelling recordings".into());
     }
 
     let key_matcher = hotkey::parse_key_match(key_name).ok_or_else(|| {
         format!(
-            "Unsupported hotkey key '{key_name}'. Use a single letter, F1-F12, Alt, Ctrl, Shift, Meta, Space, Esc, Tab, CapsLock, Backspace, or Enter"
+            "Unsupported hotkey key '{key_name}'. Use a single letter, F1-F12, Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, or Enter"
         )
     })?;
     let key = key_matcher.primary_key();
@@ -115,16 +114,16 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
             .filter(|value| !value.is_empty())
             .ok_or("Combo hotkey requires a modifier")?;
 
-        if modifier_name.eq_ignore_ascii_case("Esc") || modifier_name.eq_ignore_ascii_case("Escape") {
-            return Err("Escape key is reserved and cannot be used as a hotkey modifier".into());
-        }
-
         let modifier_matcher = hotkey::parse_key_match(modifier_name).ok_or_else(|| {
             format!(
-                "Unsupported hotkey modifier '{modifier_name}'. Use Alt, Ctrl, Shift, Meta, Space, Esc, Tab, CapsLock, Backspace, Enter, or a single letter"
+                "Unsupported hotkey modifier '{modifier_name}'. Use Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, Enter, or a single letter"
             )
         })?;
         let modifier = modifier_matcher.primary_key();
+
+        if modifier_name.eq_ignore_ascii_case("Escape") || modifier_name.eq_ignore_ascii_case("Esc") {
+            return Err("Escape is reserved for cancelling recordings".into());
+        }
 
         if hotkey::key_patterns_overlap(&key_matcher, &modifier_matcher) {
             return Err("Hotkey key and modifier must be different".into());
@@ -284,7 +283,9 @@ async fn toggle_recording(
                         duration_seconds: pr.duration_seconds,
                         status: "success".into(),
                     };
-                    state.history.lock().insert(&entry).ok();
+                    if let Err(e) = state.history.lock().insert(&entry) {
+                        log::error!("failed to save history entry: {e}");
+                    }
                 }
                 Ok(pr.polished_text.unwrap_or(pr.raw_text))
             }
@@ -302,7 +303,9 @@ async fn toggle_recording(
                     duration_seconds: 0.0,
                     status: "error".into(),
                 };
-                state.history.lock().insert(&entry).ok();
+                if let Err(db_err) = state.history.lock().insert(&entry) {
+                    log::error!("failed to save history entry: {db_err}");
+                }
                 emit_status(&app, "error", None, Some(&e.to_string()));
                 Err(e.to_string())
             }
@@ -484,6 +487,19 @@ async fn save_settings(
     settings: AppSettings,
 ) -> Result<(), String> {
     let mut settings = settings;
+    settings.stt.base_url = settings.stt.base_url.trim().to_string();
+    settings.stt.api_key = settings.stt.api_key.trim().to_string();
+    settings.stt.model = settings.stt.model.trim().to_string();
+    settings.stt.language = settings
+        .stt
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    settings.llm.base_url = settings.llm.base_url.trim().to_string();
+    settings.llm.api_key = settings.llm.api_key.trim().to_string();
+    settings.llm.model = settings.llm.model.trim().to_string();
     settings.general.hotkey.key = settings.general.hotkey.key.trim().to_string();
     settings.general.hotkey.modifier = settings
         .general
@@ -516,239 +532,21 @@ async fn save_settings(
         .map_err(|e| e.to_string())?;
     let json = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
     store.set("settings", json);
+    store.save().map_err(|e| e.to_string())?;
 
     // Update in-memory settings
     *state.settings.lock() = settings;
     Ok(())
 }
 
-/// Result of the smart hotkey recording flow.
-#[derive(Debug, Clone, Serialize)]
-struct RecordedHotkey {
-    hotkey_type: config::HotkeyType,
-    key: String,
-    modifier: Option<String>,
-    double_tap_interval_ms: u64,
-}
-
-/// Key event with timing info, sent from the rdev listener thread.
-#[derive(Debug, Clone)]
-enum KeyEvent {
-    Press(String, std::time::Instant),
-    Release(String, std::time::Instant),
-}
-
 #[tauri::command]
-async fn capture_hotkey(
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
-    // Backwards compat: still returns a single key name (used nowhere new,
-    // but kept so the handler list doesn't break during migration).
-    let result = record_hotkey_inner(&state).await?;
-    Ok(result.key)
-}
-
-#[tauri::command]
-async fn record_hotkey(
-    state: tauri::State<'_, AppState>,
-) -> Result<RecordedHotkey, String> {
-    record_hotkey_inner(&state).await
-}
-
-/// Shared implementation for hotkey recording.
-///
-/// Listens to raw key events via rdev and auto-detects the gesture:
-/// - **Combo**: two or more keys held simultaneously (modifier + action key)
-/// - **Hold**: a single key held for ≥ 400 ms
-/// - **Double-tap**: the same key pressed twice within 400 ms
-/// - **Single**: a single short key press (fallback)
-async fn record_hotkey_inner(
-    state: &tauri::State<'_, AppState>,
-) -> Result<RecordedHotkey, String> {
+fn suspend_hotkey_triggers(state: tauri::State<'_, AppState>) {
     state.hotkey_triggers_enabled.store(false, Ordering::SeqCst);
-
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<KeyEvent>();
-
-    std::thread::spawn(move || {
-        let callback = move |event: rdev::Event| {
-            match event.event_type {
-                rdev::EventType::KeyPress(key) => {
-                    if let Some(name) = hotkey::key_to_name(&key) {
-                        let _ = tx.send(KeyEvent::Press(name, std::time::Instant::now()));
-                    }
-                }
-                rdev::EventType::KeyRelease(key) => {
-                    if let Some(name) = hotkey::key_to_name(&key) {
-                        let _ = tx.send(KeyEvent::Release(name, std::time::Instant::now()));
-                    }
-                }
-                _ => {}
-            }
-        };
-        let _ = rdev::listen(callback);
-    });
-
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        analyse_key_events(rx),
-    )
-    .await
-    .map_err(|_| "Hotkey capture timed out".to_string())?;
-
-    state.hotkey_triggers_enabled.store(true, Ordering::SeqCst);
-    result
 }
 
-/// Consumes the key event stream and decides what gesture the user performed.
-async fn analyse_key_events(
-    mut rx: tokio::sync::mpsc::UnboundedReceiver<KeyEvent>,
-) -> Result<RecordedHotkey, String> {
-    use std::collections::HashMap;
-
-    const HOLD_THRESHOLD_MS: u128 = 400;
-    const DOUBLE_TAP_WINDOW_MS: u128 = 400;
-
-    // ESC is reserved as the cancel key and cannot be recorded as a hotkey.
-    const RESERVED_CANCEL_KEY: &str = "Esc";
-
-    // Currently held keys: name → press instant
-    let mut held: HashMap<String, std::time::Instant> = HashMap::new();
-    // The very first key press
-    let mut first_key: Option<(String, std::time::Instant)> = None;
-    // Track first complete tap for double-tap detection
-    let mut first_tap: Option<(String, std::time::Instant)> = None; // (key, release_instant)
-
-    loop {
-        // If we already completed a tap and are waiting for a potential second
-        // tap, use a short timeout so we don't hang forever.
-        let timeout = if first_tap.is_some() && held.is_empty() {
-            std::time::Duration::from_millis(DOUBLE_TAP_WINDOW_MS as u64 + 50)
-        } else {
-            std::time::Duration::from_secs(10)
-        };
-
-        match tokio::time::timeout(timeout, rx.recv()).await {
-            Ok(Some(KeyEvent::Press(name, instant))) => {
-                // ESC cancels the recording session immediately
-                if name == RESERVED_CANCEL_KEY {
-                    return Err("cancelled".to_string());
-                }
-
-                // ── Check for double-tap ───────────────────────────
-                if let Some((ref tap_key, tap_released)) = first_tap {
-                    if *tap_key == name
-                        && instant.duration_since(tap_released).as_millis()
-                            < DOUBLE_TAP_WINDOW_MS
-                    {
-                        return Ok(RecordedHotkey {
-                            hotkey_type: config::HotkeyType::DoubleTap,
-                            key: name,
-                            modifier: None,
-                            double_tap_interval_ms: instant
-                                .duration_since(tap_released)
-                                .as_millis()
-                                as u64
-                                + 100, // add small buffer
-                        });
-                    }
-                }
-
-                if first_key.is_none() {
-                    first_key = Some((name.clone(), instant));
-                }
-                held.insert(name, instant);
-
-                // ── Combo detection: 2+ keys held at once ──────────
-                if held.len() >= 2 {
-                    // Wait for all keys to be released, then return combo
-                    let combo_keys: Vec<(String, std::time::Instant)> =
-                        held.iter().map(|(k, &v)| (k.clone(), v)).collect();
-                    // Drain remaining events until all released
-                    loop {
-                        match tokio::time::timeout(
-                            std::time::Duration::from_secs(5),
-                            rx.recv(),
-                        )
-                        .await
-                        {
-                            Ok(Some(KeyEvent::Release(ref rk, _))) => {
-                                held.remove(rk);
-                                if held.is_empty() {
-                                    break;
-                                }
-                            }
-                            Ok(Some(KeyEvent::Press(pk, _))) => {
-                                held.insert(pk, std::time::Instant::now());
-                            }
-                            _ => break,
-                        }
-                    }
-
-                    // Sort: modifier first (earliest press), action key last
-                    let mut sorted = combo_keys;
-                    sorted.sort_by_key(|(_, t)| *t);
-                    let modifier = sorted.first().map(|(k, _)| k.clone());
-                    let key = sorted.last().map(|(k, _)| k.clone()).unwrap();
-                    return Ok(RecordedHotkey {
-                        hotkey_type: config::HotkeyType::Combo,
-                        key,
-                        modifier,
-                        double_tap_interval_ms: 300,
-                    });
-                }
-            }
-
-            Ok(Some(KeyEvent::Release(name, instant))) => {
-                if let Some(press_time) = held.remove(&name) {
-                    let duration = instant.duration_since(press_time).as_millis();
-
-                    if duration >= HOLD_THRESHOLD_MS {
-                        // ── Hold detected ──────────────────────────
-                        return Ok(RecordedHotkey {
-                            hotkey_type: config::HotkeyType::Hold,
-                            key: name,
-                            modifier: None,
-                            double_tap_interval_ms: 300,
-                        });
-                    }
-
-                    // Short press — could be start of double-tap
-                    if first_tap.is_none() {
-                        first_tap = Some((name, instant));
-                        // Continue loop; the timeout will catch if no second tap comes
-                    } else {
-                        // Second release of a different key → single
-                        return Ok(RecordedHotkey {
-                            hotkey_type: config::HotkeyType::Single,
-                            key: name,
-                            modifier: None,
-                            double_tap_interval_ms: 300,
-                        });
-                    }
-                }
-            }
-
-            Ok(None) => {
-                // Channel closed
-                break;
-            }
-
-            Err(_) => {
-                // Timeout — if we have a pending first tap, return single
-                if let Some((tap_key, _)) = first_tap {
-                    return Ok(RecordedHotkey {
-                        hotkey_type: config::HotkeyType::Single,
-                        key: tap_key,
-                        modifier: None,
-                        double_tap_interval_ms: 300,
-                    });
-                }
-                return Err("Hotkey capture timed out".to_string());
-            }
-        }
-    }
-
-    Err("Hotkey capture cancelled".to_string())
+#[tauri::command]
+fn resume_hotkey_triggers(state: tauri::State<'_, AppState>) {
+    state.hotkey_triggers_enabled.store(true, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -763,30 +561,6 @@ async fn test_llm(llm_config: config::LlmConfig) -> Result<String, String> {
     llm::test_connection(&llm_config)
         .await
         .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn fetch_models(base_url: String, api_key: String) -> Result<Vec<String>, String> {
-    let url = format!("{}/models", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::new();
-    let mut req = client
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(10));
-    if !api_key.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", api_key));
-    }
-    let resp = req.send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
-    }
-    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    let models = body["data"]
-        .as_array()
-        .ok_or("Invalid response: missing data array".to_string())?
-        .iter()
-        .filter_map(|m| m["id"].as_str().map(String::from))
-        .collect::<Vec<_>>();
-    Ok(models)
 }
 
 #[tauri::command]
@@ -941,17 +715,38 @@ fn hide_capsule(app: &AppHandle) {
 // ── App Setup ───────────────────────────────────────────────────────
 
 fn load_settings(app: &AppHandle) -> AppSettings {
+    if let Ok(path) = resolve_store_path(app, "settings.json") {
+        log::info!("settings store path: {}", path.display());
+    }
+
     match app.store("settings.json") {
         Ok(store) => {
             if let Some(val) = store.get("settings") {
                 match serde_json::from_value(val.clone()) {
                     Ok(settings) => return settings,
-                    Err(e) => log::warn!("failed to parse settings: {e}"),
+                    Err(e) => {
+                        log::warn!("failed to parse settings, fallback to defaults: {e}");
+                    }
                 }
             }
+
+            let defaults = AppSettings::default();
+            match serde_json::to_value(&defaults) {
+                Ok(json) => {
+                    store.set("settings", json);
+                    if let Err(e) = store.save() {
+                        log::warn!("failed to persist default settings: {e}");
+                    }
+                }
+                Err(e) => log::warn!("failed to serialize default settings: {e}"),
+            }
+
+            defaults
+        }
+        Err(e) => {
+            log::warn!("failed to open settings store: {e}");
             AppSettings::default()
         }
-        Err(_) => AppSettings::default(),
     }
 }
 
@@ -967,13 +762,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("default window icon not found");
     let _tray = TrayIconBuilder::with_id("yat-tray")
-        .icon(icon)
-        .icon_as_template(false)
         .menu(&menu)
         .tooltip("YAT – Voice to Text")
         .on_menu_event(move |app, event| match event.id().as_ref() {
@@ -1063,15 +852,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_shell::init())
-        .plugin(
-            tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Info)
-                .level_for("reqwest", log::LevelFilter::Warn)
-                .level_for("hyper", log::LevelFilter::Warn)
-                .level_for("rustls", log::LevelFilter::Warn)
-                .level_for("tungstenite", log::LevelFilter::Warn)
-                .build(),
-        )
+        .plugin(tauri_plugin_log::Builder::default().build())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -1181,6 +962,9 @@ pub fn run() {
                             win.set_focus().ok();
                         }
                         store.set("first_run", serde_json::Value::Bool(false));
+                        if let Err(e) = store.save() {
+                            log::warn!("failed to persist first_run flag: {e}");
+                        }
                     }
                 }
                 Err(e) => log::warn!("failed to check first_run: {e}"),
@@ -1201,13 +985,12 @@ pub fn run() {
             get_recording_status,
             get_settings,
             save_settings,
+            suspend_hotkey_triggers,
+            resume_hotkey_triggers,
             get_default_prompt,
             get_platform_context,
-            capture_hotkey,
-            record_hotkey,
             test_stt,
             test_llm,
-            fetch_models,
             get_history,
             delete_history,
             retry_history,

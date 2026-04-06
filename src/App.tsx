@@ -17,9 +17,11 @@ export default function App() {
   const platformLoaded = useAppStore((s) => s.platformLoaded);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings().catch((error) => {
+      console.error("Failed to load settings:", error);
+    });
     init();
-    loadPlatform();
+    void loadPlatform();
   }, [loadPlatform, loadSettings, init]);
 
   useEffect(() => {

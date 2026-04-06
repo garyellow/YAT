@@ -83,6 +83,10 @@ struct HotkeyState {
     hold_start: Option<Instant>,
     esc_down: bool,
     esc_consumed: bool,
+    /// After ESC cancels a Hold, the next release of the hotkey must still be
+    /// consumed so the OS doesn't receive a phantom key-up without a matching
+    /// key-down.
+    pending_consume_release: bool,
 }
 
 pub(crate) fn parse_key_match(name: &str) -> Option<KeyMatcher> {
@@ -119,47 +123,6 @@ pub(crate) fn parse_key_match(name: &str) -> Option<KeyMatcher> {
         s if s.len() == 1 => {
             let ch = s.chars().next().unwrap();
             Some(KeyMatcher::Exact(Key::Unknown(ch as u32)))
-        }
-        _ => None,
-    }
-}
-
-/// Convert an rdev Key to the canonical string name used in settings.
-pub fn key_to_name(key: &Key) -> Option<String> {
-    match key {
-        Key::Alt => Some("Alt".into()),
-        Key::AltGr => Some("RAlt".into()),
-        Key::ControlLeft => Some("LCtrl".into()),
-        Key::ControlRight => Some("RCtrl".into()),
-        Key::ShiftLeft => Some("LShift".into()),
-        Key::ShiftRight => Some("RShift".into()),
-        Key::MetaLeft => Some("LMeta".into()),
-        Key::MetaRight => Some("RMeta".into()),
-        Key::F1 => Some("F1".into()),
-        Key::F2 => Some("F2".into()),
-        Key::F3 => Some("F3".into()),
-        Key::F4 => Some("F4".into()),
-        Key::F5 => Some("F5".into()),
-        Key::F6 => Some("F6".into()),
-        Key::F7 => Some("F7".into()),
-        Key::F8 => Some("F8".into()),
-        Key::F9 => Some("F9".into()),
-        Key::F10 => Some("F10".into()),
-        Key::F11 => Some("F11".into()),
-        Key::F12 => Some("F12".into()),
-        Key::Space => Some("Space".into()),
-        Key::Escape => Some("Escape".into()),
-        Key::Tab => Some("Tab".into()),
-        Key::CapsLock => Some("CapsLock".into()),
-        Key::Backspace => Some("Backspace".into()),
-        Key::Return => Some("Enter".into()),
-        Key::Unknown(code) => {
-            if let Some(ch) = char::from_u32(*code) {
-                if ch.is_ascii_alphanumeric() || ch.is_ascii_punctuation() {
-                    return Some(ch.to_uppercase().to_string());
-                }
-            }
-            None
         }
         _ => None,
     }
@@ -230,8 +193,15 @@ where
                 st.esc_down = true;
                 st.esc_consumed = on_cancel();
                 if st.esc_consumed {
+                    // For Hold mode: consume the upcoming key release so the OS
+                    // doesn't receive a phantom key-up without a matching key-down.
+                    if st.hold_active {
+                        st.pending_consume_release = true;
+                    }
                     st.hold_active = false;
                     st.hold_start = None;
+                    // Prevent Single/DoubleTap from firing on release after cancel.
+                    st.other_key_pressed = true;
                 }
                 return st.esc_consumed;
             }
@@ -352,21 +322,30 @@ where
                     false
                 }
                 HotkeyType::Hold => {
-                    if settings.key_matcher.matches(key) && st.hold_active {
-                        let consumed = st.key_consumed;
-                        let too_short = st
-                            .hold_start
-                            .map_or(false, |t| t.elapsed().as_millis() < 150);
-                        st.hold_active = false;
-                        st.hold_start = None;
-                        st.key_consumed = false;
-                        if too_short {
-                            // Micro-tap: cancel instead of delivering empty audio
-                            on_cancel();
-                        } else {
-                            on_trigger();
+                    if settings.key_matcher.matches(key) {
+                        // After ESC cancel, consume the release to avoid a
+                        // phantom key-up reaching the OS.
+                        if st.pending_consume_release {
+                            st.pending_consume_release = false;
+                            st.key_consumed = false;
+                            return true;
                         }
-                        return consumed;
+                        if st.hold_active {
+                            let consumed = st.key_consumed;
+                            let too_short = st
+                                .hold_start
+                                .map_or(false, |t| t.elapsed().as_millis() < 150);
+                            st.hold_active = false;
+                            st.hold_start = None;
+                            st.key_consumed = false;
+                            if too_short {
+                                // Micro-tap: cancel instead of delivering empty audio
+                                on_cancel();
+                            } else {
+                                on_trigger();
+                            }
+                            return consumed;
+                        }
                     }
                     false
                 }
@@ -422,10 +401,17 @@ where
             hold_start: None,
             esc_down: false,
             esc_consumed: false,
+            pending_consume_release: false,
         }));
 
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         let callback = move |event: Event| -> Option<Event> {
+            // While a paste simulation is in progress, pass through ALL
+            // events so the simulated Ctrl/Cmd+V is not intercepted.
+            if crate::output::is_paste_active() {
+                return Some(event);
+            }
+
             let settings = settings.lock().clone();
             let mut st = state.lock();
             let trigger_enabled = triggers_enabled.load(Ordering::SeqCst);
@@ -488,6 +474,7 @@ mod tests {
             hold_start: None,
             esc_down: false,
             esc_consumed: false,
+            pending_consume_release: false,
         }
     }
 
@@ -609,5 +596,247 @@ mod tests {
         assert!(!pressed_consumed);
         assert!(!released_consumed);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
+    }
+
+    #[test]
+    fn esc_cancel_consumes_following_hold_release() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Hold,
+            key: Key::Alt,
+            key_matcher: KeyMatcher::Exact(Key::Alt),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let cancel_count = AtomicUsize::new(0);
+
+        let pressed_consumed = handle_event_type(
+            &EventType::KeyPress(Key::Alt),
+            &settings,
+            &mut state,
+            true,
+            &|| {
+                trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+            },
+            &|| {
+                cancel_count.fetch_add(1, AtomicOrdering::SeqCst);
+                true
+            },
+        );
+
+        let esc_consumed = handle_event_type(
+            &EventType::KeyPress(Key::Escape),
+            &settings,
+            &mut state,
+            true,
+            &|| {
+                trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+            },
+            &|| {
+                cancel_count.fetch_add(1, AtomicOrdering::SeqCst);
+                true
+            },
+        );
+
+        let release_consumed = handle_event_type(
+            &EventType::KeyRelease(Key::Alt),
+            &settings,
+            &mut state,
+            true,
+            &|| {
+                trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+            },
+            &|| {
+                cancel_count.fetch_add(1, AtomicOrdering::SeqCst);
+                true
+            },
+        );
+
+        assert!(pressed_consumed);
+        assert!(esc_consumed);
+        assert!(release_consumed);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
+        assert_eq!(cancel_count.load(AtomicOrdering::SeqCst), 1);
+    }
+
+    #[test]
+    fn combo_triggers_on_modifier_plus_key() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Combo,
+            key: Key::Unknown('a' as u32),
+            key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
+            modifier: Some(Key::ControlLeft),
+            modifier_matcher: Some(KeyMatcher::Exact(Key::ControlLeft)),
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // Press modifier alone — no trigger
+        handle_event_type(&EventType::KeyPress(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+
+        // Press key while modifier held — trigger
+        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert!(consumed);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
+
+        // Release key, release modifier
+        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1); // still only 1
+    }
+
+    #[test]
+    fn combo_key_without_modifier_does_not_trigger() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Combo,
+            key: Key::Unknown('a' as u32),
+            key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
+            modifier: Some(Key::ControlLeft),
+            modifier_matcher: Some(KeyMatcher::Exact(Key::ControlLeft)),
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // Press key without modifier — not consumed, no trigger
+        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert!(!consumed);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+    }
+
+    #[test]
+    fn double_tap_within_interval_triggers() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::DoubleTap,
+            key: Key::ControlRight,
+            key_matcher: KeyMatcher::Exact(Key::ControlRight),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // First tap (press + release)
+        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0); // first tap just records time
+
+        // Second tap immediately (press + release, within interval)
+        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
+    }
+
+    #[test]
+    fn double_tap_expired_interval_no_trigger() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::DoubleTap,
+            key: Key::ControlRight,
+            key_matcher: KeyMatcher::Exact(Key::ControlRight),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // First tap
+        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+
+        // Simulate expired interval by backdating last_trigger_time
+        state.last_trigger_time = Some(Instant::now() - std::time::Duration::from_secs(5));
+
+        // Second tap — interval expired, no trigger
+        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+    }
+
+    #[test]
+    fn triggers_disabled_blocks_hotkey_but_not_esc() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Hold,
+            key: Key::Alt,
+            key_matcher: KeyMatcher::Exact(Key::Alt),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let cancel_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || { cancel_count.fetch_add(1, AtomicOrdering::SeqCst); true };
+
+        // Hotkey press with trigger_enabled=false — NOT consumed
+        let consumed = handle_event_type(&EventType::KeyPress(Key::Alt), &settings, &mut state, false, &on_trigger, &on_cancel);
+        assert!(!consumed);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+
+        // ESC should still work even when triggers are disabled
+        let esc_consumed = handle_event_type(&EventType::KeyPress(Key::Escape), &settings, &mut state, false, &on_trigger, &on_cancel);
+        assert_eq!(cancel_count.load(AtomicOrdering::SeqCst), 1);
+        // ESC consumed depends on on_cancel() return — here it returns true
+        assert!(esc_consumed);
+    }
+
+    #[test]
+    fn single_trigger_fires_on_release_only() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Single,
+            key: Key::Unknown('a' as u32),
+            key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // Press — no trigger yet
+        handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+
+        // Release — trigger fires
+        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
+    }
+
+    #[test]
+    fn single_trigger_suppressed_by_other_key() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Single,
+            key: Key::Unknown('a' as u32),
+            key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
+            modifier: None,
+            modifier_matcher: None,
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        // Press hotkey, press another key, release hotkey
+        handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyPress(Key::Unknown('b' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
     }
 }

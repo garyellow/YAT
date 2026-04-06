@@ -1,8 +1,40 @@
 use arboard::Clipboard;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 
 use crate::config::{ClipboardBehavior, OutputMode};
+
+/// Global flag: when `true`, the keyboard grab callback should pass through
+/// all events so that simulated key presses (Ctrl+V) are not intercepted.
+static PASTE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// Returns `true` while a paste simulation is in progress.
+pub fn is_paste_active() -> bool {
+    PASTE_ACTIVE.load(Ordering::SeqCst)
+}
+
+/// RAII guard that sets `PASTE_ACTIVE` on creation and clears it on drop.
+struct PasteGuard;
+
+impl PasteGuard {
+    fn activate() -> Self {
+        PASTE_ACTIVE.store(true, Ordering::SeqCst);
+        // Small delay so the grab thread sees the flag before any simulated
+        // events arrive.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        Self
+    }
+}
+
+impl Drop for PasteGuard {
+    fn drop(&mut self) {
+        // Small delay so any trailing simulated events finish passing through
+        // before we re-enable interception.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        PASTE_ACTIVE.store(false, Ordering::SeqCst);
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum OutputError {
@@ -23,7 +55,7 @@ pub enum OutputOutcome {
     PasteFailedCopiedToClipboard,
 }
 
-pub fn copy_to_clipboard(text: &str) -> Result<(), OutputError> {
+fn copy_to_clipboard(text: &str) -> Result<(), OutputError> {
     let mut clipboard = Clipboard::new().map_err(|e| OutputError::Clipboard(e.to_string()))?;
     clipboard
         .set_text(text)
@@ -34,6 +66,10 @@ pub fn copy_to_clipboard(text: &str) -> Result<(), OutputError> {
 fn simulate_paste() -> Result<(), OutputError> {
     let mut enigo =
         Enigo::new(&Settings::default()).map_err(|e| OutputError::Keyboard(e.to_string()))?;
+
+    // Activate paste guard so the global keyboard grab passes through the
+    // simulated Ctrl/Cmd+V instead of intercepting it as a hotkey.
+    let _guard = PasteGuard::activate();
 
     // Small delay before simulating keys
     std::thread::sleep(std::time::Duration::from_millis(50));
@@ -53,6 +89,8 @@ fn simulate_paste() -> Result<(), OutputError> {
     enigo
         .key(modifier, Direction::Release)
         .map_err(|e| OutputError::Keyboard(e.to_string()))?;
+
+    // _guard drops here, clearing PASTE_ACTIVE after a small delay
 
     Ok(())
 }

@@ -51,17 +51,16 @@ pub async fn polish(
     timeout_ms: u64,
     max_retries: u32,
 ) -> Result<String, LlmError> {
-    if config.base_url.trim().is_empty() {
+    let base_url = config.base_url.trim();
+    let api_key = config.api_key.trim();
+    let model = config.model.trim();
+
+    if base_url.is_empty() {
         return Err(LlmError::Request(
             "LLM base URL is not configured. Please set it in Settings → LLM.".into(),
         ));
     }
-    if config.api_key.trim().is_empty() {
-        return Err(LlmError::Request(
-            "LLM API key is not configured. Please set it in Settings → LLM.".into(),
-        ));
-    }
-    if config.model.trim().is_empty() {
+    if model.is_empty() {
         return Err(LlmError::Request(
             "LLM model is not configured. Please set it in Settings → LLM.".into(),
         ));
@@ -69,7 +68,7 @@ pub async fn polish(
 
     let url = format!(
         "{}/chat/completions",
-        config.base_url.trim_end_matches('/')
+        base_url.trim_end_matches('/')
     );
 
     let mut messages = vec![ChatMessage {
@@ -94,18 +93,20 @@ pub async fn polish(
     });
 
     let body = ChatRequest {
-        model: config.model.clone(),
+        model: model.to_string(),
         messages,
         temperature: 0.0,
     };
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        AUTHORIZATION,
-        format!("Bearer {}", config.api_key)
-            .parse()
-            .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
-    );
+    if !api_key.is_empty() {
+        headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {api_key}")
+                .parse()
+                .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
+        );
+    }
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
 
     let client = reqwest::Client::builder()

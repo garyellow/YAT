@@ -14,6 +14,8 @@ interface HistoryState {
   entries: HistoryEntry[];
   loading: boolean;
   searchQuery: string;
+  retryingId: string | null;
+  retryError: string | null;
   setSearchQuery: (q: string) => void;
   loadHistory: () => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
@@ -25,11 +27,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   entries: [],
   loading: false,
   searchQuery: "",
+  retryingId: null,
+  retryError: null,
 
   setSearchQuery: (q: string) => set({ searchQuery: q }),
 
   loadHistory: async () => {
-    set({ loading: true });
+    set({ loading: true, retryError: null });
     try {
       const q = get().searchQuery || null;
       const entries = await invoke<HistoryEntry[]>("get_history", {
@@ -44,6 +48,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   },
 
   deleteEntry: async (id: string) => {
+    set({ retryError: null });
     try {
       await invoke("delete_history", { id });
       await get().loadHistory();
@@ -53,15 +58,20 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   },
 
   retryEntry: async (id: string) => {
+    set({ retryingId: id, retryError: null });
     try {
       await invoke("retry_history", { id });
+      set({ retryingId: null });
       await get().loadHistory();
     } catch (e) {
-      console.error("Failed to retry history entry:", e);
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("Failed to retry history entry:", message);
+      set({ retryingId: null, retryError: message });
     }
   },
 
   clearOld: async () => {
+    set({ retryError: null });
     try {
       await invoke("clear_old_history");
       await get().loadHistory();
