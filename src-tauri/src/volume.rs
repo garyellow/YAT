@@ -46,17 +46,60 @@ pub fn restore_system(was_muted: bool) -> Result<(), String> {
 // ── Windows implementation ──────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-pub fn mute_system() -> Result<bool, String> {
+struct ComGuard {
+    should_uninitialize: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl ComGuard {
+    fn initialize() -> Result<Self, String> {
+        use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+
+        unsafe {
+            let result = CoInitializeEx(None, COINIT_MULTITHREADED);
+            if result == RPC_E_CHANGED_MODE {
+                log::debug!(
+                    "COM already initialized on this thread with a different apartment model; reusing existing COM apartment"
+                );
+                Ok(Self {
+                    should_uninitialize: false,
+                })
+            } else {
+                result.ok().map_err(|e| format!("CoInitializeEx: {e}"))?;
+                Ok(Self {
+                    should_uninitialize: true,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        if self.should_uninitialize {
+            unsafe {
+                windows::Win32::System::Com::CoUninitialize();
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn with_endpoint_volume<T>(
+    action: impl FnOnce(
+        windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume,
+    ) -> Result<T, String>,
+) -> Result<T, String> {
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
-    };
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
     unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let _com = ComGuard::initialize()?;
 
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
@@ -70,54 +113,48 @@ pub fn mute_system() -> Result<bool, String> {
             .Activate(CLSCTX_ALL, None)
             .map_err(|e| format!("Activate: {e}"))?;
 
-        let was_muted = volume.GetMute().map_err(|e| format!("GetMute: {e}"))?.as_bool();
-
-        volume
-            .SetMute(true, std::ptr::null())
-            .map_err(|e| format!("SetMute: {e}"))?;
-
-        log::info!("system audio muted (was_muted={was_muted})");
-        Ok(was_muted)
+        action(volume)
     }
 }
 
 #[cfg(target_os = "windows")]
-pub fn restore_system(was_muted: bool) -> Result<(), String> {
-    use windows::Win32::Media::Audio::{
-        eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
-    };
-    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
-    };
+pub fn mute_system() -> Result<bool, String> {
+    with_endpoint_volume(|volume| {
+        let was_muted = unsafe {
+            volume
+                .GetMute()
+                .map_err(|e| format!("GetMute: {e}"))?
+                .as_bool()
+        };
 
+        unsafe {
+            volume
+                .SetMute(true, std::ptr::null())
+                .map_err(|e| format!("SetMute: {e}"))?;
+        }
+
+        log::info!("system audio muted (was_muted={was_muted})");
+        Ok(was_muted)
+    })
+}
+
+#[cfg(target_os = "windows")]
+pub fn restore_system(was_muted: bool) -> Result<(), String> {
     if was_muted {
         log::info!("system was already muted, not restoring");
         return Ok(());
     }
 
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-
-        let enumerator: IMMDeviceEnumerator =
-            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|e| format!("CoCreateInstance: {e}"))?;
-
-        let device = enumerator
-            .GetDefaultAudioEndpoint(eRender, eConsole)
-            .map_err(|e| format!("GetDefaultAudioEndpoint: {e}"))?;
-
-        let volume: IAudioEndpointVolume = device
-            .Activate(CLSCTX_ALL, None)
-            .map_err(|e| format!("Activate: {e}"))?;
-
-        volume
-            .SetMute(false, std::ptr::null())
-            .map_err(|e| format!("SetMute: {e}"))?;
+    with_endpoint_volume(|volume| {
+        unsafe {
+            volume
+                .SetMute(false, std::ptr::null())
+                .map_err(|e| format!("SetMute: {e}"))?;
+        }
 
         log::info!("system audio restored (unmuted)");
         Ok(())
-    }
+    })
 }
 
 // ── Linux fallback (no-op) ──────────────────────────────────────────

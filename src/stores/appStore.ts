@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { normalizePlatform, type DesktopPlatform } from "../lib/settingsFormatters";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 
 interface PlatformPayload {
   os: string;
@@ -17,6 +18,11 @@ export const useAppStore = create<AppStoreState>((set) => ({
   platformLoaded: false,
 
   loadPlatform: async () => {
+    if (!isTauriRuntime()) {
+      set({ platformLoaded: true });
+      return;
+    }
+
     try {
       const payload = await invoke<PlatformPayload>("get_platform_context");
       set({

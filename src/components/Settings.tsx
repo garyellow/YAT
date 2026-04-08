@@ -10,7 +10,7 @@ import LlmTab from "./settings/LlmTab";
 import PromptTab from "./settings/PromptTab";
 import VocabularyTab from "./settings/VocabularyTab";
 import HistoryTab from "./settings/HistoryTab";
-import { StatusDot } from "./settings/SettingPrimitives";
+import { Notice, StatusDot } from "./settings/SettingPrimitives";
 import { settingsTabs, type SettingsTab } from "./settings/tabs";
 import Toast from "./ui/Toast";
 
@@ -307,6 +307,28 @@ export default function Settings() {
             ? t("actions.saved")
             : t("settings.noChanges");
 
+    const statusNotice = useMemo(() => {
+      if (validationError) {
+        return {
+          tone: "warning" as const,
+          title: t("settings.validationNoticeTitle"),
+          body: validationError,
+        };
+      }
+
+      if (saveStatus === "error") {
+        return {
+          tone: "danger" as const,
+          title: t("settings.autoSaveFailedDetailTitle"),
+          body: t("settings.autoSaveFailedDetailBody", {
+            error: lastSaveError ?? t("settings.unknownSaveError"),
+          }),
+        };
+      }
+
+      return null;
+    }, [lastSaveError, saveStatus, t, validationError]);
+
   const renderActivePanel = () => {
     const panel = (() => {
       switch (active) {
@@ -415,6 +437,13 @@ export default function Settings() {
           </header>
 
           <main id="settings-content" className="flex-1 overflow-y-auto px-6 pb-10 pt-6">
+            {statusNotice ? (
+              <div className="mb-4">
+                <Notice title={statusNotice.title} tone={statusNotice.tone}>
+                  {statusNotice.body}
+                </Notice>
+              </div>
+            ) : null}
             {renderActivePanel()}
           </main>
         </div>

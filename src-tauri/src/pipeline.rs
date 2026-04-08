@@ -65,6 +65,7 @@ pub struct PipelineResult {
     pub polished_text: Option<String>,
     pub duration_seconds: f64,
     pub suppressed: bool,
+    pub delivery_error: Option<String>,
 }
 
 /// Run the full pipeline: STT → LLM polish → output.
@@ -96,6 +97,7 @@ pub async fn run(
             polished_text: None,
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: true,
+            delivery_error: None,
         });
     }
 
@@ -106,6 +108,7 @@ pub async fn run(
             polished_text: None,
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: false,
+            delivery_error: None,
         });
     }
 
@@ -150,6 +153,7 @@ pub async fn run(
             polished_text: polished,
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: true,
+            delivery_error: None,
         });
     }
 
@@ -172,6 +176,7 @@ pub async fn run(
                     polished_text: polished,
                     duration_seconds: start.elapsed().as_secs_f64(),
                     suppressed: false,
+                    delivery_error: Some(e.to_string()),
                 });
             }
         }
@@ -193,6 +198,7 @@ pub async fn run(
         polished_text: polished,
         duration_seconds: start.elapsed().as_secs_f64(),
         suppressed: false,
+        delivery_error: None,
     })
 }
 

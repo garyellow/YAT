@@ -26,8 +26,12 @@
     "autoSavePending": "停止輸入後會自動儲存",
     "saving": "儲存中…",
     "autoSaveFailed": "無法儲存變更",
+    "autoSaveFailedDetailTitle": "自動儲存失敗",
+    "autoSaveFailedDetailBody": "你的變更還留在目前畫面，尚未寫入本機。修正問題後按「立即儲存」重試。原因：{{error}}",
     "fixValidationErrors": "請先修正畫面上的設定問題",
+    "validationNoticeTitle": "有些設定還需要修正",
     "closeSaveBlocked": "目前還不能關閉，因為有設定仍需處理",
+    "unknownSaveError": "發生未知錯誤",
     "noChanges": "沒有待儲存變更",
     "groups": {
       "workspace": "工作台",
@@ -357,6 +361,9 @@
   },
   "capsule": {
     "escHint": "按 Esc 取消錄音",
-    "clipboardFallbackHint": "貼上失敗了，但文字仍然保留在剪貼簿。"
+    "clipboardFallbackHint": "貼上失敗了，但文字仍然保留在剪貼簿。",
+    "clipboardFallbackHintWindows": "貼上失敗了，但文字仍然保留在剪貼簿。若目標 App 以系統管理員權限執行，或 Windows 阻擋模擬輸入，就可能發生這種情況。",
+    "clipboardFallbackHintMacos": "貼上失敗了，但文字仍然保留在剪貼簿。請確認 YAT 已獲得輔助使用權限，且目標 App 接受模擬輸入。",
+    "errorUnknown": "發生錯誤，但系統沒有提供更詳細的原因。"
   }
 }

@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 import { sounds } from "../lib/sounds";
 import { useSettingsStore } from "./settingsStore";
 
@@ -36,6 +37,10 @@ export const useRecordingStore = create<RecordingState>((set) => ({
   init: () => {
     if (initialized) return;
     initialized = true;
+
+    if (!isTauriRuntime()) {
+      return;
+    }
 
     listen<PipelinePayload>("pipeline-status", (event) => {
       const { status, text, error } = event.payload;

@@ -16,6 +16,8 @@ fn parse_datetime(raw: &str) -> DateTime<Utc> {
 
 #[derive(Error, Debug)]
 pub enum HistoryError {
+    #[error("filesystem error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("database error: {0}")]
     Db(#[from] rusqlite::Error),
 }
@@ -35,9 +37,10 @@ pub struct HistoryManager {
 }
 
 impl HistoryManager {
-    pub fn new(app_data_dir: PathBuf) -> Result<Self, HistoryError> {
-        std::fs::create_dir_all(&app_data_dir).ok();
-        let db_path = app_data_dir.join("history.db");
+    pub fn new(db_path: PathBuf) -> Result<Self, HistoryError> {
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let conn = Connection::open(db_path)?;
         Self::init_tables(conn)
     }
@@ -303,5 +306,20 @@ mod tests {
 
         let fetched = mgr.get_by_id("r1").unwrap().unwrap();
         assert_eq!(fetched.polished_text.as_deref(), Some("Polished."));
+    }
+
+    #[test]
+    fn new_creates_parent_directory() {
+        let root = std::env::temp_dir().join(format!("yat-history-{}", uuid::Uuid::new_v4()));
+        let db_path = root.join("nested").join("history.db");
+
+        assert!(!db_path.parent().expect("parent dir").exists());
+
+        let _mgr = HistoryManager::new(db_path.clone()).expect("history DB should initialize");
+
+        assert!(db_path.parent().expect("parent dir").exists());
+        assert!(db_path.exists());
+
+        std::fs::remove_dir_all(root).ok();
     }
 }

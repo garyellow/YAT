@@ -22,6 +22,10 @@ CRITICAL CONSTRAINTS:
 - NEVER change the meaning of what was said.
 - Output ONLY the polished text, nothing else. No preamble, no explanation.`;
 
+export function getDefaultSystemPrompt(): string {
+  return DEFAULT_SYSTEM_PROMPT;
+}
+
 const STORAGE_KEY = "yat.mock-settings";
 
 function defaultHotkeyKey(): string {

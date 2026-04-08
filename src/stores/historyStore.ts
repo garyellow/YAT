@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 
 export interface HistoryEntry {
   id: string;
@@ -34,6 +35,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   loadHistory: async () => {
     set({ loading: true, retryError: null });
+
+    if (!isTauriRuntime()) {
+      set({ entries: [], loading: false });
+      return;
+    }
+
     try {
       const q = get().searchQuery || null;
       const entries = await invoke<HistoryEntry[]>("get_history", {
@@ -49,6 +56,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   deleteEntry: async (id: string) => {
     set({ retryError: null });
+
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     try {
       await invoke("delete_history", { id });
       await get().loadHistory();
@@ -59,6 +71,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   retryEntry: async (id: string) => {
     set({ retryingId: id, retryError: null });
+
+    if (!isTauriRuntime()) {
+      set({ retryingId: null });
+      return;
+    }
+
     try {
       await invoke("retry_history", { id });
       set({ retryingId: null });
@@ -72,6 +90,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   clearOld: async () => {
     set({ retryError: null });
+
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     try {
       await invoke("clear_old_history");
       await get().loadHistory();

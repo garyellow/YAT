@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { RecordingStatus } from "./stores/recordingStore";
 import type { AppSettings } from "./stores/settingsStore";
+import { isTauriRuntime } from "./lib/tauriRuntime";
 
 const statusConfig: Record<
   RecordingStatus,
@@ -77,8 +78,13 @@ export default function CapsuleApp() {
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  const [platformOs, setPlatformOs] = useState<string>("");
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     invoke<AppSettings>("get_settings")
       .then((appSettings) => {
         if (appSettings.general.language) {
@@ -86,9 +92,17 @@ export default function CapsuleApp() {
         }
       })
       .catch(() => {});
+
+    invoke<{ os: string }>("get_platform_context")
+      .then((platform) => setPlatformOs(platform.os))
+      .catch(() => {});
   }, [i18n]);
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     let mounted = true;
     const unlisten = listen<{ status: RecordingStatus; text?: string; error?: string }>(
       "pipeline-status",
@@ -132,17 +146,22 @@ export default function CapsuleApp() {
   const cfg = statusConfig[status] ?? statusConfig.idle;
   const detailMessage =
     status === "error"
-      ? errorMsg
+      ? errorMsg || t("capsule.errorUnknown")
       : status === "clipboardFallback"
-        ? t("capsule.clipboardFallbackHint")
+        ? platformOs === "windows"
+          ? t("capsule.clipboardFallbackHintWindows")
+          : platformOs === "macos"
+            ? t("capsule.clipboardFallbackHintMacos")
+            : t("capsule.clipboardFallbackHint")
         : "";
   if (status === "idle") return null;
 
   return (
     <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
       <div
-        className={`flex min-w-[240px] max-w-[360px] items-center gap-3 rounded-xl border px-4 py-3 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
-        aria-live="polite"
+        className={`flex min-w-[280px] max-w-[420px] items-start gap-3 rounded-2xl border px-4 py-3.5 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
+        aria-live={status === "error" ? "assertive" : "polite"}
+        role={status === "error" ? "alert" : "status"}
       >
         <span
           className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`}
@@ -173,7 +192,7 @@ export default function CapsuleApp() {
           {detailMessage ? (
             <p
               className={`mt-1 text-[11px] leading-4 break-words ${
-                status === "error" ? "text-red-300/90" : "text-white/70"
+                  status === "error" ? "text-red-200/95" : "text-white/70"
               }`}
               title={detailMessage}
             >

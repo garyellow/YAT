@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { getDefaultSystemPrompt } from "../../lib/defaultSettings";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
+import { isTauriRuntime } from "../../lib/tauriRuntime";
 import { Notice, Section } from "./SettingPrimitives";
 import type { SettingsTab } from "./tabs";
 
@@ -36,6 +38,11 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   };
 
   const resetSystemPrompt = async () => {
+    if (!isTauriRuntime()) {
+      update({ system_prompt: getDefaultSystemPrompt() });
+      return;
+    }
+
     try {
       const defaultPrompt = await invoke<string>("get_default_prompt");
       update({ system_prompt: defaultPrompt });

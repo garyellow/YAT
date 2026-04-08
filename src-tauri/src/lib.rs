@@ -10,12 +10,15 @@ mod volume;
 
 use parking_lot::Mutex;
 use serde::Serialize;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, Size, WebviewUrl, WebviewWindowBuilder,
+    WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::{resolve_store_path, StoreExt};
@@ -53,6 +56,179 @@ pub struct AppState {
 #[derive(Serialize)]
 struct PlatformContext {
     os: &'static str,
+}
+
+const SETTINGS_STORE_FILE: &str = "settings.json";
+const HISTORY_DB_FILE: &str = "history.db";
+const CAPSULE_WIDTH: f64 = 360.0;
+const CAPSULE_HEIGHT: f64 = 96.0;
+const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
+const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
+
+fn ensure_parent_dir_for_file(path: &Path) -> Result<(), std::io::Error> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+fn ensure_store_parent_dir(app: &AppHandle, store_name: &str) -> Result<std::path::PathBuf, String> {
+    let store_path = resolve_store_path(app, store_name).map_err(|e| e.to_string())?;
+    ensure_parent_dir_for_file(&store_path).map_err(|e| {
+        format!(
+            "Failed to prepare settings directory '{}': {e}",
+            store_path
+                .parent()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| String::from("<unknown>"))
+        )
+    })?;
+    Ok(store_path)
+}
+
+fn sqlite_companion_paths(path: &Path) -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::with_capacity(3);
+    paths.push(path.to_path_buf());
+
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    paths.push(std::path::PathBuf::from(wal));
+
+    let mut shm = path.as_os_str().to_os_string();
+    shm.push("-shm");
+    paths.push(std::path::PathBuf::from(shm));
+
+    paths
+}
+
+fn move_file_if_exists(source: &Path, target: &Path) -> Result<(), String> {
+    if !source.exists() || target.exists() {
+        return Ok(());
+    }
+
+    ensure_parent_dir_for_file(target).map_err(|e| {
+        format!(
+            "Failed to prepare destination '{}' while migrating '{}': {e}",
+            target.display(),
+            source.display()
+        )
+    })?;
+
+    match std::fs::rename(source, target) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => {
+            std::fs::copy(source, target).map_err(|copy_error| {
+                format!(
+                    "Failed to migrate '{}' to '{}': rename failed ({rename_error}); copy failed ({copy_error})",
+                    source.display(),
+                    target.display()
+                )
+            })?;
+            std::fs::remove_file(source).map_err(|remove_error| {
+                format!(
+                    "Migrated '{}' to '{}' but failed to remove the old file: {remove_error}",
+                    source.display(),
+                    target.display()
+                )
+            })?;
+            Ok(())
+        }
+    }
+}
+
+fn migrate_sqlite_family_if_needed(source_db_path: &Path, target_db_path: &Path) -> Result<(), String> {
+    if target_db_path.exists() || !source_db_path.exists() {
+        return Ok(());
+    }
+
+    let source_paths = sqlite_companion_paths(source_db_path);
+    let target_paths = sqlite_companion_paths(target_db_path);
+
+    for (source, target) in source_paths.iter().zip(target_paths.iter()) {
+        move_file_if_exists(source, target)?;
+    }
+
+    log::info!(
+        "migrated history database from '{}' to '{}'",
+        source_db_path.display(),
+        target_db_path.display()
+    );
+
+    Ok(())
+}
+
+fn prepare_history_db_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to resolve app data directory: {e}"))?;
+        std::fs::create_dir_all(&app_data_dir).map_err(|e| {
+            format!(
+                "Failed to prepare history directory '{}': {e}",
+                app_data_dir.display()
+            )
+        })?;
+
+        return Ok(app_data_dir.join(HISTORY_DB_FILE));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+    let local_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Failed to resolve local app data directory: {e}"))?;
+    std::fs::create_dir_all(&local_dir).map_err(|e| {
+        format!(
+            "Failed to prepare history directory '{}': {e}",
+            local_dir.display()
+        )
+    })?;
+
+    let local_db_path = local_dir.join(HISTORY_DB_FILE);
+    if local_db_path.exists() {
+        return Ok(local_db_path);
+    }
+
+    let roaming_db_path = match app.path().app_data_dir() {
+        Ok(dir) => dir.join(HISTORY_DB_FILE),
+        Err(e) => {
+            log::warn!("failed to resolve roaming app data directory for history migration: {e}");
+            return Ok(local_db_path);
+        }
+    };
+
+    if !roaming_db_path.exists() {
+        return Ok(local_db_path);
+    }
+
+    match migrate_sqlite_family_if_needed(&roaming_db_path, &local_db_path) {
+        Ok(()) => Ok(local_db_path),
+        Err(e) => {
+            log::warn!(
+                "failed to migrate history database to local app data, continuing with existing path '{}': {e}",
+                roaming_db_path.display()
+            );
+            Ok(roaming_db_path)
+        }
+    }
+    }
+}
+
+fn schedule_capsule_hide(
+    app: AppHandle,
+    capsule_generation: Arc<AtomicU64>,
+    expected_generation: u64,
+    delay: Duration,
+) {
+    std::thread::spawn(move || {
+        std::thread::sleep(delay);
+        if capsule_generation.load(Ordering::SeqCst) == expected_generation {
+            hide_capsule(&app);
+        }
+    });
 }
 
 // ── Tauri Commands ──────────────────────────────────────────────────
@@ -256,22 +432,19 @@ async fn toggle_recording(
         .await;
         drop(_busy);
 
-        // Auto-hide capsule after delay (only if no newer operation owns it)
-        let app_clone = app.clone();
-        let cap_gen_ref = Arc::clone(&state.capsule_generation);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            if cap_gen_ref.load(Ordering::SeqCst) == cap_gen {
-                hide_capsule(&app_clone);
-            }
-        });
-
         match result {
             Ok(pr) => {
                 if pr.suppressed {
                     log::info!("suppressed pipeline result after user cancellation");
                     return Ok(String::new());
                 }
+
+                let final_text = pr.polished_text.clone().unwrap_or_else(|| pr.raw_text.clone());
+                let entry_status = if pr.delivery_error.is_some() {
+                    "error"
+                } else {
+                    "success"
+                };
 
                 // Skip history for empty transcriptions (e.g. silence)
                 if !pr.raw_text.is_empty() {
@@ -281,13 +454,31 @@ async fn toggle_recording(
                         polished_text: pr.polished_text.clone(),
                         created_at: chrono::Utc::now(),
                         duration_seconds: pr.duration_seconds,
-                        status: "success".into(),
+                        status: entry_status.into(),
                     };
                     if let Err(e) = state.history.lock().insert(&entry) {
                         log::error!("failed to save history entry: {e}");
                     }
                 }
-                Ok(pr.polished_text.unwrap_or(pr.raw_text))
+
+                if let Some(error) = pr.delivery_error {
+                    schedule_capsule_hide(
+                        app.clone(),
+                        Arc::clone(&state.capsule_generation),
+                        cap_gen,
+                        Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+                    );
+                    return Err(error);
+                }
+
+                schedule_capsule_hide(
+                    app.clone(),
+                    Arc::clone(&state.capsule_generation),
+                    cap_gen,
+                    Duration::from_secs(CAPSULE_HIDE_DELAY_SUCCESS_SECS),
+                );
+
+                Ok(final_text)
             }
             Err(e) => {
                 if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
@@ -307,6 +498,14 @@ async fn toggle_recording(
                     log::error!("failed to save history entry: {db_err}");
                 }
                 emit_status(&app, "error", None, Some(&e.to_string()));
+
+                schedule_capsule_hide(
+                    app.clone(),
+                    Arc::clone(&state.capsule_generation),
+                    cap_gen,
+                    Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+                );
+
                 Err(e.to_string())
             }
         }
@@ -516,23 +715,50 @@ async fn save_settings(
 
     let validated_hotkey = build_hotkey_settings(&settings.general.hotkey)?;
 
-    // Update hotkey settings (full struct replace so new fields like
-    // key_matcher / modifier_matcher are never accidentally dropped).
-    *state.hotkey_settings.lock() = validated_hotkey;
+    let previous_autostart = app.autolaunch().is_enabled().map_err(|e| e.to_string())?;
+    let autostart_changed = previous_autostart != settings.general.auto_start;
 
-    if settings.general.auto_start {
-        app.autolaunch().enable().map_err(|e| e.to_string())?;
-    } else {
-        app.autolaunch().disable().map_err(|e| e.to_string())?;
+    if autostart_changed {
+        let autostart_result = if settings.general.auto_start {
+            app.autolaunch().enable()
+        } else {
+            app.autolaunch().disable()
+        };
+        autostart_result.map_err(|e| e.to_string())?;
     }
 
-    // Save to store
-    let store = app
-        .store("settings.json")
-        .map_err(|e| e.to_string())?;
-    let json = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
-    store.set("settings", json);
-    store.save().map_err(|e| e.to_string())?;
+    let persist_result = (|| -> Result<(), String> {
+        let store_path = ensure_store_parent_dir(&app, SETTINGS_STORE_FILE)?;
+        let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
+        let json = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
+        store.set("settings", json);
+        store
+            .save()
+            .map_err(|e| format!("Failed to save settings at {}: {e}", store_path.display()))?;
+        Ok(())
+    })();
+
+    if let Err(error) = persist_result {
+        if autostart_changed {
+            let rollback_result = if previous_autostart {
+                app.autolaunch().enable()
+            } else {
+                app.autolaunch().disable()
+            };
+
+            if let Err(rollback_error) = rollback_result {
+                log::error!(
+                    "failed to roll back autostart state after settings save failure: {rollback_error}"
+                );
+            }
+        }
+
+        return Err(error);
+    }
+
+    // Update hotkey settings only after persistence succeeds so runtime state
+    // never diverges from what was actually written to disk.
+    *state.hotkey_settings.lock() = validated_hotkey;
 
     // Update in-memory settings
     *state.settings.lock() = settings;
@@ -630,7 +856,17 @@ async fn retry_history(
         settings.general.max_retries,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        let message = e.to_string();
+        emit_status(&app, "error", None, Some(&message));
+        schedule_capsule_hide(
+            app.clone(),
+            Arc::clone(&state.capsule_generation),
+            cap_gen,
+            Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+        );
+        message
+    })?;
 
     // Write result back to history
     let updated = HistoryEntry {
@@ -643,14 +879,13 @@ async fn retry_history(
         .insert(&updated)
         .map_err(|e| e.to_string())?;
 
-    let app_clone = app.clone();
-    let cap_gen_ref = Arc::clone(&state.capsule_generation);
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        if cap_gen_ref.load(Ordering::SeqCst) == cap_gen {
-            hide_capsule(&app_clone);
-        }
-    });
+    emit_status(&app, "done", Some(&result), None);
+    schedule_capsule_hide(
+        app.clone(),
+        Arc::clone(&state.capsule_generation),
+        cap_gen,
+        Duration::from_secs(CAPSULE_HIDE_DELAY_SUCCESS_SECS),
+    );
 
     Ok(result)
 }
@@ -674,6 +909,9 @@ fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
 
 fn show_capsule(app: &AppHandle, status: &str) {
     if let Some(capsule) = app.get_webview_window("capsule") {
+        capsule
+            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, CAPSULE_HEIGHT)))
+            .ok();
         capsule.show().ok();
         // Do NOT call set_focus(); the capsule is always-on-top so it's
         // visible anyway, and stealing focus would yank keyboard input
@@ -692,7 +930,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
         .always_on_top(true)
         .skip_taskbar(true)
         .focusable(false)
-        .inner_size(240.0, 56.0)
+        .inner_size(CAPSULE_WIDTH, CAPSULE_HEIGHT)
         .center()
         .build()
         {
@@ -715,11 +953,17 @@ fn hide_capsule(app: &AppHandle) {
 // ── App Setup ───────────────────────────────────────────────────────
 
 fn load_settings(app: &AppHandle) -> AppSettings {
-    if let Ok(path) = resolve_store_path(app, "settings.json") {
-        log::info!("settings store path: {}", path.display());
+    match ensure_store_parent_dir(app, SETTINGS_STORE_FILE) {
+        Ok(path) => {
+            log::info!("settings store path: {}", path.display());
+        }
+        Err(e) => {
+            log::warn!("failed to prepare settings store directory: {e}");
+            return AppSettings::default();
+        }
     }
 
-    match app.store("settings.json") {
+    match app.store(SETTINGS_STORE_FILE) {
         Ok(store) => {
             if let Some(val) = store.get("settings") {
                 match serde_json::from_value(val.clone()) {
@@ -865,12 +1109,11 @@ pub fn run() {
             }
 
             // Initialize history manager
-            let app_data_dir = handle
-                .path()
-                .app_data_dir()
-                .expect("failed to resolve app data dir");
-            let history =
-                HistoryManager::new(app_data_dir).expect("failed to initialize history database");
+            let history_db_path =
+                prepare_history_db_path(&handle).expect("failed to resolve history database path");
+            log::info!("history database path: {}", history_db_path.display());
+            let history = HistoryManager::new(history_db_path)
+                .expect("failed to initialize history database");
 
             // Build hotkey settings from config
             let hotkey_settings = Arc::new(Mutex::new(load_hotkey_settings(&mut settings)));
@@ -954,7 +1197,11 @@ pub fn run() {
             );
 
             // First-run detection: show settings on first launch
-            match handle.store("settings.json") {
+            if let Err(e) = ensure_store_parent_dir(&handle, SETTINGS_STORE_FILE) {
+                log::warn!("failed to prepare settings store for first-run flag: {e}");
+            }
+
+            match handle.store(SETTINGS_STORE_FILE) {
                 Ok(store) => {
                     if store.get("first_run").is_none() {
                         if let Some(win) = handle.get_webview_window("main") {
@@ -1007,6 +1254,10 @@ mod tests {
     use crate::config::{HotkeyConfig, HotkeyType};
     use rdev::Key;
 
+    fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("{prefix}-{}", uuid::Uuid::new_v4()))
+    }
+
     #[test]
     fn build_hotkey_settings_accepts_alt_hold() {
         let config = HotkeyConfig {
@@ -1037,5 +1288,55 @@ mod tests {
         assert_eq!(parsed.hotkey_type, hotkey::HotkeyType::Single);
         assert_eq!(parsed.key, Key::Alt);
         assert!(parsed.modifier.is_none());
+    }
+
+    #[test]
+    fn ensure_parent_dir_for_file_creates_missing_directories() {
+        let root = unique_temp_dir("yat-settings");
+        let file_path = root.join("nested").join("settings.json");
+
+        assert!(!file_path.parent().expect("parent dir").exists());
+
+        ensure_parent_dir_for_file(&file_path).expect("should create parent dirs");
+
+        assert!(file_path.parent().expect("parent dir").exists());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn sqlite_companion_paths_include_sidecars() {
+        let db_path = Path::new("history.db");
+        let companions = sqlite_companion_paths(db_path);
+
+        assert_eq!(companions.len(), 3);
+        assert_eq!(companions[0], Path::new("history.db"));
+        assert_eq!(companions[1], Path::new("history.db-wal"));
+        assert_eq!(companions[2], Path::new("history.db-shm"));
+    }
+
+    #[test]
+    fn migrate_sqlite_family_moves_database_and_sidecars() {
+        let root = unique_temp_dir("yat-history-migration");
+        let old_db = root.join("roaming").join(HISTORY_DB_FILE);
+        let new_db = root.join("local").join(HISTORY_DB_FILE);
+
+        ensure_parent_dir_for_file(&old_db).expect("old parent should be created");
+        std::fs::write(&old_db, b"main").expect("should write main db");
+        std::fs::write(Path::new(&format!("{}-wal", old_db.display())), b"wal")
+            .expect("should write wal sidecar");
+        std::fs::write(Path::new(&format!("{}-shm", old_db.display())), b"shm")
+            .expect("should write shm sidecar");
+
+        migrate_sqlite_family_if_needed(&old_db, &new_db).expect("migration should succeed");
+
+        assert!(new_db.exists());
+        assert!(Path::new(&format!("{}-wal", new_db.display())).exists());
+        assert!(Path::new(&format!("{}-shm", new_db.display())).exists());
+        assert!(!old_db.exists());
+        assert!(!Path::new(&format!("{}-wal", old_db.display())).exists());
+        assert!(!Path::new(&format!("{}-shm", old_db.display())).exists());
+
+        std::fs::remove_dir_all(root).ok();
     }
 }

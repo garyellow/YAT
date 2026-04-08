@@ -55,6 +55,7 @@ body {
 
 body[data-capsule="true"] {
   background: transparent !important;
+  overflow: hidden;
 }
 
 button,

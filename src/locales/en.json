@@ -26,8 +26,12 @@
     "autoSavePending": "Saving after you pause typing",
     "saving": "Saving…",
     "autoSaveFailed": "Could not save changes",
+    "autoSaveFailedDetailTitle": "Auto-save failed",
+    "autoSaveFailedDetailBody": "Your changes are still on this screen and have not been written locally yet. Fix the issue, then use Save now to retry. Reason: {{error}}",
     "fixValidationErrors": "Fix the highlighted settings before saving",
+    "validationNoticeTitle": "Some settings still need attention",
     "closeSaveBlocked": "Could not close yet because some settings still need attention",
+    "unknownSaveError": "Unknown error",
     "noChanges": "No pending changes",
     "groups": {
       "workspace": "Workspace",
@@ -357,6 +361,9 @@
   },
   "capsule": {
     "escHint": "Press Esc to cancel",
-    "clipboardFallbackHint": "Paste failed, but the text is still in your clipboard."
+    "clipboardFallbackHint": "Paste failed, but the text is still in your clipboard.",
+    "clipboardFallbackHintWindows": "Paste failed, but the text is still in your clipboard. On Windows this often happens when the target app is running elevated or simulated input is blocked.",
+    "clipboardFallbackHintMacos": "Paste failed, but the text is still in your clipboard. Make sure YAT has Accessibility permission and the target app accepts simulated input.",
+    "errorUnknown": "Something went wrong, but no detailed reason was provided."
   }
 }

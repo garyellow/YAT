@@ -12,6 +12,7 @@ import {
   sortModifiersFirst,
   validateHotkeyConfig,
 } from "../../lib/settingsFormatters";
+import { isTauriRuntime } from "../../lib/tauriRuntime";
 import type { AppSettings } from "../../stores/settingsStore";
 import { Notice, OptionCard, Section, StatusDot } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
@@ -40,6 +41,11 @@ export default function GeneralTab() {
   const recordingRef = useRef(false);
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      setAudioDevices([]);
+      return;
+    }
+
     invoke<string[]>("list_audio_devices")
       .then(setAudioDevices)
       .catch((e) => console.error("Failed to list audio devices:", e));
@@ -71,6 +77,11 @@ export default function GeneralTab() {
       : ["Ctrl", "Alt", "Shift", "Cmd"];
 
   const refreshDevices = () => {
+    if (!isTauriRuntime()) {
+      setAudioDevices([]);
+      return;
+    }
+
     invoke<string[]>("list_audio_devices")
       .then(setAudioDevices)
       .catch((e) => console.error("Failed to list audio devices:", e));
