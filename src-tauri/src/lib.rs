@@ -17,8 +17,8 @@ use std::time::Duration;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, LogicalSize, Manager, Size, WebviewUrl, WebviewWindowBuilder,
-    WindowEvent,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size, WebviewUrl,
+    WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_store::{resolve_store_path, StoreExt};
@@ -60,8 +60,8 @@ struct PlatformContext {
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const HISTORY_DB_FILE: &str = "history.db";
-const CAPSULE_WIDTH: f64 = 360.0;
-const CAPSULE_HEIGHT: f64 = 96.0;
+const CAPSULE_WIDTH: f64 = 400.0;
+const CAPSULE_HEIGHT: f64 = 120.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
 
@@ -908,17 +908,28 @@ fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
 // ── Capsule Window Helpers ──────────────────────────────────────────
 
 fn show_capsule(app: &AppHandle, status: &str) {
+    let bottom_position = |window: &tauri::WebviewWindow| {
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            let monitor_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let mon_w = monitor_size.width as f64 / scale;
+            let mon_h = monitor_size.height as f64 / scale;
+            let x = (mon_w - CAPSULE_WIDTH) / 2.0;
+            let y = mon_h - CAPSULE_HEIGHT - 16.0;
+            window
+                .set_position(Position::Logical(LogicalPosition::new(x, y)))
+                .ok();
+        }
+    };
+
     if let Some(capsule) = app.get_webview_window("capsule") {
         capsule
             .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, CAPSULE_HEIGHT)))
             .ok();
+        bottom_position(&capsule);
         capsule.show().ok();
-        // Do NOT call set_focus(); the capsule is always-on-top so it's
-        // visible anyway, and stealing focus would yank keyboard input
-        // away from whatever app the user is working in.
         capsule.set_ignore_cursor_events(true).ok();
     } else {
-        // Create capsule window
         match WebviewWindowBuilder::new(
             app,
             "capsule",
@@ -931,10 +942,10 @@ fn show_capsule(app: &AppHandle, status: &str) {
         .skip_taskbar(true)
         .focusable(false)
         .inner_size(CAPSULE_WIDTH, CAPSULE_HEIGHT)
-        .center()
         .build()
         {
             Ok(w) => {
+                bottom_position(&w);
                 w.set_ignore_cursor_events(true).ok();
                 log::info!("capsule window created");
             }
@@ -996,12 +1007,10 @@ fn load_settings(app: &AppHandle) -> AppSettings {
 
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let show_item = MenuItemBuilder::with_id("toggle_window", "Show / 顯示").build(app)?;
-    let settings_item = MenuItemBuilder::with_id("settings", "Settings / 設定").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)?;
 
     let menu = MenuBuilder::new(app)
         .item(&show_item)
-        .item(&settings_item)
         .separator()
         .item(&quit_item)
         .build()?;
@@ -1012,13 +1021,6 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "toggle_window" => {
                 toggle_main_window(app);
-            }
-            "settings" => {
-                if let Some(win) = app.get_webview_window("main") {
-                    win.show().ok();
-                    win.set_focus().ok();
-                }
-                refresh_tray_menu(app);
             }
             "quit" => {
                 app.exit(0);
@@ -1067,21 +1069,16 @@ fn refresh_tray_menu(app: &AppHandle) {
         };
 
         if let Ok(show_item) = MenuItemBuilder::with_id("toggle_window", label).build(app) {
-            if let Ok(settings_item) =
-                MenuItemBuilder::with_id("settings", "Settings / 設定").build(app)
+            if let Ok(quit_item) =
+                MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)
             {
-                if let Ok(quit_item) =
-                    MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)
+                if let Ok(menu) = MenuBuilder::new(app)
+                    .item(&show_item)
+                    .separator()
+                    .item(&quit_item)
+                    .build()
                 {
-                    if let Ok(menu) = MenuBuilder::new(app)
-                        .item(&show_item)
-                        .item(&settings_item)
-                        .separator()
-                        .item(&quit_item)
-                        .build()
-                    {
-                        tray.set_menu(Some(menu)).ok();
-                    }
+                    tray.set_menu(Some(menu)).ok();
                 }
             }
         }
@@ -1093,7 +1090,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_log::Builder::default().build())
@@ -1196,26 +1193,16 @@ pub fn run() {
                 },
             );
 
-            // First-run detection: show settings on first launch
-            if let Err(e) = ensure_store_parent_dir(&handle, SETTINGS_STORE_FILE) {
-                log::warn!("failed to prepare settings store for first-run flag: {e}");
-            }
-
-            match handle.store(SETTINGS_STORE_FILE) {
-                Ok(store) => {
-                    if store.get("first_run").is_none() {
-                        if let Some(win) = handle.get_webview_window("main") {
-                            win.show().ok();
-                            win.set_focus().ok();
-                        }
-                        store.set("first_run", serde_json::Value::Bool(false));
-                        if let Err(e) = store.save() {
-                            log::warn!("failed to persist first_run flag: {e}");
-                        }
-                    }
+            // Show main window unless autostart + user prefers to start minimised
+            let launched_by_autostart = std::env::args().any(|a| a == "--autostart");
+            let start_minimized = handle.state::<AppState>().settings.lock().general.start_minimized;
+            if !(launched_by_autostart && start_minimized) {
+                if let Some(win) = handle.get_webview_window("main") {
+                    win.show().ok();
+                    win.set_focus().ok();
                 }
-                Err(e) => log::warn!("failed to check first_run: {e}"),
             }
+            refresh_tray_menu(&handle);
 
             // Clean up old history on startup
             let handle2 = handle.clone();

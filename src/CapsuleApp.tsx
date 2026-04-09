@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -11,42 +11,42 @@ const statusConfig: Record<
   { shell: string; dot: string; pulse: boolean }
 > = {
   idle: {
-    shell: "border-white/8 bg-neutral-900/70",
+    shell: "bg-neutral-900/90 border-white/10",
     dot: "bg-neutral-400",
     pulse: false,
   },
   recording: {
-    shell: "border-white/14 bg-neutral-900/88",
+    shell: "bg-neutral-900/92 border-white/15",
     dot: "bg-white",
     pulse: true,
   },
   transcribing: {
-    shell: "border-white/10 bg-neutral-900/82",
+    shell: "bg-neutral-900/90 border-white/12",
     dot: "bg-white/80",
     pulse: true,
   },
   polishing: {
-    shell: "border-white/10 bg-neutral-900/82",
+    shell: "bg-neutral-900/90 border-white/12",
     dot: "bg-white/80",
     pulse: true,
   },
   done: {
-    shell: "border-white/10 bg-neutral-900/80",
+    shell: "bg-neutral-900/90 border-white/10",
     dot: "bg-emerald-400",
     pulse: false,
   },
   clipboardFallback: {
-    shell: "border-white/10 bg-neutral-900/80",
+    shell: "bg-neutral-900/90 border-white/10",
     dot: "bg-amber-400",
     pulse: false,
   },
   busy: {
-    shell: "border-white/10 bg-neutral-900/82",
+    shell: "bg-neutral-900/90 border-white/12",
     dot: "bg-white/80",
     pulse: true,
   },
   error: {
-    shell: "border-white/10 bg-neutral-900/80",
+    shell: "bg-neutral-900/90 border-white/10",
     dot: "bg-red-400",
     pulse: false,
   },
@@ -154,12 +154,34 @@ export default function CapsuleApp() {
             ? t("capsule.clipboardFallbackHintMacos")
             : t("capsule.clipboardFallbackHint")
         : "";
-  if (status === "idle") return null;
+
+  const [visible, setVisible] = useState(false);
+  const prevStatus = useRef<RecordingStatus>("idle");
+
+  useEffect(() => {
+    if (status !== "idle") {
+      setVisible(true);
+    } else if (prevStatus.current !== "idle") {
+      // Leaving non-idle -> play exit animation
+      const timer = setTimeout(() => setVisible(false), 250);
+      return () => clearTimeout(timer);
+    }
+    prevStatus.current = status;
+  }, [status]);
+
+  if (!visible && status === "idle") return null;
+
+  const isExiting = status === "idle" && visible;
 
   return (
-    <div className="flex h-full w-full items-center justify-center no-select" data-tauri-drag-region>
+    <div
+      className="flex h-full w-full items-end justify-center pb-4 no-select"
+      data-tauri-drag-region
+    >
       <div
-        className={`flex min-w-[280px] max-w-[420px] items-start gap-3 rounded-2xl border px-4 py-3.5 text-white shadow-lg backdrop-blur-md transition-colors duration-200 ${cfg.shell}`}
+        className={`flex min-w-[280px] max-w-[420px] items-start gap-3 rounded-2xl border px-4 py-3.5 text-white shadow-2xl backdrop-blur-xl transition-all duration-200 ${cfg.shell} ${
+          isExiting ? "animate-capsule-exit" : "animate-capsule-enter"
+        }`}
         aria-live={status === "error" ? "assertive" : "polite"}
         role={status === "error" ? "alert" : "status"}
       >
@@ -171,7 +193,7 @@ export default function CapsuleApp() {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold tracking-tight">
-              {t(`status.${status}`)}
+              {t(`status.${status === "idle" ? prevStatus.current : status}`)}
             </p>
             {status === "recording" ? (
               <span className="tabular-nums text-xs text-white/75">
@@ -203,7 +225,7 @@ export default function CapsuleApp() {
 
         {status === "recording" && (
           <span
-            className="rounded-md border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white/50"
+            className="rounded-lg border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white/50"
             aria-label={t("capsule.escHint")}
           >
             Esc

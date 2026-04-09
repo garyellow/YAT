@@ -68,6 +68,7 @@ export function buildDefaultAppSettings(): AppSettings {
       auto_mute: true,
       microphone_device: null,
       close_to_tray: true,
+      start_minimized: true,
     },
     prompt: {
       system_prompt: DEFAULT_SYSTEM_PROMPT,

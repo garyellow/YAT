@@ -114,6 +114,7 @@ pub struct GeneralConfig {
     pub auto_mute: bool,
     pub microphone_device: Option<String>,
     pub close_to_tray: bool,
+    pub start_minimized: bool,
 }
 
 impl Default for GeneralConfig {
@@ -132,6 +133,7 @@ impl Default for GeneralConfig {
             auto_mute: true,
             microphone_device: None,
             close_to_tray: true,
+            start_minimized: true,
         }
     }
 }

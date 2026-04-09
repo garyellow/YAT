@@ -102,13 +102,13 @@ button {
   align-items: center;
   gap: 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
-  padding: 5px 10px;
+  padding: 6px 10px;
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: color 80ms ease, background-color 80ms ease;
+  transition: color 100ms ease, background-color 100ms ease;
 }
 
 .nav-item:hover {
@@ -130,12 +130,16 @@ button {
   justify-content: center;
   gap: 6px;
   border: 1px solid transparent;
-  border-radius: 2px;
-  padding: 5px 12px;
+  border-radius: 8px;
+  padding: 6px 14px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 80ms ease, background-color 80ms ease;
+  transition: opacity 120ms ease, background-color 120ms ease, transform 80ms ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -209,13 +213,13 @@ button {
 .field-select {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 8px;
   background: var(--bg);
   color: var(--text);
-  padding: 6px 10px;
+  padding: 7px 12px;
   font-size: 13px;
   line-height: 1.5;
-  transition: border-color 80ms ease;
+  transition: border-color 120ms ease;
 }
 
 .field-input::placeholder,
@@ -246,9 +250,10 @@ button {
 /* ─── Callout ─── */
 
 .callout {
-  border-left: 2px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 0 8px 8px 0;
   background: var(--bg-subtle);
-  padding: 10px 14px;
+  padding: 12px 16px;
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -263,6 +268,10 @@ button {
 
 .callout[data-tone="success"] {
   border-left-color: var(--green);
+}
+
+.callout[data-tone="accent"] {
+  border-left-color: var(--accent);
 }
 
 /* ─── Status Dot ─── */
@@ -293,12 +302,16 @@ button {
 .option-btn {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 10px;
   background: var(--bg);
-  padding: 10px 12px;
+  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 80ms ease, background-color 80ms ease;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 80ms ease;
+}
+
+.option-btn:active {
+  transform: scale(0.98);
 }
 
 .option-btn:hover {
@@ -309,6 +322,34 @@ button {
 .option-btn[data-selected="true"] {
   border-color: var(--accent);
   background: var(--accent-subtle);
+}
+
+/* ─── Tooltip ─── */
+
+.tooltip-bubble {
+  position: absolute;
+  left: 50%;
+  z-index: 50;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  pointer-events: none;
+  animation: fade-in 120ms ease-out;
+}
+
+.tooltip-top {
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+}
+
+.tooltip-bottom {
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
 }
 
 /* ─── Utilities ─── */
@@ -328,6 +369,7 @@ button {
   padding: 6px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--text);
   text-decoration: none;
   font-size: 13px;
@@ -355,7 +397,7 @@ button {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -380,7 +422,18 @@ button {
 /* ─── Animations ─── */
 
 .tab-enter {
-  animation: fade-in 100ms ease-out;
+  animation: tab-slide-in 180ms ease-out;
+}
+
+@keyframes tab-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-in {
@@ -419,6 +472,37 @@ button {
   to {
     opacity: 0;
     transform: translateY(-4px);
+  }
+}
+
+/* Capsule enter/exit animations */
+.animate-capsule-enter {
+  animation: capsule-slide-in 200ms ease-out;
+}
+
+.animate-capsule-exit {
+  animation: capsule-slide-out 250ms ease-in forwards;
+}
+
+@keyframes capsule-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes capsule-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
   }
 }
 

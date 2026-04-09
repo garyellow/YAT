@@ -43,6 +43,7 @@ export interface GeneralConfig {
   auto_mute: boolean;
   microphone_device: string | null;
   close_to_tray: boolean;
+  start_minimized: boolean;
 }
 
 export interface VocabularyEntry {
