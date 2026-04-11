@@ -52,6 +52,9 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "linux-
 # System volume control (Windows)
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Media_Control",
     "Win32_Foundation",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",

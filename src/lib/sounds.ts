@@ -36,4 +36,8 @@ export const sounds = {
     beep(330, 0.08);
     setTimeout(() => beep(330, 0.08), 100);
   },
+  countdownSwitch: () => {
+    beep(587, 0.08);
+    setTimeout(() => beep(440, 0.12), 100);
+  },
 };

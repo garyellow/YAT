@@ -5,8 +5,8 @@ mod hotkey;
 mod llm;
 mod output;
 mod pipeline;
+mod recording_env;
 mod stt;
-mod volume;
 
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -34,8 +34,9 @@ pub struct AppState {
     pub history: Mutex<HistoryManager>,
     pub hotkey_settings: Arc<Mutex<HotkeySettings>>,
     pub mic_level: Arc<AtomicU32>,
-    /// Tracks whether system audio was already muted before we auto-muted it.
-    pub was_muted: Mutex<bool>,
+    /// Snapshot of the recording environment (mute, media, DND) captured on
+    /// recording start; used to restore everything when recording stops.
+    pub recording_env_state: Mutex<recording_env::RecordingEnvState>,
     /// Incremented each time a new recording starts; auto-stop timers capture
     /// this value and only fire when it still matches, preventing stale timers
     /// from stopping a newer recording.
@@ -345,12 +346,13 @@ async fn toggle_recording(
         let _busy = BusyGuard::new(&state.pipeline_busy);
         let settings = state.settings.lock().clone();
 
-        // Restore system audio after recording stops
-        if settings.general.auto_mute {
-            let was_muted = *state.was_muted.lock();
-            if let Err(e) = volume::restore_system(was_muted) {
-                log::warn!("auto-mute restore failed: {e}");
-            }
+        // Restore recording environment (mute, media, DND)
+        let env_snapshot = state.recording_env_state.lock().clone();
+        recording_env::restore(&settings.general, &env_snapshot);
+
+        // Update tray indicator
+        if let Some(tray) = app.tray_by_id("yat-tray") {
+            tray.set_tooltip(Some("YAT – Voice to Text")).ok();
         }
 
         // Skip pipeline for very short recordings (< 1s) — accidental taps, noise
@@ -509,9 +511,9 @@ async fn toggle_recording(
             return Ok("busy".into());
         }
 
-        let device_name = state.settings.lock().general.microphone_device.clone();
-        let auto_mute = state.settings.lock().general.auto_mute;
-        let max_secs = state.settings.lock().general.max_recording_seconds as u64;
+        let general = state.settings.lock().general.clone();
+        let device_name = general.microphone_device.clone();
+        let max_secs = general.max_recording_seconds as u64;
 
         let mic_level = Arc::clone(&state.mic_level);
 
@@ -524,24 +526,18 @@ async fn toggle_recording(
                 return Ok("already recording".into());
             }
 
-            // Auto-mute only for the winning start path so a losing concurrent
-            // trigger cannot overwrite `was_muted` or leave the system muted.
-            if auto_mute {
-                match volume::mute_system() {
-                    Ok(was_muted) => *state.was_muted.lock() = was_muted,
-                    Err(e) => log::warn!("auto-mute failed: {e}"),
-                }
-            }
+            // Prepare recording environment (pause media, mute, enable DND)
+            // inside the lock so a losing concurrent trigger cannot conflict.
+            let env_state = recording_env::prepare(&general);
+            *state.recording_env_state.lock() = env_state;
 
             let generation = state.recording_generation.fetch_add(1, Ordering::SeqCst) + 1;
             recorder
                 .start(device_name.as_deref(), mic_level)
                 .map_err(|e| {
-                    // Restore system audio if recording failed to start
-                    if auto_mute {
-                        let was_muted = *state.was_muted.lock();
-                        volume::restore_system(was_muted).ok();
-                    }
+                    // Restore recording environment if start failed
+                    let env_snapshot = state.recording_env_state.lock().clone();
+                    recording_env::restore(&general, &env_snapshot);
                     e.to_string()
                 })?;
             generation
@@ -549,6 +545,11 @@ async fn toggle_recording(
 
         emit_status(&app, "recording", None, None);
         show_capsule(&app, "recording");
+
+        // Update tray indicator
+        if let Some(tray) = app.tray_by_id("yat-tray") {
+            tray.set_tooltip(Some("YAT – 🔴 Recording…")).ok();
+        }
 
         // Auto-stop timer — only fires if the recording generation still
         // matches, preventing a stale timer from stopping a later recording.
@@ -620,13 +621,16 @@ async fn cancel_recording(
         return Ok(());
     }
 
-    // Restore system audio if auto-mute was enabled
-    let auto_mute = state.settings.lock().general.auto_mute;
-    if restore_audio && auto_mute {
-        let was_muted = *state.was_muted.lock();
-        if let Err(e) = volume::restore_system(was_muted) {
-            log::warn!("auto-mute restore on cancel failed: {e}");
-        }
+    // Restore recording environment (mute, media, DND) if recording was active
+    if restore_audio {
+        let settings = state.settings.lock().clone();
+        let env_snapshot = state.recording_env_state.lock().clone();
+        recording_env::restore(&settings.general, &env_snapshot);
+    }
+
+    // Reset tray indicator
+    if let Some(tray) = app.tray_by_id("yat-tray") {
+        tray.set_tooltip(Some("YAT – Voice to Text")).ok();
     }
 
     app.emit("pipeline-status", pipeline::PipelineStatus {
@@ -1212,7 +1216,7 @@ pub fn run() {
                 history: Mutex::new(history),
                 hotkey_settings: Arc::clone(&hotkey_settings),
                 mic_level: Arc::new(AtomicU32::new(0)),
-                was_muted: Mutex::new(false),
+                recording_env_state: Mutex::new(recording_env::RecordingEnvState::default()),
                 recording_generation: Arc::new(AtomicU64::new(0)),
                 capsule_generation: Arc::new(AtomicU64::new(0)),
                 pipeline_busy: Arc::new(AtomicBool::new(false)),

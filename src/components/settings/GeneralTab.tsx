@@ -386,6 +386,26 @@ export default function GeneralTab() {
               <Toggle checked={g.auto_mute} onChange={(v) => update({ auto_mute: v })} ariaLabelledBy="auto-mute-label" />
             </div>
           ) : null}
+
+          {platform !== "linux" ? (
+            <div className="flex items-center justify-between gap-4 py-1">
+              <div className="flex items-center gap-1.5">
+                <p id="auto-pause-media-label" className="text-[13px] font-medium">{t("general.autoPauseMedia")}</p>
+                <HintTip text={t("general.autoPauseMediaHint")} />
+              </div>
+              <Toggle checked={g.auto_pause_media} onChange={(v) => update({ auto_pause_media: v })} ariaLabelledBy="auto-pause-media-label" />
+            </div>
+          ) : null}
+
+          {platform !== "linux" ? (
+            <div className="flex items-center justify-between gap-4 py-1">
+              <div className="flex items-center gap-1.5">
+                <p id="auto-dnd-label" className="text-[13px] font-medium">{t("general.autoDnd")}</p>
+                <HintTip text={t("general.autoDndHint")} />
+              </div>
+              <Toggle checked={g.auto_dnd} onChange={(v) => update({ auto_dnd: v })} ariaLabelledBy="auto-dnd-label" />
+            </div>
+          ) : null}
         </div>
       </Section>
 

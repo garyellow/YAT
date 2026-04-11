@@ -66,6 +66,8 @@ export function buildDefaultAppSettings(): AppSettings {
       max_retries: 2,
       sound_effects: true,
       auto_mute: true,
+      auto_pause_media: false,
+      auto_dnd: false,
       microphone_device: null,
       close_to_tray: true,
       start_minimized: true,

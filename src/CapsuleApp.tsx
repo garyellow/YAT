@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { RecordingStatus } from "./stores/recordingStore";
 import type { AppSettings } from "./stores/settingsStore";
 import { isTauriRuntime } from "./lib/tauriRuntime";
+import { sounds } from "./lib/sounds";
 
 const statusConfig: Record<
   RecordingStatus,
@@ -89,6 +90,9 @@ export default function CapsuleApp() {
   const [micLevel, setMicLevel] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
   const [platformOs, setPlatformOs] = useState<string>("");
+  const [maxSeconds, setMaxSeconds] = useState(180);
+  const [soundEffects, setSoundEffects] = useState(true);
+  const countdownFired = useRef(false);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -100,6 +104,8 @@ export default function CapsuleApp() {
         if (appSettings.general.language) {
           void i18n.changeLanguage(appSettings.general.language);
         }
+        setMaxSeconds(appSettings.general.max_recording_seconds);
+        setSoundEffects(appSettings.general.sound_effects);
       })
       .catch(() => {});
 
@@ -145,10 +151,27 @@ export default function CapsuleApp() {
   useEffect(() => {
     if (status === "recording") {
       setElapsed(0);
+      countdownFired.current = false;
       const id = setInterval(() => setElapsed((e) => e + 1), 1000);
       return () => clearInterval(id);
     }
   }, [status]);
+
+  // Countdown switch sound cue
+  useEffect(() => {
+    if (
+      status === "recording" &&
+      soundEffects &&
+      !countdownFired.current &&
+      maxSeconds - elapsed === 60
+    ) {
+      countdownFired.current = true;
+      sounds.countdownSwitch();
+    }
+  }, [elapsed, maxSeconds, status, soundEffects]);
+
+  const remaining = maxSeconds - elapsed;
+  const isCountdown = status === "recording" && remaining <= 60 && remaining > 0;
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -210,8 +233,8 @@ export default function CapsuleApp() {
               {t(`status.${status === "idle" ? prevStatus.current : status}`)}
             </p>
             {status === "recording" ? (
-              <span className="tabular-nums text-xs text-white/75">
-                {formatTime(elapsed)}
+              <span className={`tabular-nums text-xs ${isCountdown ? "text-amber-300/90" : "text-white/75"}`}>
+                {isCountdown ? `⏱ ${formatTime(remaining)}` : formatTime(elapsed)}
               </span>
             ) : null}
           </div>

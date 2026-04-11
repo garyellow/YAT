@@ -42,6 +42,8 @@ export interface GeneralConfig {
   max_retries: number;
   sound_effects: boolean;
   auto_mute: boolean;
+  auto_pause_media: boolean;
+  auto_dnd: boolean;
   microphone_device: string | null;
   close_to_tray: boolean;
   start_minimized: boolean;

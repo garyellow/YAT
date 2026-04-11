@@ -77,7 +77,7 @@ YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT tu
 ### Input and control
 
 - **Global hotkeys**: hold-to-talk, single key, double-tap, or combo
-- **Floating status capsule**: shows recording state, elapsed time, and microphone level
+- **Floating status capsule**: shows recording state, elapsed time (with countdown), and microphone level
 - **Esc to cancel**: works during recording and processing
 - **Tray-first workflow**: stays in the background until you need it
 
@@ -103,6 +103,10 @@ YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT tu
 - **History**: search, copy, retry, or delete past outputs
 - **Sound cues**: feedback for start, stop, completion, and errors
 - **Auto-mute while recording**: supported on Windows and macOS
+- **Pause media during recording**: automatically pause playing music or video and resume when done (Windows / macOS)
+- **DND during recording**: suppress notification pop-ups while recording (Windows / macOS)
+- **Tray recording indicator**: tray tooltip changes to "🔴 Recording…" during recording
+- **Countdown timer**: capsule shows remaining time in amber during the last 60 seconds with a sound cue
 - **Theme options**: dark, light, or follow system
 - **Bilingual UI**: Traditional Chinese by default, with English available in settings
 - **Auto-start on login**: keep YAT ready in the background
@@ -127,7 +131,7 @@ You can use different providers for Speech and Polish independently.
 | Tab | What you do there |
 |---|---|
 | **Overview** | See whether setup is complete and review the latest output |
-| **General** | Change hotkeys, output mode, microphone, theme, UI language, sound effects, auto-mute, timeout, retries, and auto-start |
+| **General** | Change hotkeys, output mode, microphone, theme, UI language, sound effects, auto-mute, pause media, DND, timeout, retries, and auto-start |
 | **Speech** | Set provider, API URL, API key, model, and language hint |
 | **Polish** | Turn AI cleanup on or off, then set provider, API URL, API key, and model |
 | **Prompt** | Add simple rules, or go deeper with the advanced system prompt |
@@ -140,7 +144,7 @@ You can use different providers for Speech and Polish independently.
 |---|---|
 | **macOS** | You need microphone permission, and auto-paste / global hotkeys usually also need Accessibility permission |
 | **Windows** | Auto-paste can fail if the target app is running as administrator; **Clipboard only** is usually the safest fallback |
-| **Linux** | Global hotkeys currently need X11 or a compatibility layer; if paste feels unreliable, use **Clipboard only**; auto-mute is not supported on Linux |
+| **Linux** | Global hotkeys currently need X11 or a compatibility layer; if paste feels unreliable, use **Clipboard only**; auto-mute, pause media, and DND are not supported on Linux |
 
 - Extra note: on Linux, pressing **Esc** to cancel may still send that key to the foreground app.
 
