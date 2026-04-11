@@ -46,6 +46,9 @@ rdev = { version = "0.5", features = ["unstable_grab"] }
 # Local history database
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# OS credential store for API keys
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
+
 # System volume control (Windows)
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

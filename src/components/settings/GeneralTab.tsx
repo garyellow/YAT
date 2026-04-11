@@ -5,7 +5,6 @@ import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   browserCodeToRdevName,
-  formatHotkeyCombo,
   formatHotkeyKey,
   sortModifiersFirst,
   validateHotkeyConfig,
@@ -57,7 +56,6 @@ export default function GeneralTab() {
     updateSettings({ general: { ...g, ...patch } });
   };
 
-  const hotkeySummary = formatHotkeyCombo(g.hotkey);
   const hotkeyValidation = validateHotkeyConfig(g.hotkey);
 
   const refreshDevices = () => {
@@ -460,7 +458,7 @@ export default function GeneralTab() {
       </Section>
 
       {/* ── Window Behavior ── */}
-      <Section title={t("general.sectionWindow")}>
+      <Section title={t("general.sectionWindow")} description={t("general.windowBehaviorDesc")}>
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-4 py-1">
             <div className="flex items-center gap-1.5">

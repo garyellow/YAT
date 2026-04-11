@@ -121,7 +121,9 @@ export default function HistoryTab() {
           <button
             type="button"
             className="btn btn-danger text-xs"
-            onClick={() => clearOld()}
+            onClick={() => {
+              if (window.confirm(t("history.confirmClearOld"))) clearOld();
+            }}
           >
             {t("history.clearOld")}
           </button>
@@ -184,7 +186,7 @@ export default function HistoryTab() {
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
+                  <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-100">
                     {(entry.polished_text || entry.raw_text) ? (
                       <button
                         type="button"

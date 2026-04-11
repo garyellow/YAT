@@ -110,7 +110,7 @@ export default function Settings() {
   const [active, setActive] = useState<SettingsTab>("overview");
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [toastTone, setToastTone] = useState<"success" | "error">("success");
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("success");
   const allowCloseRef = useRef(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
@@ -231,6 +231,29 @@ export default function Settings() {
       unlisten?.();
     };
   }, [dirty, flushSettings, saveStatus, t]);
+
+  // Show a one-time toast when the window first hides to tray
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+
+    void (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen("close-to-tray-hint", () => {
+        setToastTone("info");
+        setToastMessage(t("general.closeToTrayNotice"));
+        setToastVisible(true);
+      });
+      if (disposed) unlisten?.();
+    })();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [t]);
 
   const handleSave = async () => {
     if (dirty && saveStatus !== "saving" && !validationError) {

@@ -93,7 +93,10 @@
       "windowsAutoPasteBody": "若目標 App 以系統管理員權限執行，而 YAT 沒有同等權限，自動貼上可能失敗；此時建議改用『僅複製』。",
       "linuxMicrophoneBody": "請確認桌面環境、套件格式或 portal 已允許麥克風存取。",
       "linuxHotkeyBody": "YAT 目前使用以 X11 為基礎的全域熱鍵監聽；在原生 Wayland 工作階段中，熱鍵可能完全無法觸發，除非桌面環境提供相容層。此外，Linux 版本在執行中也不會像 macOS / Windows 一樣把 Esc 從前景 App 手上攔下來。",
-      "unknownBody": "如果錄音、熱鍵或貼上行為異常，請優先檢查麥克風、鍵盤監聽與輔助使用權限。"
+      "unknownBody": "如果錄音、熱鍵或貼上行為異常，請優先檢查麥克風、鍵盤監聽與輔助使用權限。",
+      "waylandTitle": "Wayland 工作階段",
+      "waylandBody": "偵測到你正在使用 Wayland。YAT 的全域熱鍵基於 X11，在原生 Wayland 下可能無法觸發。建議改用 XWayland 相容層，或確認桌面環境有提供全域快捷鍵支援。",
+      "openSettings": "打開系統設定"
     },
     "recent": {
       "title": "最近一次狀態",
@@ -107,6 +110,10 @@
       "desc": "把預設 prompt、你的自訂指令和詞彙表一起看，才知道模型最後真正收到的是什麼。",
       "enabledHint": "現在的規則會直接影響潤飾後的最終輸出。",
       "disabledHint": "文字潤飾目前關閉，這些規則暫時不會套用。"
+    },
+    "pasteFailSuggest": {
+      "title": "自動貼上已多次失敗",
+      "body": "最近連續多次自動貼上失敗，文字都退回到剪貼簿。建議改用『僅複製到剪貼簿』模式以獲得更穩定的體驗。"
     }
   },
   "general": {
@@ -220,7 +227,9 @@
     "appearanceDesc": "讓介面在你的作業系統與工作環境中看起來自然、不突兀。",
     "advancedDesc": "處理較長等待時間、網路不穩或需要常駐背景時的進階選項。",
     "advancedNoteTitle": "調整前先想清楚",
-    "advancedNote": "逾時與重試會改變等待感受。若你常在穩定網路下工作，可以把重試數壓低，讓失敗更快顯示。"
+    "advancedNote": "逾時與重試會改變等待感受。若你常在穩定網路下工作，可以把重試數壓低，讓失敗更快顯示。",
+    "closeToTrayNotice": "YAT 已縮到系統匣，你可以從通知區域的圖示重新開啟。",
+    "windowBehaviorDesc": "控制關閉按鈕行為、開機自啟與系統匣互動方式。"
   },
   "stt": {
     "baseUrl": "基礎網址",
@@ -340,6 +349,7 @@
     "emptyHint": "開始錄音後紀錄會顯示在這裡",
     "confirmDelete": "確定刪除此筆紀錄？",
     "clearOld": "清理過期",
+    "confirmClearOld": "確定清理所有過期紀錄？此操作無法還原。",
     "retryFailed": "重試失敗",
     "summaryTitle": "這裡是你的輸出工作台",
     "summaryBody": "當你要回頭複製、重試或比對原始結果時，歷史紀錄應該是快速而不雜亂的。",

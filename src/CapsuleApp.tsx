@@ -179,7 +179,7 @@ export default function CapsuleApp() {
       data-tauri-drag-region
     >
       <div
-        className={`flex min-w-[280px] max-w-[420px] items-start gap-3 rounded-2xl border px-4 py-3.5 text-white shadow-2xl backdrop-blur-xl transition-all duration-200 ${cfg.shell} ${
+        className={`flex min-w-[220px] max-w-[320px] items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-white shadow-2xl backdrop-blur-xl transition-all duration-200 ${cfg.shell} ${
           isExiting ? "animate-capsule-exit" : "animate-capsule-enter"
         }`}
         aria-live={status === "error" ? "assertive" : "polite"}
@@ -203,7 +203,7 @@ export default function CapsuleApp() {
           </div>
 
           {status === "recording" ? (
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/15">
               <div
                 className="h-full rounded-full bg-white transition-[width] duration-100"
                 style={{ width: `${micLevelToBar(micLevel)}%` }}

@@ -51,19 +51,59 @@ pub struct AppState {
     /// settings window is focused. ESC cancellation still remains available
     /// for active operations.
     pub hotkey_triggers_enabled: Arc<AtomicBool>,
+    /// Tracks whether the user has been shown the close-to-tray education
+    /// prompt at least once during this session.
+    pub close_to_tray_hinted: AtomicBool,
+    /// Consecutive paste failures; used to suggest clipboard-only mode.
+    pub paste_fail_count: AtomicU32,
 }
 
 #[derive(Serialize)]
 struct PlatformContext {
     os: &'static str,
+    /// Linux display server type: "wayland", "x11", or "unknown"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display_server: Option<String>,
 }
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const HISTORY_DB_FILE: &str = "history.db";
-const CAPSULE_WIDTH: f64 = 400.0;
-const CAPSULE_HEIGHT: f64 = 120.0;
+const CAPSULE_WIDTH: f64 = 340.0;
+const CAPSULE_HEIGHT: f64 = 80.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
+
+const KEYRING_SERVICE: &str = "com.garyellow.yat";
+
+/// Store an API key into the OS credential store; silently logs on failure.
+fn keyring_set(account: &str, secret: &str) {
+    match keyring::Entry::new(KEYRING_SERVICE, account) {
+        Ok(entry) => {
+            if secret.is_empty() {
+                if let Err(e) = entry.delete_credential() {
+                    // NotFound is fine — nothing to delete
+                    if !matches!(e, keyring::Error::NoEntry) {
+                        log::warn!("keyring delete {account}: {e}");
+                    }
+                }
+            } else if let Err(e) = entry.set_password(secret) {
+                log::warn!("keyring set {account}: {e}");
+            }
+        }
+        Err(e) => log::warn!("keyring entry {account}: {e}"),
+    }
+}
+
+/// Retrieve an API key from the OS credential store; returns empty string on failure.
+fn keyring_get(account: &str) -> String {
+    match keyring::Entry::new(KEYRING_SERVICE, account) {
+        Ok(entry) => entry.get_password().unwrap_or_default(),
+        Err(e) => {
+            log::warn!("keyring entry {account}: {e}");
+            String::new()
+        }
+    }
+}
 
 fn ensure_parent_dir_for_file(path: &Path) -> Result<(), std::io::Error> {
     if let Some(parent) = path.parent() {
@@ -676,6 +716,20 @@ fn get_default_prompt() -> String {
 fn get_platform_context() -> PlatformContext {
     PlatformContext {
         os: std::env::consts::OS,
+        display_server: if cfg!(target_os = "linux") {
+            Some(
+                std::env::var("XDG_SESSION_TYPE")
+                    .unwrap_or_else(|_| {
+                        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+                            "wayland".into()
+                        } else {
+                            "unknown".into()
+                        }
+                    })
+            )
+        } else {
+            None
+        },
     }
 }
 
@@ -730,7 +784,16 @@ async fn save_settings(
     let persist_result = (|| -> Result<(), String> {
         let store_path = ensure_store_parent_dir(&app, SETTINGS_STORE_FILE)?;
         let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
-        let json = serde_json::to_value(&settings).map_err(|e| e.to_string())?;
+
+        // Store API keys in OS credential store and strip from disk JSON
+        keyring_set("stt_api_key", &settings.stt.api_key);
+        keyring_set("llm_api_key", &settings.llm.api_key);
+
+        let mut disk_settings = settings.clone();
+        disk_settings.stt.api_key = String::new();
+        disk_settings.llm.api_key = String::new();
+
+        let json = serde_json::to_value(&disk_settings).map_err(|e| e.to_string())?;
         store.set("settings", json);
         store
             .save()
@@ -908,14 +971,28 @@ fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
 // ── Capsule Window Helpers ──────────────────────────────────────────
 
 fn show_capsule(app: &AppHandle, status: &str) {
-    let bottom_position = |window: &tauri::WebviewWindow| {
-        if let Ok(Some(monitor)) = window.current_monitor() {
-            let monitor_size = monitor.size();
-            let scale = monitor.scale_factor();
-            let mon_w = monitor_size.width as f64 / scale;
-            let mon_h = monitor_size.height as f64 / scale;
-            let x = (mon_w - CAPSULE_WIDTH) / 2.0;
-            let y = mon_h - CAPSULE_HEIGHT - 16.0;
+    // Resolve the monitor where the user is currently working.
+    // Use cursor position → monitor_from_point so that capsule always appears
+    // on the active screen in multi-monitor setups.
+    let position_on_active_monitor = |app: &AppHandle, window: &tauri::WebviewWindow| {
+        let monitor = app
+            .cursor_position()
+            .ok()
+            .and_then(|cursor| app.monitor_from_point(cursor.x, cursor.y).ok().flatten())
+            .or_else(|| app.primary_monitor().ok().flatten());
+
+        if let Some(mon) = monitor {
+            let scale = mon.scale_factor();
+            let mon_pos = mon.position();
+            let mon_size = mon.size();
+            // Convert to logical coordinates
+            let mon_x = mon_pos.x as f64 / scale;
+            let mon_y = mon_pos.y as f64 / scale;
+            let mon_w = mon_size.width as f64 / scale;
+            let mon_h = mon_size.height as f64 / scale;
+            // Center horizontally on that monitor, 16 lp above the bottom edge
+            let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
+            let y = mon_y + mon_h - CAPSULE_HEIGHT - 16.0;
             window
                 .set_position(Position::Logical(LogicalPosition::new(x, y)))
                 .ok();
@@ -926,7 +1003,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
         capsule
             .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, CAPSULE_HEIGHT)))
             .ok();
-        bottom_position(&capsule);
+        position_on_active_monitor(app, &capsule);
         capsule.show().ok();
         capsule.set_ignore_cursor_events(true).ok();
     } else {
@@ -945,7 +1022,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
         .build()
         {
             Ok(w) => {
-                bottom_position(&w);
+                position_on_active_monitor(app, &w);
                 w.set_ignore_cursor_events(true).ok();
                 log::info!("capsule window created");
             }
@@ -964,6 +1041,34 @@ fn hide_capsule(app: &AppHandle) {
 // ── App Setup ───────────────────────────────────────────────────────
 
 fn load_settings(app: &AppHandle) -> AppSettings {
+    let mut settings = load_settings_from_store(app);
+
+    // Inject API keys from OS credential store
+    let stt_key = keyring_get("stt_api_key");
+    let llm_key = keyring_get("llm_api_key");
+
+    // Migration: if keys are still in the JSON file, move them to keyring
+    if !settings.stt.api_key.is_empty() && stt_key.is_empty() {
+        keyring_set("stt_api_key", &settings.stt.api_key);
+        log::info!("migrated STT API key to OS credential store");
+    }
+    if !settings.llm.api_key.is_empty() && llm_key.is_empty() {
+        keyring_set("llm_api_key", &settings.llm.api_key);
+        log::info!("migrated LLM API key to OS credential store");
+    }
+
+    // Prefer keyring values; fall back to stored ones (pre-migration)
+    if !stt_key.is_empty() {
+        settings.stt.api_key = stt_key;
+    }
+    if !llm_key.is_empty() {
+        settings.llm.api_key = llm_key;
+    }
+
+    settings
+}
+
+fn load_settings_from_store(app: &AppHandle) -> AppSettings {
     match ensure_store_parent_dir(app, SETTINGS_STORE_FILE) {
         Ok(path) => {
             log::info!("settings store path: {}", path.display());
@@ -1023,6 +1128,12 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 toggle_main_window(app);
             }
             "quit" => {
+                // Flush the settings store so the last autosave-debounce is not lost
+                if let Ok(store) = app.store(SETTINGS_STORE_FILE) {
+                    if let Err(e) = store.save() {
+                        log::warn!("failed to flush settings on quit: {e}");
+                    }
+                }
                 app.exit(0);
             }
             _ => {}
@@ -1128,6 +1239,8 @@ pub fn run() {
                 capsule_generation: Arc::new(AtomicU64::new(0)),
                 pipeline_busy: Arc::new(AtomicBool::new(false)),
                 hotkey_triggers_enabled: Arc::clone(&hotkey_triggers_enabled),
+                close_to_tray_hinted: AtomicBool::new(false),
+                paste_fail_count: AtomicU32::new(0),
             };
             app.manage(state);
 
@@ -1148,6 +1261,16 @@ pub fn run() {
                                     win.hide().ok();
                                 }
                                 refresh_tray_menu(&handle_for_events);
+
+                                // Show a one-time education hint the first time the window hides to tray
+                                if !state
+                                    .close_to_tray_hinted
+                                    .swap(true, Ordering::SeqCst)
+                                {
+                                    handle_for_events
+                                        .emit("close-to-tray-hint", ())
+                                        .ok();
+                                }
                             }
                         }
                         _ => {}
@@ -1170,7 +1293,24 @@ pub fn run() {
                         let state = app_handle.state::<AppState>();
                         match toggle_recording(state, app_handle.clone()).await {
                             Ok(_) => {}
-                            Err(e) => log::error!("toggle recording error: {e}"),
+                            Err(e) => {
+                                log::error!("toggle recording error: {e}");
+                                emit_status(&app_handle, "error", None, Some(&e));
+                                let cap_gen = app_handle
+                                    .state::<AppState>()
+                                    .capsule_generation
+                                    .fetch_add(1, Ordering::SeqCst)
+                                    + 1;
+                                show_capsule(&app_handle, "error");
+                                schedule_capsule_hide(
+                                    app_handle.clone(),
+                                    Arc::clone(
+                                        &app_handle.state::<AppState>().capsule_generation,
+                                    ),
+                                    cap_gen,
+                                    Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+                                );
+                            }
                         }
                     });
                 },

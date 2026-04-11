@@ -5,7 +5,7 @@ interface ToastProps {
   visible: boolean;
   onDone: () => void;
   duration?: number;
-  tone?: "success" | "error";
+  tone?: "success" | "error" | "info";
 }
 
 export default function Toast({
@@ -50,7 +50,7 @@ export default function Toast({
       <span className="flex items-center gap-2">
         <span
           className="dot"
-          data-tone={tone === "error" ? "danger" : "success"}
+          data-tone={tone === "error" ? "danger" : tone === "info" ? "info" : "success"}
         />
         {message}
       </span>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   buildPromptPreview,
@@ -5,6 +6,7 @@ import {
   isLlmConfigured,
   isSttConfigured,
 } from "../../lib/settingsFormatters";
+import { isTauriRuntime } from "../../lib/tauriRuntime";
 import { useRecordingStore } from "../../stores/recordingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAppStore } from "../../stores/appStore";
@@ -19,9 +21,11 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const platform = useAppStore((s) => s.platform);
+  const displayServer = useAppStore((s) => s.displayServer);
   const recordingStatus = useRecordingStore((s) => s.status);
   const lastText = useRecordingStore((s) => s.lastText);
   const lastError = useRecordingStore((s) => s.lastError);
+  const pasteFailCount = useRecordingStore((s) => s.pasteFailCount);
 
   if (!settings) return null;
 
@@ -74,26 +78,43 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   const permissionItems = (() => {
     if (platform === "macos") {
       return [
-        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.macosMicrophoneBody") },
-        { tone: settings.general.output_mode === "auto_paste" ? "warning" as const : "default" as const, title: t("overview.permissions.accessibilityTitle"), body: t("overview.permissions.macosAccessibilityBody") },
+        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.macosMicrophoneBody"), settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone" },
+        { tone: settings.general.output_mode === "auto_paste" ? "warning" as const : "default" as const, title: t("overview.permissions.accessibilityTitle"), body: t("overview.permissions.macosAccessibilityBody"), settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" },
       ];
     }
     if (platform === "windows") {
       return [
-        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.windowsMicrophoneBody") },
+        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.windowsMicrophoneBody"), settingsUrl: "ms-settings:privacy-microphone" },
         { tone: settings.general.output_mode === "auto_paste" ? "warning" as const : "default" as const, title: t("overview.permissions.autoPasteTitle"), body: t("overview.permissions.windowsAutoPasteBody") },
       ];
     }
     if (platform === "linux") {
-      return [
-        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.linuxMicrophoneBody") },
-        { tone: "warning" as const, title: t("overview.permissions.hotkeyTitle"), body: t("overview.permissions.linuxHotkeyBody") },
+      const items: Array<{ tone: "warning" | "danger" | "default"; title: string; body: string; settingsUrl?: string }> = [
+        { tone: "warning", title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.linuxMicrophoneBody") },
+        { tone: "warning", title: t("overview.permissions.hotkeyTitle"), body: t("overview.permissions.linuxHotkeyBody") },
       ];
+      if (displayServer === "wayland") {
+        items.push({
+          tone: "danger",
+          title: t("overview.permissions.waylandTitle"),
+          body: t("overview.permissions.waylandBody"),
+        });
+      }
+      return items;
     }
     return [
       { tone: "warning" as const, title: t("overview.permissions.unknownTitle"), body: t("overview.permissions.unknownBody") },
     ];
   })();
+
+  const openSystemUrl = async (url: string) => {
+    if (isTauriRuntime()) {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(url);
+    }
+  };
+
+  const [promptExpanded, setPromptExpanded] = useState(false);
 
   return (
     <div className="space-y-10">
@@ -117,21 +138,26 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         </div>
       </div>
 
-      {/* Setup checklist */}
+      {/* Setup checklist with numbered steps */}
       <Section title={t("overview.setup.title")} description={t("overview.setup.desc")}>
         <div className="space-y-3">
-          {setupItems.map((item) => (
+          {setupItems.map((item, index) => (
             <div
               key={item.key}
               className="flex items-center justify-between gap-4 py-2 border-b border-[var(--border)] last:border-b-0"
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <StatusDot tone={item.ready ? "success" : "warning"}>
-                    <span className="text-[13px] font-medium text-[var(--text)]">{item.label}</span>
-                  </StatusDot>
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-muted)]">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <StatusDot tone={item.ready ? "success" : "warning"}>
+                      <span className="text-[13px] font-medium text-[var(--text)]">{item.label}</span>
+                    </StatusDot>
+                  </div>
+                  <p className="mt-0.5 pl-[18px] text-xs text-[var(--text-muted)]">{item.detail}</p>
                 </div>
-                <p className="mt-0.5 pl-[18px] text-xs text-[var(--text-muted)]">{item.detail}</p>
               </div>
               <button className="btn btn-secondary shrink-0 text-xs" onClick={item.action}>
                 {item.actionLabel}
@@ -141,16 +167,39 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         </div>
       </Section>
 
-      {/* Permissions */}
+      {/* Permissions with action buttons */}
       <Section title={t("overview.permissions.title")} description={t("overview.permissions.desc")}>
         <div className="space-y-2">
           {permissionItems.map((item) => (
             <Notice key={item.title} title={item.title} tone={item.tone}>
-              {item.body}
+              <span>{item.body}</span>
+              {"settingsUrl" in item && item.settingsUrl && isTauriRuntime() ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs mt-2"
+                  onClick={() => openSystemUrl(item.settingsUrl!)}
+                >
+                  {t("overview.permissions.openSettings")}
+                </button>
+              ) : null}
             </Notice>
           ))}
         </div>
       </Section>
+
+      {/* Paste failure suggestion */}
+      {pasteFailCount >= 3 && settings.general.output_mode === "auto_paste" ? (
+        <Notice title={t("overview.pasteFailSuggest.title")} tone="warning">
+          {t("overview.pasteFailSuggest.body")}
+          <button
+            type="button"
+            className="btn btn-secondary text-xs mt-2"
+            onClick={() => onNavigate("general")}
+          >
+            {t("overview.actions.adjustOutput")}
+          </button>
+        </Notice>
+      ) : null}
 
       {/* Recent output */}
       <Section
@@ -180,7 +229,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         )}
       </Section>
 
-      {/* Prompt preview */}
+      {/* Prompt preview — collapsible */}
       <Section title={t("overview.prompt.title")} description={t("overview.prompt.desc")}>
         <div className="space-y-3">
           <p className="text-xs text-[var(--text-muted)]">
@@ -188,11 +237,20 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
               ? t("overview.prompt.enabledHint")
               : t("overview.prompt.disabledHint")}
           </p>
-          <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
-            <pre className="pre-wrap max-h-60 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
-              {promptSnippet}
-            </pre>
-          </div>
+          <button
+            type="button"
+            className="btn btn-ghost text-xs"
+            onClick={() => setPromptExpanded((v) => !v)}
+          >
+            {promptExpanded ? "▾" : "▸"} {t("overview.actions.reviewPrompt")}
+          </button>
+          {promptExpanded ? (
+            <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
+              <pre className="pre-wrap max-h-60 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
+                {promptSnippet}
+              </pre>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <button className="btn btn-secondary text-xs" onClick={() => onNavigate("prompt")}>
               {t("overview.actions.reviewPrompt")}

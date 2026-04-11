@@ -297,6 +297,10 @@ button {
   background: var(--red);
 }
 
+.dot[data-tone="info"] {
+  background: var(--accent);
+}
+
 /* ─── Option Selector ─── */
 
 .option-btn {

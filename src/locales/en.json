@@ -93,7 +93,10 @@
       "windowsAutoPasteBody": "If the target app runs elevated and YAT does not, simulated paste can fail. Clipboard-only mode is usually the safest fallback.",
       "linuxMicrophoneBody": "Make sure your desktop environment, package format, or portal setup allows microphone access.",
       "linuxHotkeyBody": "YAT currently uses an X11-based global hotkey listener. In native Wayland sessions, hotkeys may not fire at all unless your environment provides compatibility. Linux builds also do not currently consume Esc away from the foreground app during an active operation.",
-      "unknownBody": "If recording, hotkeys, or paste behavior feels unreliable, check microphone, keyboard monitoring, and accessibility-related permissions first."
+      "unknownBody": "If recording, hotkeys, or paste behavior feels unreliable, check microphone, keyboard monitoring, and accessibility-related permissions first.",
+      "waylandTitle": "Wayland session detected",
+      "waylandBody": "YAT uses an X11-based global hotkey listener. In a native Wayland session, hotkeys may not work at all. Consider running under XWayland compatibility, or check if your desktop environment provides global shortcut support.",
+      "openSettings": "Open settings"
     },
     "recent": {
       "title": "Latest pipeline status",
@@ -107,6 +110,10 @@
       "desc": "Seeing the final combined rules matters. It tells you what the model is actually getting, not just what you think you configured.",
       "enabledHint": "These rules will directly shape the polished output.",
       "disabledHint": "Polishing is disabled, so these rules are currently inactive."
+    },
+    "pasteFailSuggest": {
+      "title": "Auto-paste keeps failing",
+      "body": "Multiple consecutive auto-paste attempts fell back to clipboard. Consider switching to clipboard-only mode for a more reliable experience."
     }
   },
   "general": {
@@ -220,7 +227,9 @@
     "appearanceDesc": "Make the app feel native in your desktop environment instead of visually noisy.",
     "advancedDesc": "Adjust the app for slow networks, background workflows, and longer waits.",
     "advancedNoteTitle": "Change with intent",
-    "advancedNote": "Timeout and retry settings affect perceived responsiveness. On stable networks, lower retry counts often feel better because failures surface faster."
+    "advancedNote": "Timeout and retry settings affect perceived responsiveness. On stable networks, lower retry counts often feel better because failures surface faster.",
+    "closeToTrayNotice": "YAT is still running in the system tray. Click the tray icon to reopen.",
+    "windowBehaviorDesc": "Control close button behavior, launch at login, and tray interactions."
   },
   "stt": {
     "baseUrl": "Base URL",
@@ -340,6 +349,7 @@
     "emptyHint": "Start recording to see results here",
     "confirmDelete": "Delete this entry?",
     "clearOld": "Purge old",
+    "confirmClearOld": "Purge all expired entries? This cannot be undone.",
     "retryFailed": "Retry failed",
     "summaryTitle": "Your output workspace",
     "summaryBody": "This should be the place you revisit when you want to copy, retry, compare, or recover good output quickly.",

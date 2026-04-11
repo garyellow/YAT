@@ -26,13 +26,16 @@ interface RecordingState {
   status: RecordingStatus;
   lastText: string | null;
   lastError: string | null;
+  /** Consecutive paste‐failed‐clipboard‐fallback count for this session. */
+  pasteFailCount: number;
   init: () => void;
 }
 
-export const useRecordingStore = create<RecordingState>((set) => ({
+export const useRecordingStore = create<RecordingState>((set, get) => ({
   status: "idle",
   lastText: null,
   lastError: null,
+  pasteFailCount: 0,
 
   init: () => {
     if (initialized) return;
@@ -83,6 +86,12 @@ export const useRecordingStore = create<RecordingState>((set) => ({
         status,
         lastText: text ?? null,
         lastError: error ?? null,
+        pasteFailCount:
+          status === "clipboardFallback"
+            ? get().pasteFailCount + 1
+            : status === "done"
+              ? 0
+              : get().pasteFailCount,
       });
     });
   },
