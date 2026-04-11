@@ -66,10 +66,6 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         </Notice>
       ) : null}
 
-      <Notice title={t("prompt.simpleFirstTitle")} tone="accent">
-        {t("prompt.simpleFirstBody")}
-      </Notice>
-
       {/* User Instructions */}
       <Section title={t("prompt.userInstructions")} description={t("prompt.userInstructionsDesc")}>
         <div className="space-y-3">

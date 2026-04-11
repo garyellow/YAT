@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  buildPromptPreview,
   formatHotkeyCombo,
   isLlmConfigured,
   isSttConfigured,
@@ -12,6 +11,23 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useAppStore } from "../../stores/appStore";
 import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
 import type { SettingsTab } from "./tabs";
+
+type DotTone = "default" | "success" | "warning" | "danger";
+
+interface OverviewCardProps {
+  children: ReactNode;
+  className?: string;
+}
+
+function OverviewCard({ children, className = "" }: OverviewCardProps) {
+  return (
+    <div
+      className={`rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-sm ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface OverviewTabProps {
   onNavigate: (tab: SettingsTab) => void;
@@ -35,9 +51,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
     settings.prompt.user_instructions.trim().length > 0 ||
     settings.prompt.vocabulary.length > 0;
 
-  const promptPreview = buildPromptPreview(settings.prompt);
-  const promptSnippet =
-    promptPreview.length > 500 ? `${promptPreview.slice(0, 500)}\n…` : promptPreview;
+  const [openSettingsFailed, setOpenSettingsFailed] = useState(false);
 
   const setupItems = [
     {
@@ -75,26 +89,131 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
     },
   ];
 
+  const summaryItems: Array<{
+    key: string;
+    label: string;
+    value: string;
+    detail: string;
+    tone: DotTone;
+  }> = [
+    {
+      key: "speech",
+      label: t("overview.stats.speech"),
+      value: sttReady ? t("overview.metricValues.ready") : t("overview.metricValues.pending"),
+      detail: sttReady
+        ? t("overview.summary.speechReady", { model: settings.stt.model })
+        : t("overview.summary.speechPending"),
+      tone: sttReady ? "success" : "warning",
+    },
+    {
+      key: "polish",
+      label: t("overview.stats.polish"),
+      value: !settings.llm.enabled
+        ? t("overview.metricValues.off")
+        : llmReady
+          ? t("overview.metricValues.active")
+          : t("overview.metricValues.pending"),
+      detail: !settings.llm.enabled
+        ? t("overview.summary.polishOff")
+        : llmReady
+          ? t("overview.summary.polishOn", { model: settings.llm.model })
+          : t("overview.summary.polishPending"),
+      tone: !settings.llm.enabled ? "default" : llmReady ? "success" : "warning",
+    },
+    {
+      key: "output",
+      label: t("general.sectionOutput"),
+      value:
+        settings.general.output_mode === "auto_paste"
+          ? t("general.autoPaste")
+          : t("general.clipboardOnly"),
+      detail:
+        settings.general.output_mode === "auto_paste"
+          ? t("overview.summary.outputAutoPaste")
+          : t("overview.summary.outputClipboard"),
+      tone: "default",
+    },
+    {
+      key: "hotkey",
+      label: t("overview.stats.hotkey"),
+      value: formatHotkeyCombo(settings.general.hotkey),
+      detail: t("overview.summary.hotkeyStatus", {
+        status: t(`status.${recordingStatus}`),
+      }),
+      tone: recordingStatus === "error" ? "danger" : "default",
+    },
+  ];
+
   const permissionItems = (() => {
     if (platform === "macos") {
       return [
-        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.macosMicrophoneBody"), settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone" },
-        { tone: settings.general.output_mode === "auto_paste" ? "warning" as const : "default" as const, title: t("overview.permissions.accessibilityTitle"), body: t("overview.permissions.macosAccessibilityBody"), settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" },
+        {
+          key: "microphone",
+          tone: "warning" as const,
+          title: t("overview.permissions.microphoneTitle"),
+          body: t("overview.permissions.macosMicrophoneBody"),
+          settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+          actionLabel: t("overview.permissions.openMicrophoneSettings"),
+        },
+        {
+          key: "accessibility",
+          tone:
+            settings.general.output_mode === "auto_paste"
+              ? ("warning" as const)
+              : ("default" as const),
+          title: t("overview.permissions.accessibilityTitle"),
+          body: t("overview.permissions.macosAccessibilityBody"),
+          settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+          actionLabel: t("overview.permissions.openAccessibilitySettings"),
+        },
       ];
     }
     if (platform === "windows") {
       return [
-        { tone: "warning" as const, title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.windowsMicrophoneBody"), settingsUrl: "ms-settings:privacy-microphone" },
-        { tone: settings.general.output_mode === "auto_paste" ? "warning" as const : "default" as const, title: t("overview.permissions.autoPasteTitle"), body: t("overview.permissions.windowsAutoPasteBody") },
+        {
+          key: "microphone",
+          tone: "warning" as const,
+          title: t("overview.permissions.microphoneTitle"),
+          body: t("overview.permissions.windowsMicrophoneBody"),
+          settingsUrl: "ms-settings:privacy-microphone",
+          actionLabel: t("overview.permissions.openMicrophoneSettings"),
+        },
+        {
+          key: "auto-paste",
+          tone:
+            settings.general.output_mode === "auto_paste"
+              ? ("warning" as const)
+              : ("default" as const),
+          title: t("overview.permissions.autoPasteTitle"),
+          body: t("overview.permissions.windowsAutoPasteBody"),
+        },
       ];
     }
     if (platform === "linux") {
-      const items: Array<{ tone: "warning" | "danger" | "default"; title: string; body: string; settingsUrl?: string }> = [
-        { tone: "warning", title: t("overview.permissions.microphoneTitle"), body: t("overview.permissions.linuxMicrophoneBody") },
-        { tone: "warning", title: t("overview.permissions.hotkeyTitle"), body: t("overview.permissions.linuxHotkeyBody") },
+      const items: Array<{
+        key: string;
+        tone: "warning" | "danger" | "default";
+        title: string;
+        body: string;
+        settingsUrl?: string;
+        actionLabel?: string;
+      }> = [
+        {
+          key: "microphone",
+          tone: "warning",
+          title: t("overview.permissions.microphoneTitle"),
+          body: t("overview.permissions.linuxMicrophoneBody"),
+        },
+        {
+          key: "hotkey",
+          tone: "warning",
+          title: t("overview.permissions.hotkeyTitle"),
+          body: t("overview.permissions.linuxHotkeyBody"),
+        },
       ];
       if (displayServer === "wayland") {
         items.push({
+          key: "wayland",
           tone: "danger",
           title: t("overview.permissions.waylandTitle"),
           body: t("overview.permissions.waylandBody"),
@@ -103,164 +222,157 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
       return items;
     }
     return [
-      { tone: "warning" as const, title: t("overview.permissions.unknownTitle"), body: t("overview.permissions.unknownBody") },
+      {
+        key: "unknown",
+        tone: "warning" as const,
+        title: t("overview.permissions.unknownTitle"),
+        body: t("overview.permissions.unknownBody"),
+      },
     ];
   })();
 
   const openSystemUrl = async (url: string) => {
-    if (isTauriRuntime()) {
+    if (!isTauriRuntime()) return;
+
+    setOpenSettingsFailed(false);
+
+    try {
       const { open } = await import("@tauri-apps/plugin-shell");
       await open(url);
+    } catch (error) {
+      console.error("Failed to open system settings:", error);
+      setOpenSettingsFailed(true);
     }
   };
 
-  const [promptExpanded, setPromptExpanded] = useState(false);
-
   return (
-    <div className="space-y-10">
-      {/* Status summary */}
-      <div>
-        <h1 className="text-base font-medium">{t("overview.title")}</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">{t("overview.desc")}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-4">
-          <StatusDot tone={sttReady ? "success" : "warning"}>
-            {t("overview.stats.speech")}: {sttReady ? t("overview.metricValues.ready") : t("overview.metricValues.pending")}
-          </StatusDot>
-          <StatusDot tone={llmReady ? "success" : "warning"}>
-            {t("overview.stats.polish")}: {settings.llm.enabled ? (llmReady ? t("overview.metricValues.active") : t("overview.metricValues.pending")) : t("overview.metricValues.off")}
-          </StatusDot>
-          <StatusDot tone="default">
-            {t("overview.stats.hotkey")}: {formatHotkeyCombo(settings.general.hotkey)}
-          </StatusDot>
-          <StatusDot tone={recordingStatus === "error" ? "danger" : "default"}>
-            {t(`status.${recordingStatus}`)}
-          </StatusDot>
+    <div className="space-y-8">
+      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-subtle)]/70 p-5 sm:p-6">
+        <div className="max-w-2xl">
+          <h1 className="text-lg font-semibold leading-7 text-balance">{t("overview.title")}</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{t("overview.desc")}</p>
         </div>
-      </div>
 
-      {/* Setup checklist with numbered steps */}
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {summaryItems.map((item) => (
+            <OverviewCard key={item.key} className="h-full">
+              <StatusDot tone={item.tone}>{item.label}</StatusDot>
+              <p className="mt-3 text-sm font-semibold text-[var(--text)]">{item.value}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{item.detail}</p>
+            </OverviewCard>
+          ))}
+        </div>
+      </section>
+
       <Section title={t("overview.setup.title")} description={t("overview.setup.desc")}>
         <div className="space-y-3">
           {setupItems.map((item, index) => (
-            <div
-              key={item.key}
-              className="flex items-center justify-between gap-4 py-2 border-b border-[var(--border)] last:border-b-0"
-            >
-              <div className="flex items-start gap-3 min-w-0">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-muted)]">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+            <OverviewCard key={item.key}>
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-muted)]">
+                    {index + 1}
+                  </span>
+
+                  <div className="min-w-0">
                     <StatusDot tone={item.ready ? "success" : "warning"}>
-                      <span className="text-[13px] font-medium text-[var(--text)]">{item.label}</span>
+                      {item.ready ? t("overview.metricValues.ready") : t("overview.metricValues.pending")}
                     </StatusDot>
+                    <h3 className="mt-2 text-sm font-semibold text-[var(--text)]">{item.label}</h3>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{item.detail}</p>
                   </div>
-                  <p className="mt-0.5 pl-[18px] text-xs text-[var(--text-muted)]">{item.detail}</p>
                 </div>
+
+                <button type="button" className="btn btn-secondary shrink-0" onClick={item.action}>
+                  {item.actionLabel}
+                </button>
               </div>
-              <button className="btn btn-secondary shrink-0 text-xs" onClick={item.action}>
-                {item.actionLabel}
-              </button>
-            </div>
+            </OverviewCard>
           ))}
         </div>
       </Section>
 
-      {/* Permissions with action buttons */}
-      <Section title={t("overview.permissions.title")} description={t("overview.permissions.desc")}>
-        <div className="space-y-2">
-          {permissionItems.map((item) => (
-            <Notice key={item.title} title={item.title} tone={item.tone}>
-              <span>{item.body}</span>
-              {"settingsUrl" in item && item.settingsUrl && isTauriRuntime() ? (
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <Section title={t("overview.permissions.title")} description={t("overview.permissions.desc")}>
+          <div className="space-y-3">
+            {openSettingsFailed ? (
+              <Notice title={t("overview.permissions.unknownTitle")} tone="warning">
+                {t("overview.permissions.openSettingsFailed")}
+              </Notice>
+            ) : null}
+
+            {permissionItems.map((item) => (
+              <OverviewCard key={item.key}>
+                <StatusDot tone={item.tone}>{item.title}</StatusDot>
+                <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{item.body}</p>
+
+                {item.settingsUrl && item.actionLabel && isTauriRuntime() ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary mt-4"
+                    onClick={() => {
+                      if (item.settingsUrl) {
+                        void openSystemUrl(item.settingsUrl);
+                      }
+                    }}
+                  >
+                    {item.actionLabel}
+                  </button>
+                ) : null}
+              </OverviewCard>
+            ))}
+          </div>
+        </Section>
+
+        <Section title={t("overview.recent.title")} description={t("overview.recent.desc")}>
+          <div className="space-y-3">
+            {pasteFailCount >= 3 && settings.general.output_mode === "auto_paste" ? (
+              <Notice title={t("overview.pasteFailSuggest.title")} tone="warning">
+                {t("overview.pasteFailSuggest.body")}
                 <button
                   type="button"
-                  className="btn btn-secondary text-xs mt-2"
-                  onClick={() => openSystemUrl(item.settingsUrl!)}
+                  className="btn btn-secondary mt-3"
+                  onClick={() => onNavigate("general")}
                 >
-                  {t("overview.permissions.openSettings")}
+                  {t("overview.actions.adjustOutput")}
                 </button>
-              ) : null}
-            </Notice>
-          ))}
-        </div>
-      </Section>
+              </Notice>
+            ) : null}
 
-      {/* Paste failure suggestion */}
-      {pasteFailCount >= 3 && settings.general.output_mode === "auto_paste" ? (
-        <Notice title={t("overview.pasteFailSuggest.title")} tone="warning">
-          {t("overview.pasteFailSuggest.body")}
-          <button
-            type="button"
-            className="btn btn-secondary text-xs mt-2"
-            onClick={() => onNavigate("general")}
-          >
-            {t("overview.actions.adjustOutput")}
-          </button>
-        </Notice>
-      ) : null}
+            {lastError ? (
+              <Notice title={t("overview.recent.errorTitle")} tone="danger">
+                {lastError}
+              </Notice>
+            ) : null}
 
-      {/* Recent output */}
-      <Section
-        title={t("overview.recent.title")}
-        description={t("overview.recent.desc")}
-      >
-        {lastError ? (
-          <Notice title={t("overview.recent.errorTitle")} tone="danger">
-            {lastError}
-          </Notice>
-        ) : null}
+            {lastText ? (
+              <OverviewCard>
+                <div className="max-h-48 overflow-auto">
+                  <p className="whitespace-pre-wrap text-[13px] leading-6 text-[var(--text-secondary)]">
+                    {lastText}
+                  </p>
+                </div>
 
-        {lastText ? (
-          <div className="rounded-lg bg-[var(--bg-subtle)] p-3 text-[13px] text-[var(--text-secondary)]">
-            {lastText}
+                <div className="mt-4 flex justify-end">
+                  <button type="button" className="btn btn-secondary" onClick={() => onNavigate("history")}>
+                    {t("overview.actions.openHistory")}
+                  </button>
+                </div>
+              </OverviewCard>
+            ) : (
+              <EmptyState
+                title={t("overview.recent.emptyTitle")}
+                description={t("overview.recent.emptyDesc")}
+                action={
+                  <button type="button" className="btn btn-secondary" onClick={() => onNavigate("history")}>
+                    {t("overview.actions.openHistory")}
+                  </button>
+                }
+              />
+            )}
           </div>
-        ) : (
-          <EmptyState
-            title={t("overview.recent.emptyTitle")}
-            description={t("overview.recent.emptyDesc")}
-            action={
-              <button className="btn btn-secondary text-xs" onClick={() => onNavigate("history")}>
-                {t("overview.actions.openHistory")}
-              </button>
-            }
-          />
-        )}
-      </Section>
-
-      {/* Prompt preview — collapsible */}
-      <Section title={t("overview.prompt.title")} description={t("overview.prompt.desc")}>
-        <div className="space-y-3">
-          <p className="text-xs text-[var(--text-muted)]">
-            {settings.llm.enabled
-              ? t("overview.prompt.enabledHint")
-              : t("overview.prompt.disabledHint")}
-          </p>
-          <button
-            type="button"
-            className="btn btn-ghost text-xs"
-            onClick={() => setPromptExpanded((v) => !v)}
-          >
-            {promptExpanded ? "▾" : "▸"} {t("overview.actions.reviewPrompt")}
-          </button>
-          {promptExpanded ? (
-            <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
-              <pre className="pre-wrap max-h-60 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
-                {promptSnippet}
-              </pre>
-            </div>
-          ) : null}
-          <div className="flex gap-2">
-            <button className="btn btn-secondary text-xs" onClick={() => onNavigate("prompt")}>
-              {t("overview.actions.reviewPrompt")}
-            </button>
-            <button className="btn btn-secondary text-xs" onClick={() => onNavigate("vocabulary")}>
-              {t("overview.actions.openVocabulary")}
-            </button>
-          </div>
-        </div>
-      </Section>
+        </Section>
+      </div>
     </div>
   );
 }

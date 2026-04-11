@@ -16,6 +16,7 @@ import Toggle from "../ui/Toggle";
 import { HintTip } from "../ui/Tooltip";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
+const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 const HOTKEY_VALIDATION_COPY: Record<string, string> = {
   missing_key: "general.hotkeyValidationMissingKey",
@@ -28,7 +29,7 @@ const HOTKEY_VALIDATION_COPY: Record<string, string> = {
 };
 
 export default function GeneralTab() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [audioDevices, setAudioDevices] = useState<string[]>([]);
@@ -325,7 +326,7 @@ export default function GeneralTab() {
       </Section>
 
       {/* ── Recording ── */}
-      <Section title={t("general.sectionRecording")}>
+      <Section title={t("general.sectionRecording")} description={t("general.recordingDesc")}>
         <div className="space-y-5">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-3">
@@ -346,6 +347,7 @@ export default function GeneralTab() {
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
+            <p className={hintCls}>{t("general.microphoneHint")}</p>
           </div>
 
           <div className="space-y-1.5">
@@ -364,6 +366,7 @@ export default function GeneralTab() {
               />
               <span className="w-14 text-right text-xs font-medium tabular-nums text-[var(--text-secondary)]">{g.max_recording_seconds}{t("general.seconds")}</span>
             </div>
+            <p className={hintCls}>{t("general.maxRecordingHint")}</p>
           </div>
 
           <div className="flex items-center justify-between gap-4 py-1">
@@ -387,7 +390,7 @@ export default function GeneralTab() {
       </Section>
 
       {/* ── Output ── */}
-      <Section title={t("general.sectionOutput")}>
+      <Section title={t("general.sectionOutput")} description={t("general.outputDesc")}>
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <OptionCard
@@ -421,40 +424,10 @@ export default function GeneralTab() {
       </Section>
 
       {/* ── Appearance ── */}
-      <Section title={t("general.sectionAppearance")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label htmlFor="theme-select" className={labelCls}>{t("general.theme")}</label>
-            <select
-              id="theme-select"
-              name="theme-select"
-              value={g.theme}
-              onChange={(e) => update({ theme: e.target.value })}
-              className="field-select"
-            >
-              <option value="system">{t("general.system")}</option>
-              <option value="light">{t("general.light")}</option>
-              <option value="dark">{t("general.dark")}</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="language-select" className={labelCls}>{t("general.language")}</label>
-            <select
-              id="language-select"
-              name="language-select"
-              value={g.language}
-              onChange={(e) => {
-                update({ language: e.target.value });
-                i18n.changeLanguage(e.target.value);
-              }}
-              className="field-select"
-            >
-              <option value="zh-TW">繁體中文</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-        </div>
+      <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
+        <Notice title={t("general.appearanceQuickToggleTitle")} tone="default">
+          {t("general.appearanceQuickToggleBody")}
+        </Notice>
       </Section>
 
       {/* ── Window Behavior ── */}
@@ -489,7 +462,7 @@ export default function GeneralTab() {
       </Section>
 
       {/* ── Network ── */}
-      <Section title={t("general.sectionNetwork")}>
+      <Section title={t("general.sectionNetwork")} description={t("general.networkDesc")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5">

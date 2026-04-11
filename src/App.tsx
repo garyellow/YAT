@@ -70,7 +70,7 @@ export default function App() {
   return (
     <>
       <a href="#settings-content" className="skip-link">
-        Skip to content
+        {t("settings.skipToContent")}
       </a>
       <Settings />
     </>

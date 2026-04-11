@@ -72,25 +72,32 @@ const CAPSULE_WIDTH: f64 = 340.0;
 const CAPSULE_HEIGHT: f64 = 80.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
+const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 1;
+const CAPSULE_HIDE_DELAY_NO_SPEECH_SECS: u64 = 2;
+const MIN_RECORDING_DURATION_MS: u64 = 500;
+const POST_RECORDING_BUFFER_MS: u64 = 300;
+const AUTO_CLIPBOARD_FALLBACK_THRESHOLD: u32 = 3;
 
 const KEYRING_SERVICE: &str = "com.garyellow.yat";
 
-/// Store an API key into the OS credential store; silently logs on failure.
-fn keyring_set(account: &str, secret: &str) {
+/// Store an API key into the OS credential store.
+fn keyring_set(account: &str, secret: &str) -> Result<(), String> {
     match keyring::Entry::new(KEYRING_SERVICE, account) {
         Ok(entry) => {
             if secret.is_empty() {
                 if let Err(e) = entry.delete_credential() {
                     // NotFound is fine — nothing to delete
                     if !matches!(e, keyring::Error::NoEntry) {
-                        log::warn!("keyring delete {account}: {e}");
+                        return Err(format!("failed to delete credential '{account}': {e}"));
                     }
                 }
             } else if let Err(e) = entry.set_password(secret) {
-                log::warn!("keyring set {account}: {e}");
+                return Err(format!("failed to store credential '{account}': {e}"));
             }
+
+            Ok(())
         }
-        Err(e) => log::warn!("keyring entry {account}: {e}"),
+        Err(e) => Err(format!("failed to access credential entry '{account}': {e}")),
     }
 }
 
@@ -126,75 +133,22 @@ fn ensure_store_parent_dir(app: &AppHandle, store_name: &str) -> Result<std::pat
     Ok(store_path)
 }
 
-fn sqlite_companion_paths(path: &Path) -> Vec<std::path::PathBuf> {
-    let mut paths = Vec::with_capacity(3);
-    paths.push(path.to_path_buf());
-
-    let mut wal = path.as_os_str().to_os_string();
-    wal.push("-wal");
-    paths.push(std::path::PathBuf::from(wal));
-
-    let mut shm = path.as_os_str().to_os_string();
-    shm.push("-shm");
-    paths.push(std::path::PathBuf::from(shm));
-
-    paths
+fn sanitize_settings_for_store(settings: &AppSettings) -> AppSettings {
+    let mut disk_settings = settings.clone();
+    disk_settings.stt.api_key.clear();
+    disk_settings.llm.api_key.clear();
+    disk_settings
 }
 
-fn move_file_if_exists(source: &Path, target: &Path) -> Result<(), String> {
-    if !source.exists() || target.exists() {
-        return Ok(());
-    }
+fn persist_settings_to_store(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
+    let store_path = ensure_store_parent_dir(app, SETTINGS_STORE_FILE)?;
+    let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
+    let json = serde_json::to_value(settings).map_err(|e| e.to_string())?;
 
-    ensure_parent_dir_for_file(target).map_err(|e| {
-        format!(
-            "Failed to prepare destination '{}' while migrating '{}': {e}",
-            target.display(),
-            source.display()
-        )
-    })?;
-
-    match std::fs::rename(source, target) {
-        Ok(()) => Ok(()),
-        Err(rename_error) => {
-            std::fs::copy(source, target).map_err(|copy_error| {
-                format!(
-                    "Failed to migrate '{}' to '{}': rename failed ({rename_error}); copy failed ({copy_error})",
-                    source.display(),
-                    target.display()
-                )
-            })?;
-            std::fs::remove_file(source).map_err(|remove_error| {
-                format!(
-                    "Migrated '{}' to '{}' but failed to remove the old file: {remove_error}",
-                    source.display(),
-                    target.display()
-                )
-            })?;
-            Ok(())
-        }
-    }
-}
-
-fn migrate_sqlite_family_if_needed(source_db_path: &Path, target_db_path: &Path) -> Result<(), String> {
-    if target_db_path.exists() || !source_db_path.exists() {
-        return Ok(());
-    }
-
-    let source_paths = sqlite_companion_paths(source_db_path);
-    let target_paths = sqlite_companion_paths(target_db_path);
-
-    for (source, target) in source_paths.iter().zip(target_paths.iter()) {
-        move_file_if_exists(source, target)?;
-    }
-
-    log::info!(
-        "migrated history database from '{}' to '{}'",
-        source_db_path.display(),
-        target_db_path.display()
-    );
-
-    Ok(())
+    store.set("settings", json);
+    store
+        .save()
+        .map_err(|e| format!("Failed to save settings at {}: {e}", store_path.display()))
 }
 
 fn prepare_history_db_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -227,33 +181,7 @@ fn prepare_history_db_path(app: &AppHandle) -> Result<std::path::PathBuf, String
         )
     })?;
 
-    let local_db_path = local_dir.join(HISTORY_DB_FILE);
-    if local_db_path.exists() {
-        return Ok(local_db_path);
-    }
-
-    let roaming_db_path = match app.path().app_data_dir() {
-        Ok(dir) => dir.join(HISTORY_DB_FILE),
-        Err(e) => {
-            log::warn!("failed to resolve roaming app data directory for history migration: {e}");
-            return Ok(local_db_path);
-        }
-    };
-
-    if !roaming_db_path.exists() {
-        return Ok(local_db_path);
-    }
-
-    match migrate_sqlite_family_if_needed(&roaming_db_path, &local_db_path) {
-        Ok(()) => Ok(local_db_path),
-        Err(e) => {
-            log::warn!(
-                "failed to migrate history database to local app data, continuing with existing path '{}': {e}",
-                roaming_db_path.display()
-            );
-            Ok(roaming_db_path)
-        }
-    }
+    Ok(local_dir.join(HISTORY_DB_FILE))
     }
 }
 
@@ -392,6 +320,14 @@ async fn toggle_recording(
     // lock acquisition.  This eliminates the TOCTOU race where two rapid
     // hotkey presses could both see is_recording()==false and start two
     // concurrent recordings.
+
+    // Post-recording buffer: keep the mic open briefly to capture trailing
+    // syllables before actually stopping.
+    let needs_buffer = state.recorder.lock().is_recording();
+    if needs_buffer {
+        tokio::time::sleep(std::time::Duration::from_millis(POST_RECORDING_BUFFER_MS)).await;
+    }
+
     let stop_data = {
         let mut recorder = state.recorder.lock();
         if recorder.is_recording() {
@@ -417,7 +353,7 @@ async fn toggle_recording(
             }
         }
 
-        // Skip pipeline for very short recordings (< 0.3s) — accidental taps, noise
+        // Skip pipeline for very short recordings (< 1s) — accidental taps, noise
         let too_short = if audio_data.len() >= 44 {
             let sample_rate = u32::from_le_bytes([
                 audio_data[24],
@@ -433,7 +369,7 @@ async fn toggle_recording(
             } else {
                 0
             };
-            if duration_ms < 300 {
+            if duration_ms < MIN_RECORDING_DURATION_MS {
                 log::info!("recording too short ({duration_ms}ms), skipping pipeline");
                 true
             } else {
@@ -445,8 +381,14 @@ async fn toggle_recording(
         };
 
         if too_short {
-            emit_status(&app, "done", Some(""), None);
-            hide_capsule(&app);
+            let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
+            emit_status(&app, "dismissed", None, None);
+            schedule_capsule_hide(
+                app.clone(),
+                Arc::clone(&state.capsule_generation),
+                cap_gen,
+                Duration::from_secs(CAPSULE_HIDE_DELAY_DISMISSED_SECS),
+            );
             return Ok(String::new());
         }
 
@@ -468,6 +410,8 @@ async fn toggle_recording(
             recent_ctx,
             Arc::clone(&state.recording_generation),
             operation_generation,
+            &state.paste_fail_count,
+            AUTO_CLIPBOARD_FALLBACK_THRESHOLD,
         )
         .await;
         drop(_busy);
@@ -511,11 +455,18 @@ async fn toggle_recording(
                     return Err(error);
                 }
 
+                // Use a shorter hide delay for no-speech results
+                let hide_delay = if pr.raw_text.is_empty() {
+                    CAPSULE_HIDE_DELAY_NO_SPEECH_SECS
+                } else {
+                    CAPSULE_HIDE_DELAY_SUCCESS_SECS
+                };
+
                 schedule_capsule_hide(
                     app.clone(),
                     Arc::clone(&state.capsule_generation),
                     cap_gen,
-                    Duration::from_secs(CAPSULE_HIDE_DELAY_SUCCESS_SECS),
+                    Duration::from_secs(hide_delay),
                 );
 
                 Ok(final_text)
@@ -782,23 +733,12 @@ async fn save_settings(
     }
 
     let persist_result = (|| -> Result<(), String> {
-        let store_path = ensure_store_parent_dir(&app, SETTINGS_STORE_FILE)?;
-        let store = app.store(SETTINGS_STORE_FILE).map_err(|e| e.to_string())?;
-
         // Store API keys in OS credential store and strip from disk JSON
-        keyring_set("stt_api_key", &settings.stt.api_key);
-        keyring_set("llm_api_key", &settings.llm.api_key);
+        keyring_set("stt_api_key", &settings.stt.api_key)?;
+        keyring_set("llm_api_key", &settings.llm.api_key)?;
 
-        let mut disk_settings = settings.clone();
-        disk_settings.stt.api_key = String::new();
-        disk_settings.llm.api_key = String::new();
-
-        let json = serde_json::to_value(&disk_settings).map_err(|e| e.to_string())?;
-        store.set("settings", json);
-        store
-            .save()
-            .map_err(|e| format!("Failed to save settings at {}: {e}", store_path.display()))?;
-        Ok(())
+        let disk_settings = sanitize_settings_for_store(&settings);
+        persist_settings_to_store(&app, &disk_settings)
     })();
 
     if let Err(error) = persist_result {
@@ -1043,26 +983,62 @@ fn hide_capsule(app: &AppHandle) {
 fn load_settings(app: &AppHandle) -> AppSettings {
     let mut settings = load_settings_from_store(app);
 
+    let legacy_stt_key = (!settings.stt.api_key.is_empty()).then(|| settings.stt.api_key.clone());
+    let legacy_llm_key = (!settings.llm.api_key.is_empty()).then(|| settings.llm.api_key.clone());
+
     // Inject API keys from OS credential store
-    let stt_key = keyring_get("stt_api_key");
-    let llm_key = keyring_get("llm_api_key");
+    let mut stt_key = keyring_get("stt_api_key");
+    let mut llm_key = keyring_get("llm_api_key");
+
+    let mut should_scrub_store = false;
 
     // Migration: if keys are still in the JSON file, move them to keyring
-    if !settings.stt.api_key.is_empty() && stt_key.is_empty() {
-        keyring_set("stt_api_key", &settings.stt.api_key);
-        log::info!("migrated STT API key to OS credential store");
+    if let Some(legacy_key) = legacy_stt_key.as_deref() {
+        if stt_key.is_empty() {
+            match keyring_set("stt_api_key", legacy_key) {
+                Ok(()) => {
+                    stt_key = legacy_key.to_string();
+                    should_scrub_store = true;
+                    log::info!("migrated STT API key to OS credential store");
+                }
+                Err(e) => log::warn!("failed to migrate STT API key to OS credential store: {e}"),
+            }
+        } else {
+            should_scrub_store = true;
+        }
     }
-    if !settings.llm.api_key.is_empty() && llm_key.is_empty() {
-        keyring_set("llm_api_key", &settings.llm.api_key);
-        log::info!("migrated LLM API key to OS credential store");
+    if let Some(legacy_key) = legacy_llm_key.as_deref() {
+        if llm_key.is_empty() {
+            match keyring_set("llm_api_key", legacy_key) {
+                Ok(()) => {
+                    llm_key = legacy_key.to_string();
+                    should_scrub_store = true;
+                    log::info!("migrated LLM API key to OS credential store");
+                }
+                Err(e) => log::warn!("failed to migrate LLM API key to OS credential store: {e}"),
+            }
+        } else {
+            should_scrub_store = true;
+        }
+    }
+
+    if should_scrub_store {
+        let disk_settings = sanitize_settings_for_store(&settings);
+        if let Err(e) = persist_settings_to_store(app, &disk_settings) {
+            log::warn!("failed to scrub legacy API keys from settings store: {e}");
+        }
     }
 
     // Prefer keyring values; fall back to stored ones (pre-migration)
     if !stt_key.is_empty() {
         settings.stt.api_key = stt_key;
+    } else if let Some(legacy_key) = legacy_stt_key {
+        settings.stt.api_key = legacy_key;
     }
     if !llm_key.is_empty() {
         settings.llm.api_key = llm_key;
+    } else if let Some(legacy_key) = legacy_llm_key {
+        settings.llm.api_key = legacy_key;
     }
 
     settings
@@ -1113,6 +1089,7 @@ fn load_settings_from_store(app: &AppHandle) -> AppSettings {
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let show_item = MenuItemBuilder::with_id("toggle_window", "Show / 顯示").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)?;
+    let show_menu_on_left_click = cfg!(target_os = "linux");
 
     let menu = MenuBuilder::new(app)
         .item(&show_item)
@@ -1122,6 +1099,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let _tray = TrayIconBuilder::with_id("yat-tray")
         .menu(&menu)
+        .show_menu_on_left_click(show_menu_on_left_click)
         .tooltip("YAT – Voice to Text")
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "toggle_window" => {
@@ -1432,38 +1410,18 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_companion_paths_include_sidecars() {
-        let db_path = Path::new("history.db");
-        let companions = sqlite_companion_paths(db_path);
+    fn sanitize_settings_for_store_clears_api_keys_only() {
+        let mut settings = AppSettings::default();
+        settings.stt.api_key = "stt-secret".into();
+        settings.llm.api_key = "llm-secret".into();
+        settings.stt.base_url = "https://example.invalid/v1".into();
+        settings.llm.enabled = true;
 
-        assert_eq!(companions.len(), 3);
-        assert_eq!(companions[0], Path::new("history.db"));
-        assert_eq!(companions[1], Path::new("history.db-wal"));
-        assert_eq!(companions[2], Path::new("history.db-shm"));
-    }
+        let sanitized = sanitize_settings_for_store(&settings);
 
-    #[test]
-    fn migrate_sqlite_family_moves_database_and_sidecars() {
-        let root = unique_temp_dir("yat-history-migration");
-        let old_db = root.join("roaming").join(HISTORY_DB_FILE);
-        let new_db = root.join("local").join(HISTORY_DB_FILE);
-
-        ensure_parent_dir_for_file(&old_db).expect("old parent should be created");
-        std::fs::write(&old_db, b"main").expect("should write main db");
-        std::fs::write(Path::new(&format!("{}-wal", old_db.display())), b"wal")
-            .expect("should write wal sidecar");
-        std::fs::write(Path::new(&format!("{}-shm", old_db.display())), b"shm")
-            .expect("should write shm sidecar");
-
-        migrate_sqlite_family_if_needed(&old_db, &new_db).expect("migration should succeed");
-
-        assert!(new_db.exists());
-        assert!(Path::new(&format!("{}-wal", new_db.display())).exists());
-        assert!(Path::new(&format!("{}-shm", new_db.display())).exists());
-        assert!(!old_db.exists());
-        assert!(!Path::new(&format!("{}-wal", old_db.display())).exists());
-        assert!(!Path::new(&format!("{}-shm", old_db.display())).exists());
-
-        std::fs::remove_dir_all(root).ok();
+        assert!(sanitized.stt.api_key.is_empty());
+        assert!(sanitized.llm.api_key.is_empty());
+        assert_eq!(sanitized.stt.base_url, "https://example.invalid/v1");
+        assert!(sanitized.llm.enabled);
     }
 }

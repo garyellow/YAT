@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../stores/settingsStore";
 import { isSttConfigured } from "../lib/settingsFormatters";
@@ -16,7 +16,11 @@ import Toast from "./ui/Toast";
 
 type IconName = "overview" | "general" | "stt" | "llm" | "prompt" | "vocabulary" | "history";
 
-const THEME_CYCLE = ["light", "dark", "system"] as const;
+const THEME_CYCLE = ["system", "light", "dark"] as const;
+const LANGUAGE_CYCLE = ["zh-TW", "en"] as const;
+
+type ThemeSetting = (typeof THEME_CYCLE)[number];
+type LanguageSetting = (typeof LANGUAGE_CYCLE)[number];
 
 function ThemeIcon({ theme }: { theme: string }) {
   const cls = "h-3.5 w-3.5 text-current";
@@ -39,6 +43,15 @@ function ThemeIcon({ theme }: { theme: string }) {
     <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
       <rect x="4" y="5" width="16" height="12" rx="1.5" />
       <path d="M8 21h8m-4-4v4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LanguageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-current" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3.75a8.25 8.25 0 1 0 0 16.5 8.25 8.25 0 0 0 0-16.5Z" />
+      <path d="M4.5 12h15M12 4c1.9 2.1 3 4.92 3 8s-1.1 5.9-3 8c-1.9-2.1-3-4.92-3-8s1.1-5.9 3-8Z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -106,7 +119,7 @@ const tabGroups: Array<{ labelKey: string; tabs: SettingsTab[] }> = [
 ];
 
 export default function Settings() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [active, setActive] = useState<SettingsTab>("overview");
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -121,8 +134,12 @@ export default function Settings() {
   const flushSettings = useSettingsStore((s) => s.flushSettings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
-  const tabTitle = useMemo(() => t(`tabs.${active}`), [active, t]);
+  const tabTitle = t(`tabs.${active}`);
   const sttReady = isSttConfigured(settings);
+  const currentTheme: ThemeSetting = settings?.general.theme === "light" || settings?.general.theme === "dark"
+    ? settings.general.theme
+    : "system";
+  const currentLanguage: LanguageSetting = settings?.general.language === "en" ? "en" : "zh-TW";
 
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("tab");
@@ -182,7 +199,7 @@ export default function Settings() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [dirty, saveStatus, settings, validationError, flushSettings, t]);
+  }, [dirty, saveStatus, settings, validationError, flushSettings, t, i18n.resolvedLanguage]);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -230,7 +247,7 @@ export default function Settings() {
       disposed = true;
       unlisten?.();
     };
-  }, [dirty, flushSettings, saveStatus, t]);
+  }, [dirty, flushSettings, saveStatus, t, i18n.resolvedLanguage]);
 
   // Show a one-time toast when the window first hides to tray
   useEffect(() => {
@@ -253,7 +270,7 @@ export default function Settings() {
       disposed = true;
       unlisten?.();
     };
-  }, [t]);
+  }, [t, i18n.resolvedLanguage]);
 
   const handleSave = async () => {
     if (dirty && saveStatus !== "saving" && !validationError) {
@@ -275,11 +292,11 @@ export default function Settings() {
 
   const hideToast = useCallback(() => setToastVisible(false), []);
 
-  const saveIndicator = useMemo(() => {
+  const saveIndicator = (() => {
     if (validationError) {
       return {
         label: t("settings.fixValidationErrors"),
-        className: "text-[var(--red)]",
+        tone: "warning" as const,
         title: validationError,
       };
     }
@@ -287,70 +304,87 @@ export default function Settings() {
     if (saveStatus === "error") {
       return {
         label: t("settings.autoSaveFailed"),
-        className: "text-[var(--red)]",
-        title: lastSaveError ?? undefined,
+        tone: "danger" as const,
+        title: t("settings.autoSaveFailedDetailBody", {
+          error: lastSaveError ?? t("settings.unknownSaveError"),
+        }),
       };
     }
 
     if (saveStatus === "saving") {
       return {
         label: t("settings.saving"),
-        className: "text-[var(--text-secondary)]",
+        tone: "default" as const,
+        title: t("settings.autoSaveHelp"),
       };
     }
 
     if (dirty || saveStatus === "pending") {
       return {
         label: t("settings.autoSavePending"),
-        className: "text-[var(--text-secondary)]",
-      };
-    }
-
-    if (saved || saveStatus === "saved") {
-      return {
-        label: t("settings.allChangesSaved"),
-        className: "text-[var(--green)]",
+        tone: "default" as const,
+        title: t("settings.autoSaveHelp"),
       };
     }
 
     return {
-      label: t("settings.autoSaveActive"),
-      className: "text-[var(--text-muted)]",
+      label: t("settings.allChangesSaved"),
+      tone: saved || saveStatus === "saved" ? ("success" as const) : ("default" as const),
+      title: t("settings.autoSaveHelp"),
     };
-  }, [dirty, lastSaveError, saveStatus, saved, t, validationError]);
+  })();
 
-  const saveButtonLabel =
-    saveStatus === "saving"
-      ? t("settings.saving")
-      : saveStatus === "error"
-        ? t("actions.retrySave")
-        : dirty
-          ? t("actions.saveNow")
-          : saved
-            ? t("actions.saved")
-            : t("settings.noChanges");
-
-    const statusNotice = useMemo(() => {
-      if (validationError) {
-        return {
-          tone: "warning" as const,
-          title: t("settings.validationNoticeTitle"),
-          body: validationError,
-        };
+  const statusNotice = validationError
+    ? {
+        tone: "warning" as const,
+        title: t("settings.validationNoticeTitle"),
+        body: validationError,
       }
-
-      if (saveStatus === "error") {
-        return {
+    : saveStatus === "error"
+      ? {
           tone: "danger" as const,
           title: t("settings.autoSaveFailedDetailTitle"),
-          body: t("settings.autoSaveFailedDetailBody", {
-            error: lastSaveError ?? t("settings.unknownSaveError"),
-          }),
-        };
-      }
+          body: (
+            <div className="space-y-3">
+              <p className="leading-5">
+                {t("settings.autoSaveFailedDetailBody", {
+                  error: lastSaveError ?? t("settings.unknownSaveError"),
+                })}
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                onClick={() => void handleSave()}
+              >
+                {t("actions.retrySave")}
+              </button>
+            </div>
+          ),
+        }
+      : null;
 
-      return null;
-    }, [lastSaveError, saveStatus, t, validationError]);
+  const cycleTheme = () => {
+    if (!settings) return;
+    const idx = THEME_CYCLE.indexOf(currentTheme);
+    const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+    updateSettings({ general: { ...settings.general, theme: next } });
+  };
+
+  const cycleLanguage = () => {
+    if (!settings) return;
+    const idx = LANGUAGE_CYCLE.indexOf(currentLanguage);
+    const next = LANGUAGE_CYCLE[(idx + 1) % LANGUAGE_CYCLE.length];
+    updateSettings({ general: { ...settings.general, language: next } });
+    void i18n.changeLanguage(next);
+  };
+
+  const themeLabel = t(`general.${currentTheme}`);
+  const languageLabel = currentLanguage === "zh-TW"
+    ? t("general.languageTraditionalChineseShort")
+    : t("general.languageEnglishShort");
+  const languageTitle = currentLanguage === "zh-TW"
+    ? t("general.languageTraditionalChinese")
+    : t("general.languageEnglish");
 
   const renderActivePanel = () => {
     const panel = (() => {
@@ -427,35 +461,37 @@ export default function Settings() {
         <div className="flex h-full min-h-0 flex-col">
           <header className="main-header flex items-center justify-between gap-4 px-6 py-3">
             <h2 className="text-[14px] font-medium">{tabTitle}</h2>
-            <div className="flex items-center gap-3" aria-live="polite">
+            <div className="flex flex-wrap items-center justify-end gap-2" aria-live="polite">
               <button
                 type="button"
-                onClick={() => {
-                  if (!settings) return;
-                  const current = settings.general.theme;
-                  const idx = THEME_CYCLE.indexOf(current as typeof THEME_CYCLE[number]);
-                  const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
-                  updateSettings({ general: { ...settings.general, theme: next } });
-                }}
-                className="btn btn-ghost flex items-center gap-1.5 px-2"
-                title={t(`general.${settings?.general.theme === "light" ? "light" : settings?.general.theme === "dark" ? "dark" : "system"}`)}
-                aria-label={t("general.theme")}
+                onClick={cycleTheme}
+                className="toolbar-chip"
+                title={`${t("general.theme")}: ${themeLabel}`}
+                aria-label={`${t("general.theme")}: ${themeLabel}`}
               >
-                <ThemeIcon theme={settings?.general.theme ?? "system"} />
-                <span className="text-xs">{t(`general.${settings?.general.theme === "light" ? "light" : settings?.general.theme === "dark" ? "dark" : "system"}`)}</span>
+                <ThemeIcon theme={currentTheme} />
+                <span className="text-xs whitespace-nowrap">{themeLabel}</span>
               </button>
-              <span className={`text-xs ${saveIndicator.className}`} title={saveIndicator.title}>
-                {saveIndicator.label}
+
+              <button
+                type="button"
+                onClick={cycleLanguage}
+                className="toolbar-chip"
+                title={`${t("general.language")}: ${languageTitle}`}
+                aria-label={`${t("general.language")}: ${languageTitle}`}
+              >
+                <LanguageIcon />
+                <span className="text-xs whitespace-nowrap" translate="no">{languageLabel}</span>
+              </button>
+
+              <span
+                className="status-pill"
+                data-tone={saveIndicator.tone}
+                title={saveIndicator.title}
+              >
+                <span className="dot" data-tone={saveIndicator.tone} />
+                <span className="text-xs font-medium whitespace-nowrap">{saveIndicator.label}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => void handleSave()}
-                disabled={!dirty || saveStatus === "saving" || Boolean(validationError)}
-                className={`btn ${dirty ? "btn-primary" : "btn-secondary opacity-50"}`}
-                title={validationError ?? lastSaveError ?? t("actions.saveHint")}
-              >
-                {saveButtonLabel}
-              </button>
             </div>
           </header>
 

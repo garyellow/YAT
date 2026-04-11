@@ -42,10 +42,6 @@ export default function LlmTab() {
 
   return (
     <div className="space-y-10">
-      <Notice title={t("llm.quickStartTitle")} tone="accent">
-        {t("llm.quickStartDesc")}
-      </Notice>
-
       {/* Enable/Disable */}
       <Section
         title={t("llm.modeTitle")}

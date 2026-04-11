@@ -50,6 +50,16 @@ const statusConfig: Record<
     dot: "bg-red-400",
     pulse: false,
   },
+  dismissed: {
+    shell: "bg-neutral-900/90 border-white/10",
+    dot: "bg-neutral-400",
+    pulse: false,
+  },
+  noSpeech: {
+    shell: "bg-neutral-900/90 border-white/10",
+    dot: "bg-amber-400",
+    pulse: false,
+  },
 };
 
 /**
@@ -153,7 +163,11 @@ export default function CapsuleApp() {
           : platformOs === "macos"
             ? t("capsule.clipboardFallbackHintMacos")
             : t("capsule.clipboardFallbackHint")
-        : "";
+        : status === "dismissed"
+          ? t("capsule.dismissedHint")
+          : status === "noSpeech"
+            ? t("capsule.noSpeechHint")
+            : "";
 
   const [visible, setVisible] = useState(false);
   const prevStatus = useRef<RecordingStatus>("idle");

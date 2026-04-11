@@ -13,9 +13,9 @@ pub struct SttConfig {
 impl Default for SttConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.groq.com/openai/v1".into(),
+            base_url: String::new(),
             api_key: String::new(),
-            model: "whisper-large-v3-turbo".into(),
+            model: String::new(),
             language: None,
         }
     }
@@ -35,9 +35,9 @@ impl Default for LlmConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            base_url: "https://api.groq.com/openai/v1".into(),
+            base_url: String::new(),
             api_key: String::new(),
-            model: "llama-3.3-70b-versatile".into(),
+            model: String::new(),
         }
     }
 }

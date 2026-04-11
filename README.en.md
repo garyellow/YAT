@@ -46,7 +46,7 @@ YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT tu
 ### 2. Set up **Speech** first
 
 - Open the **Speech** tab
-- Choose **Groq** / **OpenAI**, or enter your own OpenAI-compatible API URL
+- Enter your OpenAI-compatible API base URL and model name
 - Paste your API key
 - Click **Test Connection**
 
@@ -111,19 +111,16 @@ YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT tu
 
 YAT uses your own API keys (BYOK). Requests go directly to the provider you configure.
 
-| If you want | Recommended provider | Why |
-|---|---|---|
-| The fastest way to get started | **Groq** | Fast, easy to try, and has a friendly free tier |
-| Official OpenAI usage | **OpenAI** | Best if you already use the OpenAI API |
-| Your own endpoint | **Custom OpenAI-compatible service** | Works with your own compatible API |
+Any OpenAI-compatible endpoint works, including OpenAI, Groq, self-hosted services, and more.
+You can use different providers for Speech and Polish independently.
 
-| Job | Common models |
+| Job | Required API endpoint |
 |---|---|
-| Speech-to-text | `whisper-large-v3-turbo`, `whisper-1` |
-| Text polishing | `llama-3.3-70b-versatile`, `gpt-4o-mini` |
+| Speech-to-text | `/audio/transcriptions` (OpenAI-compatible) |
+| Text polishing | `/chat/completions` (OpenAI-compatible) |
 
 > **👉 Easiest starting point:**
-> Get **Groq + Speech** working first, then decide whether you want **Polish** on top.
+> Get Speech working first, then decide whether you want Polish on top.
 
 ## What you can change in Settings
 

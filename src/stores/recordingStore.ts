@@ -14,7 +14,9 @@ export type RecordingStatus =
   | "done"
   | "error"
   | "busy"
-  | "clipboardFallback";
+  | "clipboardFallback"
+  | "dismissed"
+  | "noSpeech";
 
 interface PipelinePayload {
   status: RecordingStatus;
@@ -79,6 +81,14 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
       // aligned with the real pipeline stage (recording/transcribing/polishing)
       // and let the sound effect carry the feedback.
       if (status === "busy") {
+        return;
+      }
+
+      // "dismissed" means the recording was too short and was auto-skipped.
+      // "noSpeech" means STT returned an empty transcription.
+      // Update status for capsule display but don't touch lastText/lastError.
+      if (status === "dismissed" || status === "noSpeech") {
+        set({ status });
         return;
       }
 

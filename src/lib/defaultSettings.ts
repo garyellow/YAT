@@ -38,16 +38,16 @@ function defaultHotkeyKey(): string {
 export function buildDefaultAppSettings(): AppSettings {
   return {
     stt: {
-      base_url: "https://api.groq.com/openai/v1",
+      base_url: "",
       api_key: "",
-      model: "whisper-large-v3-turbo",
+      model: "",
       language: null,
     },
     llm: {
       enabled: false,
-      base_url: "https://api.groq.com/openai/v1",
+      base_url: "",
       api_key: "",
-      model: "llama-3.3-70b-versatile",
+      model: "",
     },
     general: {
       hotkey: {

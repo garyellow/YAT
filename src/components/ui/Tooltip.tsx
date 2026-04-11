@@ -52,7 +52,7 @@ export function HintTip({ text }: { text: string }) {
     <Tooltip content={text} side="bottom">
       <button
         type="button"
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
         aria-label={text}
         tabIndex={0}
       >

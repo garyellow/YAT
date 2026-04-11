@@ -83,6 +83,7 @@ export default function VocabularyTab() {
                 onChange={(e) => setWrong(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="field-input"
+                placeholder={t("vocabulary.wrongPlaceholder")}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -96,6 +97,7 @@ export default function VocabularyTab() {
                 onChange={(e) => setCorrect(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="field-input"
+                placeholder={t("vocabulary.correctPlaceholder")}
                 autoComplete="off"
                 spellCheck={false}
               />

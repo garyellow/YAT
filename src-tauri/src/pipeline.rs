@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 
-use crate::config::{AppSettings, VocabularyEntry};
+use crate::config::{AppSettings, OutputMode, VocabularyEntry};
 use crate::llm;
 use crate::output;
 use crate::stt;
@@ -77,6 +77,8 @@ pub async fn run(
     recent_context: Vec<String>,
     cancel_generation: Arc<AtomicU64>,
     operation_generation: u64,
+    paste_fail_count: &AtomicU32,
+    auto_clipboard_fallback_threshold: u32,
 ) -> Result<PipelineResult, PipelineError> {
     let start = std::time::Instant::now();
 
@@ -102,7 +104,7 @@ pub async fn run(
     }
 
     if raw_text.trim().is_empty() {
-        emit_status(app, "done", Some(""), None);
+        emit_status(app, "noSpeech", None, None);
         return Ok(PipelineResult {
             raw_text: String::new(),
             polished_text: None,
@@ -134,7 +136,7 @@ pub async fn run(
         {
             Ok(polished) if !polished.trim().is_empty() => Some(polished),
             Ok(_) => {
-                log::warn!("LLM returned empty polish, using raw text");
+                log::debug!("LLM returned empty polish, using raw text");
                 None
             }
             Err(e) => {
@@ -160,10 +162,18 @@ pub async fn run(
     let final_text = polished.as_deref().unwrap_or(&raw_text);
 
     // Step 3: Output
+    // Auto-fallback: if paste has failed consecutively too many times,
+    // silently switch to clipboard-only for this operation.
+    let effective_output_mode = if paste_fail_count.load(Ordering::Relaxed) >= auto_clipboard_fallback_threshold {
+        &OutputMode::ClipboardOnly
+    } else {
+        &settings.general.output_mode
+    };
+
     let outcome = if !final_text.is_empty() {
         match output::output_text(
             final_text,
-            &settings.general.output_mode,
+            effective_output_mode,
             &settings.general.clipboard_behavior,
         ) {
             Ok(o) => o,
@@ -186,7 +196,12 @@ pub async fn run(
 
     match outcome {
         output::OutputOutcome::PasteFailedCopiedToClipboard => {
+            paste_fail_count.fetch_add(1, Ordering::Relaxed);
             emit_status(app, "clipboardFallback", Some(final_text), None);
+        }
+        output::OutputOutcome::Pasted => {
+            paste_fail_count.store(0, Ordering::Relaxed);
+            emit_status(app, "done", Some(final_text), None);
         }
         _ => {
             emit_status(app, "done", Some(final_text), None);
