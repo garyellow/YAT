@@ -36,6 +36,56 @@ const FRIENDLY_KEY_LABELS: Record<string, string> = {
   backspace: "Backspace",
   tab: "Tab",
   capslock: "Caps Lock",
+  // Navigation
+  up: "↑",
+  down: "↓",
+  left: "←",
+  right: "→",
+  home: "Home",
+  end: "End",
+  pageup: "Page Up",
+  pagedown: "Page Down",
+  insert: "Insert",
+  delete: "Delete",
+  // Punctuation / symbols
+  comma: ",",
+  period: ".",
+  dot: ".",
+  slash: "/",
+  backslash: "\\",
+  semicolon: ";",
+  quote: "'",
+  apostrophe: "'",
+  backquote: "`",
+  grave: "`",
+  leftbracket: "[",
+  rightbracket: "]",
+  minus: "−",
+  hyphen: "−",
+  equal: "=",
+  intlbackslash: "IntlBackslash",
+  // Numpad
+  kp0: "Numpad 0",
+  kp1: "Numpad 1",
+  kp2: "Numpad 2",
+  kp3: "Numpad 3",
+  kp4: "Numpad 4",
+  kp5: "Numpad 5",
+  kp6: "Numpad 6",
+  kp7: "Numpad 7",
+  kp8: "Numpad 8",
+  kp9: "Numpad 9",
+  kpreturn: "Numpad Enter",
+  kpminus: "Numpad −",
+  kpplus: "Numpad +",
+  kpmultiply: "Numpad ×",
+  kpdivide: "Numpad ÷",
+  kpdelete: "Numpad .",
+  numlock: "Num Lock",
+  // Lock / misc
+  printscreen: "Print Screen",
+  scrolllock: "Scroll Lock",
+  pause: "Pause",
 };
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
@@ -67,6 +117,79 @@ const HOTKEY_TOKEN_ALIASES: Record<string, string> = {
   backspace: "backspace",
   enter: "enter",
   return: "enter",
+  // Navigation
+  up: "up",
+  arrowup: "up",
+  down: "down",
+  arrowdown: "down",
+  left: "left",
+  arrowleft: "left",
+  right: "right",
+  arrowright: "right",
+  home: "home",
+  end: "end",
+  pageup: "pageup",
+  pagedown: "pagedown",
+  insert: "insert",
+  delete: "delete",
+  // Punctuation / symbols
+  comma: "comma",
+  period: "period",
+  dot: "period",
+  slash: "slash",
+  backslash: "backslash",
+  semicolon: "semicolon",
+  quote: "quote",
+  apostrophe: "quote",
+  backquote: "backquote",
+  grave: "backquote",
+  leftbracket: "leftbracket",
+  bracketleft: "leftbracket",
+  rightbracket: "rightbracket",
+  bracketright: "rightbracket",
+  minus: "minus",
+  hyphen: "minus",
+  equal: "equal",
+  equals: "equal",
+  intlbackslash: "intlbackslash",
+  // Numpad
+  kp0: "kp0",
+  numpad0: "kp0",
+  kp1: "kp1",
+  numpad1: "kp1",
+  kp2: "kp2",
+  numpad2: "kp2",
+  kp3: "kp3",
+  numpad3: "kp3",
+  kp4: "kp4",
+  numpad4: "kp4",
+  kp5: "kp5",
+  numpad5: "kp5",
+  kp6: "kp6",
+  numpad6: "kp6",
+  kp7: "kp7",
+  numpad7: "kp7",
+  kp8: "kp8",
+  numpad8: "kp8",
+  kp9: "kp9",
+  numpad9: "kp9",
+  kpreturn: "kpreturn",
+  numpadenter: "kpreturn",
+  kpminus: "kpminus",
+  numpadsubtract: "kpminus",
+  kpplus: "kpplus",
+  numpadadd: "kpplus",
+  kpmultiply: "kpmultiply",
+  numpadmultiply: "kpmultiply",
+  kpdivide: "kpdivide",
+  numpaddivide: "kpdivide",
+  kpdelete: "kpdelete",
+  numpaddecimal: "kpdelete",
+  numlock: "numlock",
+  // Lock / misc
+  printscreen: "printscreen",
+  scrolllock: "scrolllock",
+  pause: "pause",
 };
 
 type HotkeyMatcherCategory =
@@ -154,23 +277,18 @@ function normalizeHotkeyMatcherToken(token: string): HotkeyMatcherCategory | nul
       return "shift";
     case "meta":
       return "meta";
-    case "lalt":
-    case "ralt":
-    case "lctrl":
-    case "rctrl":
-    case "lshift":
-    case "rshift":
-    case "lmeta":
-    case "rmeta":
-    case "space":
-    case "escape":
-    case "tab":
-    case "capslock":
-    case "backspace":
-    case "enter":
-      return `exact:${normalized}`;
-    default:
+    default: {
+      // Known alias → exact key
+      if (HOTKEY_TOKEN_ALIASES[token] !== undefined) {
+        return `exact:${normalized}`;
+      }
+      // F1–F12
+      if (/^f(?:1[0-2]?|[2-9])$/.test(normalized)) {
+        return `exact:${normalized}`;
+      }
+      // Single character (letter / digit / symbol)
       return normalized.length === 1 ? `exact:${normalized}` : null;
+    }
   }
 }
 
@@ -291,11 +409,11 @@ export function formatHotkeyValidationError(error: HotkeyValidationError): strin
     case "escape_reserved":
       return "Escape is reserved for cancelling recordings.";
     case "unsupported_key":
-      return "Unsupported hotkey key. Use a single character, F1–F12, Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, or Enter.";
+      return "Unsupported key. Use letters, digits, F1–F12, arrow keys, punctuation keys, modifier keys, navigation keys (Home / End / Insert / Delete / Page Up / Page Down, etc.) or numpad keys.";
     case "missing_modifier":
       return "Combo hotkeys require a modifier.";
     case "unsupported_modifier":
-      return "Unsupported hotkey modifier. Use Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, Enter, or a single character.";
+      return "Unsupported modifier. Use Ctrl, Alt, Shift, Cmd, or another supported single key.";
     case "same_key_and_modifier":
       return "Hotkey key and modifier must be different.";
     case "invalid_double_tap_interval":
@@ -305,9 +423,9 @@ export function formatHotkeyValidationError(error: HotkeyValidationError): strin
   }
 }
 
-export function validateSettings(settings: AppSettings): string | null {
+export function validateSettings(settings: AppSettings): HotkeyValidationCode | null {
   const hotkeyError = validateHotkeyConfig(settings.general.hotkey);
-  return hotkeyError ? formatHotkeyValidationError(hotkeyError) : null;
+  return hotkeyError ? hotkeyError.code : null;
 }
 
 export function buildPromptPreview(prompt: PromptConfig): string {
@@ -439,6 +557,52 @@ const BROWSER_CODE_TO_RDEV: Record<string, string> = {
   CapsLock: "CapsLock",
   Backspace: "Backspace",
   Enter: "Enter",
+  // Navigation
+  ArrowUp: "Up",
+  ArrowDown: "Down",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  Home: "Home",
+  End: "End",
+  PageUp: "PageUp",
+  PageDown: "PageDown",
+  Insert: "Insert",
+  Delete: "Delete",
+  // Punctuation / symbols
+  Comma: "Comma",
+  Period: "Period",
+  Slash: "Slash",
+  Backslash: "Backslash",
+  Semicolon: "Semicolon",
+  Quote: "Quote",
+  Backquote: "Backquote",
+  BracketLeft: "LeftBracket",
+  BracketRight: "RightBracket",
+  Minus: "Minus",
+  Equal: "Equal",
+  IntlBackslash: "IntlBackslash",
+  // Numpad
+  Numpad0: "Kp0",
+  Numpad1: "Kp1",
+  Numpad2: "Kp2",
+  Numpad3: "Kp3",
+  Numpad4: "Kp4",
+  Numpad5: "Kp5",
+  Numpad6: "Kp6",
+  Numpad7: "Kp7",
+  Numpad8: "Kp8",
+  Numpad9: "Kp9",
+  NumpadEnter: "KpReturn",
+  NumpadSubtract: "KpMinus",
+  NumpadAdd: "KpPlus",
+  NumpadMultiply: "KpMultiply",
+  NumpadDivide: "KpDivide",
+  NumpadDecimal: "KpDelete",
+  NumLock: "NumLock",
+  // Lock / misc
+  PrintScreen: "PrintScreen",
+  ScrollLock: "ScrollLock",
+  Pause: "Pause",
   // Letters
   KeyA: "A", KeyB: "B", KeyC: "C", KeyD: "D",
   KeyE: "E", KeyF: "F", KeyG: "G", KeyH: "H",

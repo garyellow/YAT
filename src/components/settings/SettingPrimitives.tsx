@@ -57,14 +57,14 @@ export function StatusDot({
 interface NoticeProps {
   title: string;
   tone?: Tone;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 export function Notice({ title, tone = "default", children }: NoticeProps) {
   return (
     <div className="callout" data-tone={tone}>
       <p className="text-[13px] font-medium text-[var(--text)]">{title}</p>
-      <div className="mt-1 text-xs">{children}</div>
+      {children ? <div className="mt-1 text-xs">{children}</div> : null}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   saveMockSettings,
 } from "../lib/defaultSettings";
 import { validateSettings } from "../lib/settingsFormatters";
+import type { HotkeyValidationCode } from "../lib/settingsFormatters";
 import { isTauriRuntime } from "../lib/tauriRuntime";
 
 export interface SttConfig {
@@ -79,7 +80,7 @@ interface SettingsState {
   dirty: boolean;
   saveStatus: SaveStatus;
   lastSaveError: string | null;
-  validationError: string | null;
+  validationError: HotkeyValidationCode | null;
   revision: number;
   loadSettings: () => Promise<void>;
   saveSettings: (settings: AppSettings, revision?: number) => Promise<void>;

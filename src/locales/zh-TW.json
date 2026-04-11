@@ -34,6 +34,7 @@
     "autoSaveFailedDetailBody": "你的變更還留在目前畫面，尚未寫入本機。修正問題後再試一次。原因：{{error}}",
     "fixValidationErrors": "請先修正",
     "validationNoticeTitle": "有些設定還需要修正",
+    "validationNoticeBody": "前往「一般設定」分頁查看詳情。",
     "closeSaveBlocked": "目前還不能關閉，因為仍有設定待處理",
     "unknownSaveError": "發生未知錯誤",
     "noChanges": "沒有變更",
@@ -130,7 +131,7 @@
     },
     "pasteFailSuggest": {
       "title": "自動貼上已連續失敗",
-      "body": "最近幾次自動貼上都改成回退到剪貼簿。若你想要更穩定，建議改用「僅複製到剪貼簿」。"
+      "body": "最近幾次自動貼上都退回到剪貼簿了。若你想要更穩定，建議改用「僅複製到剪貼簿」。"
     }
   },
   "general": {
@@ -145,7 +146,7 @@
     "comboDesc": "需要修飾鍵，比較不容易誤觸。",
     "holdDesc": "按住才錄音，放開就停止。",
     "key": "按鍵",
-    "keyHint": "例如：RCtrl、RCmd、Alt、F8、Space、A。請使用支援的按鍵名稱。",
+    "keyHint": "例如：RCtrl、RCmd、Alt、F8、Space、A、Comma、Slash。建議直接使用互動式錄製功能。",
     "modifier": "修飾鍵",
     "modifierHint": "例如：Ctrl、Alt、Shift 或 Cmd。",
     "doubleTapInterval": "間隔",
@@ -177,7 +178,7 @@
     "hotkeyValidationTitle": "請先修正這組快捷鍵",
     "hotkeyValidationMissingKey": "請先輸入按鍵名稱。Esc 保留給取消錄音，所以不能直接拿來當快捷鍵。",
     "hotkeyValidationEscapeReserved": "Escape / Esc 保留給取消錄音，不能作為快捷鍵本體或修飾鍵。",
-    "hotkeyValidationUnsupportedKey": "請使用支援的按鍵名稱：單一字元、F1–F12、Alt、Ctrl、Shift、Cmd / Meta、Space、Tab、CapsLock、Backspace 或 Enter。",
+    "hotkeyValidationUnsupportedKey": "請使用支援的按鍵名稱：字母、數字、F1–F12、方向鍵、標點符號鍵、修飾鍵、功能鍵（Home / End / Insert / Delete / Page Up / Page Down 等）或數字鍵盤按鍵。",
     "hotkeyValidationMissingModifier": "組合鍵模式需要主鍵與修飾鍵都填好。",
     "hotkeyValidationUnsupportedModifier": "請使用支援的修飾鍵名稱，例如 Ctrl、Alt、Shift、Cmd，或其他支援的單一按鍵。",
     "hotkeyValidationSameKey": "組合鍵的主鍵與修飾鍵不能是同一顆。",
@@ -292,7 +293,7 @@
     "apiKeyHintLocal": "若是 localhost 或內網的本地 LLM 端點，而且沒有啟用驗證，API 金鑰可以留白。",
     "model": "模型名稱",
     "modelHint": "填入服務商提供的模型名稱，例如 gpt-4o-mini",
-    "quickStartTitle": "潤飾不是必需，想讓成稿更穩時再開啟",
+    "quickStartTitle": "潤飾不是必需，想讓輸出更穩時再開啟",
     "quickStartDesc": "把它當成第二層整理：補標點、去掉贅詞、調整格式。若你現在只想要最快速度，可以先關閉。",
     "modeTitle": "潤飾模式",
     "modeDesc": "不是每次都需要；想讓文字更穩、更整齊時再開啟。",
@@ -308,7 +309,7 @@
     "validationSuccessBody": "目前的文字潤飾設定已成功收到回應。",
     "validationFailTitle": "LLM 連線測試失敗",
     "disabledNoticeTitle": "目前直接輸出語音辨識結果",
-    "disabledNoticeBody": "現在仍可正常錄音與輸出文字；想讓成稿更乾淨時，再回來開啟文字潤飾即可。",
+    "disabledNoticeBody": "現在仍可正常錄音與輸出文字；想讓輸出更乾淨時，再回來開啟文字潤飾即可。",
     "showKey": "顯示 LLM API 金鑰",
     "hideKey": "隱藏 LLM API 金鑰",
     "showKeyShort": "顯示",

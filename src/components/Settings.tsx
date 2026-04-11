@@ -297,7 +297,7 @@ export default function Settings() {
       return {
         label: t("settings.fixValidationErrors"),
         tone: "warning" as const,
-        title: validationError,
+        title: t("settings.validationNoticeTitle"),
       };
     }
 
@@ -334,11 +334,11 @@ export default function Settings() {
     };
   })();
 
-  const statusNotice = validationError
+  const statusNotice = validationError && active !== "general"
     ? {
         tone: "warning" as const,
         title: t("settings.validationNoticeTitle"),
-        body: validationError,
+        body: <p className="leading-5">{t("settings.validationNoticeBody")}</p>,
       }
     : saveStatus === "error"
       ? {
