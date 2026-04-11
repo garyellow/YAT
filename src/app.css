@@ -15,6 +15,8 @@
   --red: #e5484d;
   --green: #2ea44f;
   --amber: #d4870e;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .dark {
@@ -30,6 +32,8 @@
   --red: #e5484d;
   --green: #3fb950;
   --amber: #d29922;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* ─── Reset & Base ─── */
@@ -70,11 +74,11 @@ button {
 }
 
 ::selection {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(99, 68, 223, 0.14);
 }
 
 .dark ::selection {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(167, 139, 250, 0.18);
 }
 
 /* ─── Shell Layout ─── */
@@ -88,10 +92,12 @@ button {
 .sidebar {
   width: 200px;
   border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
 }
 
 .main-header {
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
 }
 
 /* ─── Navigation ─── */
@@ -135,7 +141,7 @@ button {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: opacity 120ms ease, background-color 120ms ease, transform 80ms ease;
+  transition: opacity 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
 }
 
 .btn:active:not(:disabled) {
@@ -150,10 +156,12 @@ button {
 .btn-primary {
   background: var(--accent);
   color: var(--accent-fg);
+  box-shadow: var(--shadow-xs);
 }
 
 .btn-primary:hover:not(:disabled) {
   opacity: 0.85;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary {
@@ -190,13 +198,15 @@ button {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease, transform 80ms ease;
+  box-shadow: var(--shadow-xs);
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
 }
 
 .toolbar-chip:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--text-muted);
   background: var(--bg-subtle);
+  box-shadow: var(--shadow-sm);
 }
 
 .toolbar-chip:active:not(:disabled) {
@@ -213,6 +223,7 @@ button {
   background: var(--bg);
   padding: 0 12px;
   color: var(--text-secondary);
+  box-shadow: var(--shadow-xs);
 }
 
 .status-pill[data-tone="success"] {
@@ -363,7 +374,8 @@ button {
   padding: 12px 14px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 120ms ease, background-color 120ms ease, transform 80ms ease;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
 }
 
 .option-btn:active {
@@ -373,6 +385,7 @@ button {
 .option-btn:hover {
   border-color: var(--text-muted);
   background: var(--bg-subtle);
+  box-shadow: var(--shadow-sm);
 }
 
 .option-btn:focus-visible {

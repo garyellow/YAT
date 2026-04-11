@@ -247,7 +247,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-subtle)]/70 p-5 sm:p-6">
+      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-subtle)]/70 p-5 shadow-sm sm:p-6">
         <div className="max-w-2xl">
           <h1 className="text-lg font-semibold leading-7 text-balance">{t("overview.title")}</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{t("overview.desc")}</p>

@@ -24,11 +24,6 @@
   "settings": {
     "navigationLabel": "Settings navigation",
     "skipToContent": "Skip to content",
-    "allChangesSaved": "Saved",
-    "autoSaveActive": "Auto-save on",
-    "autoSavePending": "Saving soon",
-    "saving": "Saving…",
-    "autoSaveHelp": "YAT saves a moment after you stop typing. Press Ctrl+S or Cmd+S if you want to force a save.",
     "autoSaveFailed": "Save failed",
     "autoSaveFailedDetailTitle": "Auto-save failed",
     "autoSaveFailedDetailBody": "Your changes are still on this screen and have not been written locally yet. Fix the issue, then try again. Reason: {{error}}",
@@ -37,7 +32,6 @@
     "validationNoticeBody": "Check the General tab for details.",
     "closeSaveBlocked": "Could not close yet because some settings still need attention",
     "unknownSaveError": "Unknown error",
-    "noChanges": "No changes",
     "groups": {
       "workspace": "Quick start",
       "capture": "Capture & models",
@@ -401,8 +395,7 @@
     "delete": "Delete",
     "retrySave": "Try again",
     "saveSuccess": "Settings saved",
-    "saveFailed": "Failed to save settings",
-    "saveHint": "Save now (Ctrl+S)"
+    "saveFailed": "Failed to save settings"
   },
   "capsule": {
     "escHint": "Press Esc to cancel",

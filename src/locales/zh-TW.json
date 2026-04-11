@@ -24,11 +24,6 @@
   "settings": {
     "navigationLabel": "設定導覽",
     "skipToContent": "跳到主要內容",
-    "allChangesSaved": "已儲存",
-    "autoSaveActive": "自動儲存開啟",
-    "autoSavePending": "稍後自動儲存",
-    "saving": "儲存中…",
-    "autoSaveHelp": "YAT 會在你停止輸入後自動儲存；若要立刻寫入，可按 Ctrl+S 或 Cmd+S。",
     "autoSaveFailed": "儲存失敗",
     "autoSaveFailedDetailTitle": "自動儲存失敗",
     "autoSaveFailedDetailBody": "你的變更還留在目前畫面，尚未寫入本機。修正問題後再試一次。原因：{{error}}",
@@ -37,7 +32,6 @@
     "validationNoticeBody": "前往「一般設定」分頁查看詳情。",
     "closeSaveBlocked": "目前還不能關閉，因為仍有設定待處理",
     "unknownSaveError": "發生未知錯誤",
-    "noChanges": "沒有變更",
     "groups": {
       "workspace": "快速開始",
       "capture": "輸入與模型",
@@ -401,8 +395,7 @@
     "delete": "刪除",
     "retrySave": "再試一次",
     "saveSuccess": "設定已儲存",
-    "saveFailed": "設定儲存失敗",
-    "saveHint": "立即儲存 (Ctrl+S)"
+    "saveFailed": "設定儲存失敗"
   },
   "capsule": {
     "escHint": "按 Esc 取消錄音",

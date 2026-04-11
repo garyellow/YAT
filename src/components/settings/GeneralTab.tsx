@@ -269,7 +269,7 @@ export default function GeneralTab() {
       {/* ── Hotkey ── */}
       <Section title={t("general.hotkey")} description={t("general.hotkeyDesc")}>
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4 shadow-sm">
             <div className="space-y-1">
               <p className="text-[11px] text-[var(--text-muted)]">{t("general.currentHotkey")}</p>
               <div className="flex flex-wrap items-center gap-2">

@@ -127,7 +127,6 @@ export default function Settings() {
   const allowCloseRef = useRef(false);
   const settings = useSettingsStore((s) => s.settings);
   const dirty = useSettingsStore((s) => s.dirty);
-  const saved = useSettingsStore((s) => s.saved);
   const saveStatus = useSettingsStore((s) => s.saveStatus);
   const lastSaveError = useSettingsStore((s) => s.lastSaveError);
   const validationError = useSettingsStore((s) => s.validationError);
@@ -311,27 +310,7 @@ export default function Settings() {
       };
     }
 
-    if (saveStatus === "saving") {
-      return {
-        label: t("settings.saving"),
-        tone: "default" as const,
-        title: t("settings.autoSaveHelp"),
-      };
-    }
-
-    if (dirty || saveStatus === "pending") {
-      return {
-        label: t("settings.autoSavePending"),
-        tone: "default" as const,
-        title: t("settings.autoSaveHelp"),
-      };
-    }
-
-    return {
-      label: t("settings.allChangesSaved"),
-      tone: saved || saveStatus === "saved" ? ("success" as const) : ("default" as const),
-      title: t("settings.autoSaveHelp"),
-    };
+    return null;
   })();
 
   const statusNotice = validationError && active !== "general"
@@ -484,14 +463,16 @@ export default function Settings() {
                 <span className="text-xs whitespace-nowrap" translate="no">{languageLabel}</span>
               </button>
 
-              <span
-                className="status-pill"
-                data-tone={saveIndicator.tone}
-                title={saveIndicator.title}
-              >
-                <span className="dot" data-tone={saveIndicator.tone} />
-                <span className="text-xs font-medium whitespace-nowrap">{saveIndicator.label}</span>
-              </span>
+              {saveIndicator && (
+                <span
+                  className="status-pill"
+                  data-tone={saveIndicator.tone}
+                  title={saveIndicator.title}
+                >
+                  <span className="dot" data-tone={saveIndicator.tone} />
+                  <span className="text-xs font-medium whitespace-nowrap">{saveIndicator.label}</span>
+                </span>
+              )}
             </div>
           </header>
 
