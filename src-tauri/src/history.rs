@@ -30,6 +30,9 @@ pub struct HistoryEntry {
     pub created_at: DateTime<Utc>,
     pub duration_seconds: f64,
     pub status: String,
+    /// Application that was active when recording started (for per-app context).
+    #[serde(default)]
+    pub app_name: Option<String>,
 }
 
 pub struct HistoryManager {
@@ -59,18 +62,23 @@ impl HistoryManager {
                 polished_text   TEXT,
                 created_at      TEXT NOT NULL,
                 duration_seconds REAL NOT NULL DEFAULT 0,
-                status          TEXT NOT NULL DEFAULT 'success'
+                status          TEXT NOT NULL DEFAULT 'success',
+                app_name        TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_history_created ON history(created_at);",
         )?;
+
+        // Migration: add app_name column for databases created before this version.
+        // SQLite silently ignores duplicate column additions, so we just try it.
+        let _ = conn.execute_batch("ALTER TABLE history ADD COLUMN app_name TEXT;");
 
         Ok(Self { conn })
     }
 
     pub fn insert(&self, entry: &HistoryEntry) -> Result<(), HistoryError> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO history (id, raw_text, polished_text, created_at, duration_seconds, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT OR REPLACE INTO history (id, raw_text, polished_text, created_at, duration_seconds, status, app_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 entry.id,
                 entry.raw_text,
@@ -78,6 +86,7 @@ impl HistoryManager {
                 entry.created_at.to_rfc3339(),
                 entry.duration_seconds,
                 entry.status,
+                entry.app_name,
             ],
         )?;
         Ok(())
@@ -96,7 +105,7 @@ impl HistoryManager {
                 let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
                 let pattern = format!("%{escaped}%");
                 let mut stmt = self.conn.prepare(
-                    "SELECT id, raw_text, polished_text, created_at, duration_seconds, status
+                    "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
                      FROM history
                      WHERE raw_text LIKE ?1 ESCAPE '\\' OR polished_text LIKE ?1 ESCAPE '\\'
                      ORDER BY created_at DESC
@@ -110,6 +119,7 @@ impl HistoryManager {
                         created_at: parse_datetime(&row.get::<_, String>(3)?),
                         duration_seconds: row.get(4)?,
                         status: row.get(5)?,
+                        app_name: row.get(6)?,
                     })
                 })?;
                 for row in rows {
@@ -120,7 +130,7 @@ impl HistoryManager {
         }
 
         let mut stmt = self.conn.prepare(
-            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status
+            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
              FROM history
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -133,6 +143,7 @@ impl HistoryManager {
                 created_at: parse_datetime(&row.get::<_, String>(3)?),
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
+                app_name: row.get(6)?,
             })
         })?;
         for row in rows {
@@ -175,9 +186,37 @@ impl HistoryManager {
         Ok(results)
     }
 
+    /// Get recent context filtered to a specific application.
+    ///
+    /// When the user is dictating inside an app, this provides the LLM with
+    /// only the recent transcriptions from that same app, giving more
+    /// relevant context than the unfiltered `recent_context()`.
+    pub fn recent_context_for_app(
+        &self,
+        minutes: u32,
+        app_name: &str,
+    ) -> Result<Vec<String>, HistoryError> {
+        let cutoff = Utc::now() - chrono::Duration::minutes(minutes as i64);
+        let mut stmt = self.conn.prepare(
+            "SELECT COALESCE(polished_text, raw_text)
+             FROM history
+             WHERE created_at >= ?1 AND status = 'success' AND app_name = ?2
+             ORDER BY created_at DESC
+             LIMIT 5",
+        )?;
+        let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name], |row| {
+            row.get::<_, String>(0)
+        })?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     pub fn get_by_id(&self, id: &str) -> Result<Option<HistoryEntry>, HistoryError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status
+            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
              FROM history WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], |row| {
@@ -188,6 +227,7 @@ impl HistoryManager {
                 created_at: parse_datetime(&row.get::<_, String>(3)?),
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
+                app_name: row.get(6)?,
             })
         })?;
         match rows.next() {
@@ -211,6 +251,7 @@ mod tests {
             created_at: Utc::now(),
             duration_seconds: 1.5,
             status: status.into(),
+            app_name: None,
         }
     }
 

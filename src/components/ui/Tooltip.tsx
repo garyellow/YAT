@@ -14,11 +14,22 @@ export default function Tooltip({ content, children, side = "top" }: TooltipProp
   const wrapRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    if (!visible || !tipRef.current) return;
+    if (!visible || !tipRef.current || !wrapRef.current) return;
     const rect = tipRef.current.getBoundingClientRect();
+    // Vertical flip
     if (side === "top" && rect.top < 4) setFlipped(true);
     else if (side === "bottom" && rect.bottom > window.innerHeight - 4) setFlipped(true);
     else setFlipped(false);
+    // Horizontal clamping
+    if (rect.left < 4) {
+      const shift = 4 - rect.left;
+      tipRef.current.style.left = `calc(50% + ${shift}px)`;
+    } else if (rect.right > window.innerWidth - 4) {
+      const shift = rect.right - window.innerWidth + 4;
+      tipRef.current.style.left = `calc(50% - ${shift}px)`;
+    } else {
+      tipRef.current.style.left = "50%";
+    }
   }, [visible, side]);
 
   const placement = flipped ? (side === "top" ? "bottom" : "top") : side;

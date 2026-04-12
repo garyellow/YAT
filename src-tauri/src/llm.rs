@@ -14,17 +14,17 @@ pub enum LlmError {
     Parse(String),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     temperature: f32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ChatMessage {
     role: String,
-    content: String,
+    content: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -42,78 +42,59 @@ struct ChatMessageResp {
     content: String,
 }
 
-/// Send text to an OpenAI-compatible `/chat/completions` endpoint for polishing.
-pub async fn polish(
-    config: &LlmConfig,
-    system_prompt: &str,
+fn build_user_content(raw_text: &str, screenshot_base64: Option<&str>) -> serde_json::Value {
+    if let Some(b64) = screenshot_base64 {
+        serde_json::json!([
+            { "type": "text", "text": raw_text },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": format!("data:image/png;base64,{b64}"),
+                    "detail": "low"
+                }
+            }
+        ])
+    } else {
+        serde_json::Value::String(raw_text.to_string())
+    }
+}
+
+fn error_looks_like_vision_unsupported(error: &LlmError) -> bool {
+    match error {
+        LlmError::ApiError { status, body }
+            if matches!(status, 400 | 404 | 415 | 422 | 501) =>
+        {
+            let body = body.to_lowercase();
+            [
+                "vision",
+                "image_url",
+                "image input",
+                "images are not supported",
+                "does not support images",
+                "doesn't support images",
+                "multimodal",
+                "unsupported content",
+                "unsupported message type",
+                "invalid image",
+                "content type",
+            ]
+            .iter()
+            .any(|needle| body.contains(needle))
+        }
+        _ => false,
+    }
+}
+
+async fn send_chat_request(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HeaderMap,
+    model: &str,
+    base_messages: &[ChatMessage],
     raw_text: &str,
-    recent_context: &[String],
-    timeout_ms: u64,
+    screenshot_base64: Option<&str>,
     max_retries: u32,
 ) -> Result<String, LlmError> {
-    let base_url = config.base_url.trim();
-    let api_key = config.api_key.trim();
-    let model = config.model.trim();
-
-    if base_url.is_empty() {
-        return Err(LlmError::Request(
-            "LLM base URL is not configured. Please set it in Settings → LLM.".into(),
-        ));
-    }
-    if model.is_empty() {
-        return Err(LlmError::Request(
-            "LLM model is not configured. Please set it in Settings → LLM.".into(),
-        ));
-    }
-
-    let url = format!(
-        "{}/chat/completions",
-        base_url.trim_end_matches('/')
-    );
-
-    let mut messages = vec![ChatMessage {
-        role: "system".into(),
-        content: system_prompt.to_string(),
-    }];
-
-    // Add recent transcription context if available
-    if !recent_context.is_empty() {
-        let ctx = recent_context.join("\n---\n");
-        messages.push(ChatMessage {
-            role: "system".into(),
-            content: format!(
-                "Recent transcriptions for context (maintain consistency with these terms):\n{ctx}"
-            ),
-        });
-    }
-
-    messages.push(ChatMessage {
-        role: "user".into(),
-        content: raw_text.to_string(),
-    });
-
-    let body = ChatRequest {
-        model: model.to_string(),
-        messages,
-        temperature: 0.0,
-    };
-
-    let mut headers = HeaderMap::new();
-    if !api_key.is_empty() {
-        headers.insert(
-            AUTHORIZATION,
-            format!("Bearer {api_key}")
-                .parse()
-                .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
-        );
-    }
-    headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(timeout_ms))
-        .build()
-        .map_err(|e| LlmError::Request(e.to_string()))?;
-
     let mut last_error = LlmError::Request("no attempts made".into());
 
     for attempt in 0..=max_retries {
@@ -123,8 +104,20 @@ pub async fn polish(
             log::info!("LLM retry attempt {attempt}/{max_retries}");
         }
 
+        let mut messages = base_messages.to_vec();
+        messages.push(ChatMessage {
+            role: "user".into(),
+            content: build_user_content(raw_text, screenshot_base64),
+        });
+
+        let body = ChatRequest {
+            model: model.to_string(),
+            messages,
+            temperature: 0.0,
+        };
+
         let result = client
-            .post(&url)
+            .post(url)
             .headers(headers.clone())
             .json(&body)
             .send()
@@ -164,7 +157,101 @@ pub async fn polish(
     Err(last_error)
 }
 
+/// Send text to an OpenAI-compatible `/chat/completions` endpoint for polishing.
+pub async fn polish(
+    config: &LlmConfig,
+    system_prompt: &str,
+    raw_text: &str,
+    recent_context: &[String],
+    screenshot_base64: Option<&str>,
+    timeout_ms: u64,
+    max_retries: u32,
+) -> Result<String, LlmError> {
+    let base_url = config.base_url.trim();
+    let api_key = config.api_key.trim();
+    let model = config.model.trim();
+
+    if base_url.is_empty() {
+        return Err(LlmError::Request(
+            "LLM base URL is not configured. Please set it in Settings → LLM.".into(),
+        ));
+    }
+    if model.is_empty() {
+        return Err(LlmError::Request(
+            "LLM model is not configured. Please set it in Settings → LLM.".into(),
+        ));
+    }
+
+    let url = format!(
+        "{}/chat/completions",
+        base_url.trim_end_matches('/')
+    );
+
+    let mut messages = vec![ChatMessage {
+        role: "system".into(),
+        content: serde_json::Value::String(system_prompt.to_string()),
+    }];
+
+    // Add recent transcription context if available
+    if !recent_context.is_empty() {
+        let ctx = recent_context.join("\n---\n");
+        messages.push(ChatMessage {
+            role: "system".into(),
+            content: serde_json::Value::String(format!(
+                "Recent transcriptions for context (maintain consistency with these terms):\n{ctx}"
+            )),
+        });
+    }
+
+    let mut headers = HeaderMap::new();
+    if !api_key.is_empty() {
+        headers.insert(
+            AUTHORIZATION,
+            format!("Bearer {api_key}")
+                .parse()
+                .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
+        );
+    }
+    headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|e| LlmError::Request(e.to_string()))?;
+
+    match send_chat_request(
+        &client,
+        &url,
+        &headers,
+        model,
+        &messages,
+        raw_text,
+        screenshot_base64,
+        max_retries,
+    )
+    .await
+    {
+        Err(error) if screenshot_base64.is_some() && error_looks_like_vision_unsupported(&error) => {
+            log::warn!(
+                "LLM provider/model rejected screenshot input; retrying with text-only polishing"
+            );
+            send_chat_request(
+                &client,
+                &url,
+                &headers,
+                model,
+                &messages,
+                raw_text,
+                None,
+                max_retries,
+            )
+            .await
+        }
+        other => other,
+    }
+}
+
 /// Quick connectivity check.
 pub async fn test_connection(config: &LlmConfig) -> Result<String, LlmError> {
-    polish(config, "Reply with: OK", "test", &[], 30000, 0).await
+    polish(config, "Reply with: OK", "test", &[], None, 30000, 0).await
 }

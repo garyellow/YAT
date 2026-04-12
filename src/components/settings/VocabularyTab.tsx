@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+import ConfirmDialog from "../ui/ConfirmDialog";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
@@ -14,6 +15,7 @@ export default function VocabularyTab() {
   const [wrong, setWrong] = useState("");
   const [correct, setCorrect] = useState("");
   const [validationMsg, setValidationMsg] = useState("");
+  const [confirmIndex, setConfirmIndex] = useState<number | null>(null);
 
   if (!settings) return null;
   const vocab = settings.prompt.vocabulary;
@@ -55,6 +57,13 @@ export default function VocabularyTab() {
       addEntry();
     }
   };
+
+  const handleConfirmDelete = useCallback(() => {
+    if (confirmIndex !== null) {
+      removeEntry(confirmIndex);
+      setConfirmIndex(null);
+    }
+  }, [confirmIndex]);
 
   return (
     <div className="space-y-10">
@@ -127,7 +136,7 @@ export default function VocabularyTab() {
             {vocab.map((entry, index) => (
               <div
                 key={`${entry.wrong}-${index}`}
-                className="flex items-center justify-between gap-4 py-2 border-b border-[var(--border)] last:border-b-0"
+                className="group flex items-center justify-between gap-4 py-3 border-b border-[var(--border)] last:border-b-0 transition-colors duration-100 hover:bg-[var(--bg-subtle)] -mx-2 px-2 rounded"
               >
                 <div className="min-w-0 flex items-center gap-2 text-[13px]">
                   <span className="text-[var(--text-muted)] line-through">{entry.wrong}</span>
@@ -136,12 +145,8 @@ export default function VocabularyTab() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-danger text-xs shrink-0"
-                  onClick={() => {
-                    if (window.confirm(t("vocabulary.confirmDelete"))) {
-                      removeEntry(index);
-                    }
-                  }}
+                  className="btn btn-danger text-xs shrink-0 transition-opacity duration-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                  onClick={() => setConfirmIndex(index)}
                 >
                   {t("actions.delete")}
                 </button>
@@ -150,6 +155,14 @@ export default function VocabularyTab() {
           </div>
         )}
       </Section>
+
+      <ConfirmDialog
+        open={confirmIndex !== null}
+        message={t("vocabulary.confirmDelete")}
+        tone="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmIndex(null)}
+      />
     </div>
   );
 }

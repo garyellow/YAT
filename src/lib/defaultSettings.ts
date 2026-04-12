@@ -53,7 +53,7 @@ export function buildDefaultAppSettings(): AppSettings {
       hotkey: {
         hotkey_type: "hold",
         key: defaultHotkeyKey(),
-        modifier: null,
+        held_keys: [],
         double_tap_interval_ms: 300,
       },
       theme: "system",
@@ -76,6 +76,11 @@ export function buildDefaultAppSettings(): AppSettings {
       system_prompt: DEFAULT_SYSTEM_PROMPT,
       user_instructions: "",
       vocabulary: [],
+      context_clipboard: false,
+      context_selection: false,
+      context_active_app: false,
+      context_input_field: false,
+      context_screenshot: false,
     },
     history: {
       retention_hours: 720,

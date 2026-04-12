@@ -26,7 +26,7 @@ export interface LlmConfig {
 export interface HotkeyConfig {
   hotkey_type: "single" | "double_tap" | "combo" | "hold";
   key: string;
-  modifier: string | null;
+  held_keys: string[];
   double_tap_interval_ms: number;
 }
 
@@ -58,6 +58,11 @@ export interface PromptConfig {
   system_prompt: string;
   user_instructions: string;
   vocabulary: VocabularyEntry[];
+  context_clipboard: boolean;
+  context_selection: boolean;
+  context_active_app: boolean;
+  context_input_field: boolean;
+  context_screenshot: boolean;
 }
 
 export interface HistoryConfig {
@@ -115,7 +120,13 @@ function sanitizeSettings(settings: AppSettings): AppSettings {
       hotkey: {
         ...settings.general.hotkey,
         key: settings.general.hotkey.key.trim(),
-        modifier: settings.general.hotkey.modifier?.trim() || null,
+        held_keys: Array.from(
+          new Set(
+            settings.general.hotkey.held_keys
+              .map((key) => key.trim())
+              .filter(Boolean),
+          ),
+        ),
       },
     },
   };

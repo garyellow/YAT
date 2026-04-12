@@ -40,6 +40,15 @@ bytes = "1"
 arboard = "3"
 enigo = "0.2"
 
+# Context capture: active window detection & native selected text
+active-win-pos-rs = "0.10"
+get-selected-text = "0.1"
+
+# Screen capture for visual context
+xcap = "0.3"
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 # Global keyboard hook (for single-key hotkeys like Alt)
 rdev = { version = "0.5", features = ["unstable_grab"] }
 
@@ -51,6 +60,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "linux-
 
 # System volume control (Windows)
 [target.'cfg(windows)'.dependencies]
+# UI Automation for reading focused input field text
+uiautomation = "0.24"
 windows = { version = "0.61", features = [
     "Foundation",
     "Foundation_Collections",

@@ -1,5 +1,6 @@
 mod audio;
 mod config;
+mod context;
 mod history;
 mod hotkey;
 mod llm;
@@ -52,11 +53,25 @@ pub struct AppState {
     /// settings window is focused. ESC cancellation still remains available
     /// for active operations.
     pub hotkey_triggers_enabled: Arc<AtomicBool>,
+    /// Tracks whether the main settings window is currently focused.
+    pub main_window_focused: AtomicBool,
+    /// Tracks whether the user is currently recording a new hotkey binding.
+    pub hotkey_capture_active: AtomicBool,
     /// Tracks whether the user has been shown the close-to-tray education
     /// prompt at least once during this session.
     pub close_to_tray_hinted: AtomicBool,
     /// Consecutive paste failures; used to suggest clipboard-only mode.
     pub paste_fail_count: AtomicU32,
+    /// Clipboard content captured at the start of a recording, for LLM context.
+    pub captured_clipboard: Mutex<Option<String>>,
+    /// Selected text captured at the start of a recording, for LLM context.
+    pub captured_selection: Mutex<Option<String>>,
+    /// Active window info captured at the start of a recording.
+    pub captured_app_info: Mutex<Option<context::ActiveWindowInfo>>,
+    /// Focused input field text captured at the start of a recording.
+    pub captured_input_field: Mutex<Option<String>>,
+    /// Screenshot (base64-encoded PNG) captured at the start of a recording.
+    pub captured_screenshot: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -69,8 +84,10 @@ struct PlatformContext {
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const HISTORY_DB_FILE: &str = "history.db";
-const CAPSULE_WIDTH: f64 = 340.0;
-const CAPSULE_HEIGHT: f64 = 80.0;
+const CAPSULE_WIDTH: f64 = 280.0;
+const CAPSULE_HEIGHT: f64 = 32.0;
+const CAPSULE_HEIGHT_DETAIL: f64 = 62.0;
+const CAPSULE_MAX_HEIGHT: f64 = 160.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
 const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 1;
@@ -200,6 +217,12 @@ fn schedule_capsule_hide(
     });
 }
 
+fn sync_hotkey_triggers_enabled(state: &AppState) {
+    let enabled = !state.main_window_focused.load(Ordering::SeqCst)
+        && !state.hotkey_capture_active.load(Ordering::SeqCst);
+    state.hotkey_triggers_enabled.store(enabled, Ordering::SeqCst);
+}
+
 // ── Tauri Commands ──────────────────────────────────────────────────
 
 /// RAII guard that sets `pipeline_busy` to `true` on creation and back
@@ -251,40 +274,57 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
         return Err("Double-tap interval must be between 100ms and 1000ms".into());
     }
 
-    let (modifier, modifier_matcher) = if matches!(hk_config.hotkey_type, config::HotkeyType::Combo) {
-        let modifier_name = hk_config
-            .modifier
-            .as_deref()
-            .map(str::trim)
+    let (held_keys, held_key_matchers) = if matches!(hk_config.hotkey_type, config::HotkeyType::Combo) {
+        if hk_config.held_keys.is_empty() {
+            return Err("Combo hotkey requires at least two keys".into());
+        }
+
+        let mut held_keys = Vec::new();
+        let mut held_key_matchers = Vec::new();
+
+        for held_key_name in hk_config
+            .held_keys
+            .iter()
+            .map(|value| value.trim())
             .filter(|value| !value.is_empty())
-            .ok_or("Combo hotkey requires a modifier")?;
+        {
+            if held_key_name.eq_ignore_ascii_case("Escape") || held_key_name.eq_ignore_ascii_case("Esc") {
+                return Err("Escape is reserved for cancelling recordings".into());
+            }
 
-        let modifier_matcher = hotkey::parse_key_match(modifier_name).ok_or_else(|| {
-            format!(
-                "Unsupported hotkey modifier '{modifier_name}'. Use Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, Enter, or a single letter"
-            )
-        })?;
-        let modifier = modifier_matcher.primary_key();
+            let held_key_matcher = hotkey::parse_key_match(held_key_name).ok_or_else(|| {
+                format!(
+                    "Unsupported combo key '{held_key_name}'. Use Alt, Ctrl, Shift, Meta, Space, Tab, CapsLock, Backspace, Enter, or a single letter"
+                )
+            })?;
 
-        if modifier_name.eq_ignore_ascii_case("Escape") || modifier_name.eq_ignore_ascii_case("Esc") {
-            return Err("Escape is reserved for cancelling recordings".into());
+            if hotkey::key_patterns_overlap(&key_matcher, &held_key_matcher)
+                || held_key_matchers
+                    .iter()
+                    .any(|matcher| hotkey::key_patterns_overlap(matcher, &held_key_matcher))
+            {
+                return Err("All keys in a combo hotkey must be different".into());
+            }
+
+            held_keys.push(held_key_matcher.primary_key());
+            held_key_matchers.push(held_key_matcher);
         }
 
-        if hotkey::key_patterns_overlap(&key_matcher, &modifier_matcher) {
-            return Err("Hotkey key and modifier must be different".into());
+        if held_key_matchers.is_empty() {
+            return Err("Combo hotkey requires at least two keys".into());
         }
 
-        (Some(modifier), Some(modifier_matcher))
+        (held_keys, held_key_matchers)
     } else {
-        (None, None)
+        (Vec::new(), Vec::new())
     };
 
     Ok(HotkeySettings {
         hotkey_type: hotkey_type_from_config(hk_config),
         key,
         key_matcher,
-        modifier,
-        modifier_matcher,
+        held_keys,
+        held_key_matchers,
         double_tap_interval_ms: hk_config.double_tap_interval_ms,
     })
 }
@@ -394,11 +434,61 @@ async fn toggle_recording(
             return Ok(String::new());
         }
 
-        let recent_ctx = state
-            .history
-            .lock()
-            .recent_context(settings.history.context_window_minutes)
-            .unwrap_or_default();
+        let captured_clipboard_ctx = state.captured_clipboard.lock().take();
+        let captured_selection_ctx = state.captured_selection.lock().take();
+        let captured_app_info = state.captured_app_info.lock().take();
+        let captured_input_field_ctx = state.captured_input_field.lock().take();
+        let captured_screenshot_ctx = state.captured_screenshot.lock().take();
+
+        // Respect the *current* settings when deciding whether captured context
+        // should still be used. This avoids leaking stale context if the user
+        // turns polishing or an individual context source off mid-recording.
+        let context_enabled = settings.llm.enabled;
+        let clipboard_ctx = if context_enabled && settings.prompt.context_clipboard {
+            captured_clipboard_ctx
+        } else {
+            None
+        };
+        let selection_ctx = if context_enabled && settings.prompt.context_selection {
+            captured_selection_ctx
+        } else {
+            None
+        };
+        let app_info = if context_enabled && settings.prompt.context_active_app {
+            captured_app_info
+        } else {
+            None
+        };
+        let input_field_ctx = if context_enabled && settings.prompt.context_input_field {
+            captured_input_field_ctx
+        } else {
+            None
+        };
+        let screenshot_ctx = if context_enabled && settings.prompt.context_screenshot {
+            captured_screenshot_ctx
+        } else {
+            None
+        };
+
+        // Per-app / recent context only matters when the LLM pass is enabled.
+        let recent_ctx = if context_enabled {
+            let history = state.history.lock();
+            let minutes = settings.history.context_window_minutes;
+            if let Some(ref info) = app_info {
+                let per_app = history
+                    .recent_context_for_app(minutes, &info.app_name)
+                    .unwrap_or_default();
+                if per_app.is_empty() {
+                    history.recent_context(minutes).unwrap_or_default()
+                } else {
+                    per_app
+                }
+            } else {
+                history.recent_context(minutes).unwrap_or_default()
+            }
+        } else {
+            Vec::new()
+        };
 
         let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
         show_capsule(&app, "transcribing");
@@ -410,6 +500,11 @@ async fn toggle_recording(
             audio_data,
             &settings,
             recent_ctx,
+            clipboard_ctx,
+            selection_ctx,
+            app_info.as_ref().map(|i| i.app_name.as_str()),
+            input_field_ctx,
+            screenshot_ctx,
             Arc::clone(&state.recording_generation),
             operation_generation,
             &state.paste_fail_count,
@@ -432,6 +527,12 @@ async fn toggle_recording(
                     "success"
                 };
 
+                let history_app_name = if context_enabled && settings.prompt.context_active_app {
+                    app_info.as_ref().map(|i| i.app_name.clone())
+                } else {
+                    None
+                };
+
                 // Skip history for empty transcriptions (e.g. silence)
                 if !pr.raw_text.is_empty() {
                     let entry = HistoryEntry {
@@ -441,6 +542,7 @@ async fn toggle_recording(
                         created_at: chrono::Utc::now(),
                         duration_seconds: pr.duration_seconds,
                         status: entry_status.into(),
+                        app_name: history_app_name.clone(),
                     };
                     if let Err(e) = state.history.lock().insert(&entry) {
                         log::error!("failed to save history entry: {e}");
@@ -486,6 +588,11 @@ async fn toggle_recording(
                     created_at: chrono::Utc::now(),
                     duration_seconds: 0.0,
                     status: "error".into(),
+                    app_name: if context_enabled && settings.prompt.context_active_app {
+                        app_info.as_ref().map(|i| i.app_name.clone())
+                    } else {
+                        None
+                    },
                 };
                 if let Err(db_err) = state.history.lock().insert(&entry) {
                     log::error!("failed to save history entry: {db_err}");
@@ -511,9 +618,57 @@ async fn toggle_recording(
             return Ok("busy".into());
         }
 
-        let general = state.settings.lock().general.clone();
+        let settings_snapshot = state.settings.lock().clone();
+        let general = settings_snapshot.general.clone();
         let device_name = general.microphone_device.clone();
         let max_secs = general.max_recording_seconds as u64;
+
+        // Offload context capture (screenshot, clipboard, active app, etc.) to a background thread.
+        // This ensures the microphone starts immediately without blocking on potentially slow I/O.
+        let context_enabled = settings_snapshot.llm.enabled;
+        let prompt_cfg = settings_snapshot.prompt;
+
+        use tauri::Manager;
+        let app_handle_for_bg = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let state_for_bg = app_handle_for_bg.state::<AppState>();
+            let (app_info, clip_ctx, sel_ctx, input_ctx, screenshot_ctx) = if context_enabled {
+                let app_info = if prompt_cfg.context_active_app {
+                    context::get_active_window_info()
+                } else {
+                    None
+                };
+                let clip_ctx = if prompt_cfg.context_clipboard {
+                    context::read_clipboard_text()
+                } else {
+                    None
+                };
+                let sel_ctx = if prompt_cfg.context_selection {
+                    context::read_selected_text()
+                } else {
+                    None
+                };
+                let input_ctx = if prompt_cfg.context_input_field {
+                    context::read_input_field_text()
+                } else {
+                    None
+                };
+                let screenshot_ctx = if prompt_cfg.context_screenshot {
+                    context::capture_screenshot_base64()
+                } else {
+                    None
+                };
+                (app_info, clip_ctx, sel_ctx, input_ctx, screenshot_ctx)
+            } else {
+                (None, None, None, None, None)
+            };
+
+            *state_for_bg.captured_clipboard.lock() = clip_ctx;
+            *state_for_bg.captured_selection.lock() = sel_ctx;
+            *state_for_bg.captured_app_info.lock() = app_info;
+            *state_for_bg.captured_input_field.lock() = input_ctx;
+            *state_for_bg.captured_screenshot.lock() = screenshot_ctx;
+        });
 
         let mic_level = Arc::clone(&state.mic_level);
 
@@ -709,17 +864,18 @@ async fn save_settings(
     settings.llm.api_key = settings.llm.api_key.trim().to_string();
     settings.llm.model = settings.llm.model.trim().to_string();
     settings.general.hotkey.key = settings.general.hotkey.key.trim().to_string();
-    settings.general.hotkey.modifier = settings
+    settings.general.hotkey.held_keys = settings
         .general
         .hotkey
-        .modifier
-        .as_deref()
-        .map(str::trim)
+        .held_keys
+        .iter()
+        .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .map(str::to_string);
+        .map(str::to_string)
+        .collect();
 
     if !matches!(settings.general.hotkey.hotkey_type, config::HotkeyType::Combo) {
-        settings.general.hotkey.modifier = None;
+        settings.general.hotkey.held_keys.clear();
     }
 
     let validated_hotkey = build_hotkey_settings(&settings.general.hotkey)?;
@@ -774,12 +930,14 @@ async fn save_settings(
 
 #[tauri::command]
 fn suspend_hotkey_triggers(state: tauri::State<'_, AppState>) {
-    state.hotkey_triggers_enabled.store(false, Ordering::SeqCst);
+    state.hotkey_capture_active.store(true, Ordering::SeqCst);
+    sync_hotkey_triggers_enabled(&state);
 }
 
 #[tauri::command]
 fn resume_hotkey_triggers(state: tauri::State<'_, AppState>) {
-    state.hotkey_triggers_enabled.store(true, Ordering::SeqCst);
+    state.hotkey_capture_active.store(false, Ordering::SeqCst);
+    sync_hotkey_triggers_enabled(&state);
 }
 
 #[tauri::command]
@@ -859,6 +1017,7 @@ async fn retry_history(
         &system_prompt,
         &entry.raw_text,
         &recent_ctx,
+        None,
         settings.general.timeout_ms,
         settings.general.max_retries,
     )
@@ -915,10 +1074,16 @@ fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
 // ── Capsule Window Helpers ──────────────────────────────────────────
 
 fn show_capsule(app: &AppHandle, status: &str) {
+    let height = match status {
+        "error" | "clipboardFallback" | "dismissed" | "noSpeech" => CAPSULE_HEIGHT_DETAIL,
+        _ => CAPSULE_HEIGHT,
+    };
+
     // Resolve the monitor where the user is currently working.
     // Use cursor position → monitor_from_point so that capsule always appears
     // on the active screen in multi-monitor setups.
-    let position_on_active_monitor = |app: &AppHandle, window: &tauri::WebviewWindow| {
+    let position_on_active_monitor =
+        |app: &AppHandle, window: &tauri::WebviewWindow| {
         let monitor = app
             .cursor_position()
             .ok()
@@ -933,10 +1098,9 @@ fn show_capsule(app: &AppHandle, status: &str) {
             let mon_x = mon_pos.x as f64 / scale;
             let mon_y = mon_pos.y as f64 / scale;
             let mon_w = mon_size.width as f64 / scale;
-            let mon_h = mon_size.height as f64 / scale;
-            // Center horizontally on that monitor, 16 lp above the bottom edge
+            // Center horizontally on that monitor, 16 lp below the top edge
             let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
-            let y = mon_y + mon_h - CAPSULE_HEIGHT - 16.0;
+            let y = mon_y + 16.0;
             window
                 .set_position(Position::Logical(LogicalPosition::new(x, y)))
                 .ok();
@@ -945,7 +1109,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
 
     if let Some(capsule) = app.get_webview_window("capsule") {
         capsule
-            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, CAPSULE_HEIGHT)))
+            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, height)))
             .ok();
         position_on_active_monitor(app, &capsule);
         capsule.show().ok();
@@ -962,7 +1126,7 @@ fn show_capsule(app: &AppHandle, status: &str) {
         .always_on_top(true)
         .skip_taskbar(true)
         .focusable(false)
-        .inner_size(CAPSULE_WIDTH, CAPSULE_HEIGHT)
+        .inner_size(CAPSULE_WIDTH, height)
         .build()
         {
             Ok(w) => {
@@ -979,6 +1143,38 @@ fn show_capsule(app: &AppHandle, status: &str) {
 fn hide_capsule(app: &AppHandle) {
     if let Some(capsule) = app.get_webview_window("capsule") {
         capsule.hide().ok();
+    }
+}
+
+/// Resize the capsule window and reposition to keep the bottom edge fixed.
+/// Called from the frontend when detail text appears/disappears.
+#[tauri::command]
+fn resize_capsule(app: AppHandle, height: f64) {
+    let h = height.clamp(CAPSULE_HEIGHT, CAPSULE_MAX_HEIGHT);
+    if let Some(capsule) = app.get_webview_window("capsule") {
+        capsule
+            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, h)))
+            .ok();
+        // Re-centre on the active monitor (top position stays the same
+        // regardless of height since we anchor to the top edge)
+        let monitor = app
+            .cursor_position()
+            .ok()
+            .and_then(|cursor| app.monitor_from_point(cursor.x, cursor.y).ok().flatten())
+            .or_else(|| app.primary_monitor().ok().flatten());
+        if let Some(mon) = monitor {
+            let scale = mon.scale_factor();
+            let mon_pos = mon.position();
+            let mon_size = mon.size();
+            let mon_x = mon_pos.x as f64 / scale;
+            let mon_y = mon_pos.y as f64 / scale;
+            let mon_w = mon_size.width as f64 / scale;
+            let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
+            let y = mon_y + 16.0;
+            capsule
+                .set_position(Position::Logical(LogicalPosition::new(x, y)))
+                .ok();
+        }
     }
 }
 
@@ -1205,9 +1401,12 @@ pub fn run() {
             let history = HistoryManager::new(history_db_path)
                 .expect("failed to initialize history database");
 
+            let launched_by_autostart = std::env::args().any(|a| a == "--autostart");
+            let start_hidden = launched_by_autostart && settings.general.start_minimized;
+
             // Build hotkey settings from config
             let hotkey_settings = Arc::new(Mutex::new(load_hotkey_settings(&mut settings)));
-            let hotkey_triggers_enabled = Arc::new(AtomicBool::new(true));
+            let hotkey_triggers_enabled = Arc::new(AtomicBool::new(start_hidden));
 
             // Create app state
             let state = AppState {
@@ -1221,18 +1420,27 @@ pub fn run() {
                 capsule_generation: Arc::new(AtomicU64::new(0)),
                 pipeline_busy: Arc::new(AtomicBool::new(false)),
                 hotkey_triggers_enabled: Arc::clone(&hotkey_triggers_enabled),
+                main_window_focused: AtomicBool::new(!start_hidden),
+                hotkey_capture_active: AtomicBool::new(false),
                 close_to_tray_hinted: AtomicBool::new(false),
                 paste_fail_count: AtomicU32::new(0),
+                captured_clipboard: Mutex::new(None),
+                captured_selection: Mutex::new(None),
+                captured_app_info: Mutex::new(None),
+                captured_input_field: Mutex::new(None),
+                captured_screenshot: Mutex::new(None),
             };
             app.manage(state);
+            sync_hotkey_triggers_enabled(&handle.state::<AppState>());
 
             if let Some(main_window) = handle.get_webview_window("main") {
-                let hotkey_triggers_enabled = Arc::clone(&hotkey_triggers_enabled);
                 let handle_for_events = handle.clone();
                 main_window.on_window_event(move |event| {
                     match event {
                         WindowEvent::Focused(focused) => {
-                            hotkey_triggers_enabled.store(!focused, Ordering::SeqCst);
+                            let state = handle_for_events.state::<AppState>();
+                            state.main_window_focused.store(*focused, Ordering::SeqCst);
+                            sync_hotkey_triggers_enabled(&state);
                         }
                         WindowEvent::CloseRequested { api, .. } => {
                             let state = handle_for_events.state::<AppState>();
@@ -1316,7 +1524,6 @@ pub fn run() {
             );
 
             // Show main window unless autostart + user prefers to start minimised
-            let launched_by_autostart = std::env::args().any(|a| a == "--autostart");
             let start_minimized = handle.state::<AppState>().settings.lock().general.start_minimized;
             if !(launched_by_autostart && start_minimized) {
                 if let Some(win) = handle.get_webview_window("main") {
@@ -1352,6 +1559,7 @@ pub fn run() {
             retry_history,
             clear_old_history,
             list_audio_devices,
+            resize_capsule,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run YAT");
@@ -1372,7 +1580,7 @@ mod tests {
         let config = HotkeyConfig {
             hotkey_type: HotkeyType::Hold,
             key: "Alt".into(),
-            modifier: None,
+            held_keys: Vec::new(),
             double_tap_interval_ms: 300,
         };
 
@@ -1380,7 +1588,7 @@ mod tests {
 
         assert_eq!(parsed.hotkey_type, hotkey::HotkeyType::Hold);
         assert_eq!(parsed.key, Key::Alt);
-        assert!(parsed.modifier.is_none());
+        assert!(parsed.held_keys.is_empty());
     }
 
     #[test]
@@ -1388,7 +1596,7 @@ mod tests {
         let config = HotkeyConfig {
             hotkey_type: HotkeyType::Single,
             key: "Alt".into(),
-            modifier: None,
+            held_keys: Vec::new(),
             double_tap_interval_ms: 300,
         };
 
@@ -1396,7 +1604,7 @@ mod tests {
 
         assert_eq!(parsed.hotkey_type, hotkey::HotkeyType::Single);
         assert_eq!(parsed.key, Key::Alt);
-        assert!(parsed.modifier.is_none());
+        assert!(parsed.held_keys.is_empty());
     }
 
     #[test]

@@ -57,7 +57,8 @@ pub enum HotkeyType {
 pub struct HotkeyConfig {
     pub hotkey_type: HotkeyType,
     pub key: String,
-    pub modifier: Option<String>,
+    #[serde(default)]
+    pub held_keys: Vec<String>,
     pub double_tap_interval_ms: u64,
 }
 
@@ -76,7 +77,7 @@ impl Default for HotkeyConfig {
         Self {
             hotkey_type: HotkeyType::Hold,
             key: default_hotkey_key().into(),
-            modifier: None,
+            held_keys: Vec::new(),
             double_tap_interval_ms: 300,
         }
     }
@@ -150,6 +151,16 @@ pub struct PromptConfig {
     #[serde(default)]
     pub user_instructions: String,
     pub vocabulary: Vec<VocabularyEntry>,
+    #[serde(default)]
+    pub context_clipboard: bool,
+    #[serde(default)]
+    pub context_selection: bool,
+    #[serde(default)]
+    pub context_active_app: bool,
+    #[serde(default)]
+    pub context_input_field: bool,
+    #[serde(default)]
+    pub context_screenshot: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,6 +175,11 @@ impl Default for PromptConfig {
             system_prompt: default_system_prompt().to_string(),
             user_instructions: String::new(),
             vocabulary: Vec::new(),
+            context_clipboard: false,
+            context_selection: false,
+            context_active_app: false,
+            context_input_field: false,
+            context_screenshot: false,
         }
     }
 }

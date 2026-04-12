@@ -24,6 +24,7 @@ struct RecordingState {
     samples: Vec<f32>,
     sample_rate: u32,
     channels: u16,
+    samples_to_ignore: usize,
 }
 
 /// Wrapper to make cpal::Stream Send.
@@ -102,6 +103,7 @@ impl AudioRecorder {
                 samples: Vec::new(),
                 sample_rate,
                 channels,
+                samples_to_ignore: (0.15 * sample_rate as f32 * channels as f32) as usize,
             });
         }
 
@@ -117,9 +119,18 @@ impl AudioRecorder {
                 .build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        if let Some(ref mut state) = *recording.lock() {
-                            state.samples.extend_from_slice(data);
-                        }
+                        let mut guard = recording.lock();
+                        let data = if let Some(ref mut state) = *guard {
+                            let ignore = state.samples_to_ignore.min(data.len());
+                            state.samples_to_ignore -= ignore;
+                            let sliced = &data[ignore..];
+                            state.samples.extend_from_slice(sliced);
+                            sliced
+                        } else {
+                            data
+                        };
+                        drop(guard);
+
                         if !data.is_empty() {
                             let rms = (data.iter().map(|&s| s * s).sum::<f32>() / data.len() as f32).sqrt();
                             mic_level_f32.store(rms.to_bits(), Ordering::Relaxed);
@@ -137,11 +148,20 @@ impl AudioRecorder {
                     .build_input_stream(
                         &config.into(),
                         move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                            if let Some(ref mut state) = *recording.lock() {
+                            let mut guard = recording.lock();
+                            let data = if let Some(ref mut state) = *guard {
+                                let ignore = state.samples_to_ignore.min(data.len());
+                                state.samples_to_ignore -= ignore;
+                                let sliced = &data[ignore..];
                                 state
                                     .samples
-                                    .extend(data.iter().map(|&s| s as f32 / i16::MAX as f32));
-                            }
+                                    .extend(sliced.iter().map(|&s| s as f32 / i16::MAX as f32));
+                                sliced
+                            } else {
+                                data
+                            };
+                            drop(guard);
+
                             if !data.is_empty() {
                                 let rms = (data.iter().map(|&s| {
                                     let f = s as f32 / i16::MAX as f32;
@@ -162,12 +182,21 @@ impl AudioRecorder {
                     .build_input_stream(
                         &config.into(),
                         move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                            if let Some(ref mut state) = *recording.lock() {
+                            let mut guard = recording.lock();
+                            let data = if let Some(ref mut state) = *guard {
+                                let ignore = state.samples_to_ignore.min(data.len());
+                                state.samples_to_ignore -= ignore;
+                                let sliced = &data[ignore..];
                                 state.samples.extend(
-                                    data.iter()
+                                    sliced.iter()
                                         .map(|&s| (s as f32 / u16::MAX as f32) * 2.0 - 1.0),
                                 );
-                            }
+                                sliced
+                            } else {
+                                data
+                            };
+                            drop(guard);
+
                             if !data.is_empty() {
                                 let rms = (data.iter().map(|&s| {
                                     let f = (s as f32 / u16::MAX as f32) * 2.0 - 1.0;

@@ -60,6 +60,112 @@ body {
 body[data-capsule="true"] {
   background: transparent !important;
   overflow: hidden;
+  /* Prevent any white flicker or edge artifacts */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ─── Capsule (floating pill overlay) ─── */
+
+.capsule-viewport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.capsule-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: rgba(15, 15, 15, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.3),
+    0 0 0 0.5px rgba(0, 0, 0, 0.15);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.capsule-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.capsule-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.capsule-timer {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+
+.capsule-timer--warn {
+  color: #fbbf24;
+  opacity: 1;
+}
+
+.capsule-mic {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.capsule-mic-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: #fff;
+  transition: width 100ms linear;
+}
+
+.capsule-esc {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.capsule-detail {
+  max-width: 280px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(15, 15, 15, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  word-break: break-word;
+  pointer-events: none;
+}
+
+.capsule-detail--error {
+  color: rgba(252, 165, 165, 0.95);
 }
 
 button,
@@ -84,7 +190,6 @@ button {
 /* ─── Shell Layout ─── */
 
 .shell {
-  max-width: 1040px;
   height: 100vh;
   min-height: 540px;
 }
@@ -241,10 +346,12 @@ button {
 .btn-danger {
   background: transparent;
   color: var(--red);
+  border-color: var(--border);
 }
 
 .btn-danger:hover:not(:disabled) {
   background: rgba(229, 72, 77, 0.06);
+  border-color: rgba(229, 72, 77, 0.3);
 }
 
 .dark .btn-danger:hover:not(:disabled) {
@@ -360,7 +467,8 @@ button {
   background: var(--red);
 }
 
-.dot[data-tone="info"] {
+.dot[data-tone="info"],
+.dot[data-tone="accent"] {
   background: var(--accent);
 }
 
@@ -550,18 +658,18 @@ button {
 }
 
 /* Capsule enter/exit animations */
-.animate-capsule-enter {
-  animation: capsule-slide-in 200ms ease-out;
+.capsule-enter {
+  animation: capsule-in 180ms ease-out;
 }
 
-.animate-capsule-exit {
-  animation: capsule-slide-out 250ms ease-in forwards;
+.capsule-exit {
+  animation: capsule-out 220ms ease-in forwards;
 }
 
-@keyframes capsule-slide-in {
+@keyframes capsule-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: translateY(-8px) scale(0.95);
   }
   to {
     opacity: 1;
@@ -569,14 +677,14 @@ button {
   }
 }
 
-@keyframes capsule-slide-out {
+@keyframes capsule-out {
   from {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: translateY(-8px) scale(0.92);
   }
 }
 
@@ -587,5 +695,26 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Dialog ─── */
+
+.dialog-backdrop {
+  animation: fade-in 150ms ease-out;
+}
+
+.dialog-panel {
+  animation: dialog-in 180ms ease-out;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }

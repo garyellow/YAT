@@ -211,6 +211,16 @@ export interface HotkeyValidationError {
   code: HotkeyValidationCode;
 }
 
+function normalizeKeyList(values?: string[] | null): string[] {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => normalizeKeyToken(value))
+        .filter(Boolean),
+    ),
+  );
+}
+
 function normalizeKeyToken(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
@@ -381,46 +391,33 @@ export function validateHotkeyConfig(hotkey: HotkeyConfig): HotkeyValidationErro
     return null;
   }
 
-  const modifierToken = normalizeKeyToken(hotkey.modifier);
-  if (!modifierToken) {
+  const heldKeys = normalizeKeyList(hotkey.held_keys);
+  if (heldKeys.length === 0) {
     return { code: "missing_modifier" };
   }
 
-  if (modifierToken === "escape") {
-    return { code: "escape_reserved" };
-  }
+  const seenMatchers: HotkeyMatcherCategory[] = [];
+  for (const heldKey of heldKeys) {
+    if (heldKey === "escape") {
+      return { code: "escape_reserved" };
+    }
 
-  const modifierMatcher = normalizeHotkeyMatcherToken(modifierToken);
-  if (!modifierMatcher) {
-    return { code: "unsupported_modifier" };
-  }
+    const heldMatcher = normalizeHotkeyMatcherToken(heldKey);
+    if (!heldMatcher) {
+      return { code: "unsupported_modifier" };
+    }
 
-  if (hotkeyMatchersOverlap(keyMatcher, modifierMatcher)) {
-    return { code: "same_key_and_modifier" };
+    if (
+      hotkeyMatchersOverlap(keyMatcher, heldMatcher)
+      || seenMatchers.some((matcher) => hotkeyMatchersOverlap(matcher, heldMatcher))
+    ) {
+      return { code: "same_key_and_modifier" };
+    }
+
+    seenMatchers.push(heldMatcher);
   }
 
   return null;
-}
-
-export function formatHotkeyValidationError(error: HotkeyValidationError): string {
-  switch (error.code) {
-    case "missing_key":
-      return "Hotkey key cannot be empty.";
-    case "escape_reserved":
-      return "Escape is reserved for cancelling recordings.";
-    case "unsupported_key":
-      return "Unsupported key. Use letters, digits, F1–F12, arrow keys, punctuation keys, modifier keys, navigation keys (Home / End / Insert / Delete / Page Up / Page Down, etc.) or numpad keys.";
-    case "missing_modifier":
-      return "Combo hotkeys require a modifier.";
-    case "unsupported_modifier":
-      return "Unsupported modifier. Use Ctrl, Alt, Shift, Cmd, or another supported single key.";
-    case "same_key_and_modifier":
-      return "Hotkey key and modifier must be different.";
-    case "invalid_double_tap_interval":
-      return "Double-tap interval must be between 100ms and 1000ms.";
-    default:
-      return "The current hotkey configuration is invalid.";
-  }
 }
 
 export function validateSettings(settings: AppSettings): HotkeyValidationCode | null {
@@ -440,6 +437,16 @@ export function buildPromptPreview(prompt: PromptConfig): string {
       .map((entry) => `- \"${entry.wrong}\" → \"${entry.correct}\"`)
       .join("\n");
     parts.push(`Vocabulary corrections (always apply these):\n${vocabularyBlock}`);
+  }
+
+  const ctxParts: string[] = [];
+  if (prompt.context_active_app) ctxParts.push("active app");
+  if (prompt.context_selection) ctxParts.push("selected text");
+  if (prompt.context_input_field) ctxParts.push("input field");
+  if (prompt.context_clipboard) ctxParts.push("clipboard");
+  if (prompt.context_screenshot) ctxParts.push("screenshot");
+  if (ctxParts.length > 0) {
+    parts.push(`[Context sources enabled: ${ctxParts.join(", ")}]`);
   }
 
   return parts.filter(Boolean).join("\n\n");
@@ -519,11 +526,11 @@ export function getHotkeyAdvice(hotkey: HotkeyConfig): HotkeyAdvice {
 
 export function formatHotkeyCombo(hotkey: HotkeyConfig): string {
   const key = formatHotkeyKey(hotkey.key);
-  const modifier = formatHotkeyKey(hotkey.modifier);
+  const heldKeys = normalizeKeyList(hotkey.held_keys).map(formatHotkeyKey);
 
   switch (hotkey.hotkey_type) {
     case "combo":
-      return hotkey.modifier?.trim() ? `${modifier} + ${key}` : key;
+      return [...heldKeys, key].join(" + ");
     case "double_tap":
       return `${key} ×2`;
     case "hold":

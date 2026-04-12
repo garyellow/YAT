@@ -49,8 +49,8 @@ pub struct HotkeySettings {
     pub hotkey_type: HotkeyType,
     pub key: Key,
     pub(crate) key_matcher: KeyMatcher,
-    pub modifier: Option<Key>,
-    pub(crate) modifier_matcher: Option<KeyMatcher>,
+    pub held_keys: Vec<Key>,
+    pub(crate) held_key_matchers: Vec<KeyMatcher>,
     pub double_tap_interval_ms: u64,
 }
 
@@ -66,8 +66,8 @@ impl Default for HotkeySettings {
             key: Key::ControlRight,
             #[cfg(not(target_os = "macos"))]
             key_matcher: KeyMatcher::Exact(Key::ControlRight),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         }
     }
@@ -78,7 +78,7 @@ struct HotkeyState {
     key_consumed: bool,
     other_key_pressed: bool,
     last_trigger_time: Option<Instant>,
-    modifier_held: bool,
+    pressed_keys: Vec<Key>,
     hold_active: bool,
     hold_start: Option<Instant>,
     esc_down: bool,
@@ -226,6 +226,23 @@ fn should_consume_single_or_double_tap(key: &Key) -> bool {
     !is_modifier_key(key)
 }
 
+fn remember_pressed_key(pressed_keys: &mut Vec<Key>, key: &Key) {
+    if !pressed_keys.iter().any(|pressed| pressed == key) {
+        pressed_keys.push(key.clone());
+    }
+}
+
+fn forget_pressed_key(pressed_keys: &mut Vec<Key>, key: &Key) {
+    pressed_keys.retain(|pressed| pressed != key);
+}
+
+fn held_keys_active(settings: &HotkeySettings, pressed_keys: &[Key]) -> bool {
+    settings
+        .held_key_matchers
+        .iter()
+        .all(|matcher| pressed_keys.iter().any(|pressed| matcher.matches(pressed)))
+}
+
 fn handle_event_type<F, G>(
     event_type: &EventType,
     settings: &HotkeySettings,
@@ -240,13 +257,15 @@ where
 {
     match event_type {
         EventType::KeyPress(key) => {
+            remember_pressed_key(&mut st.pressed_keys, key);
+
             if key == &Key::Escape
                 && !st.esc_down
                 && !settings.key_matcher.matches(&Key::Escape)
                 && settings
-                    .modifier_matcher
-                    .as_ref()
-                    .map_or(true, |m| !m.matches(&Key::Escape))
+                    .held_key_matchers
+                    .iter()
+                    .all(|matcher| !matcher.matches(&Key::Escape))
             {
                 st.esc_down = true;
                 st.esc_consumed = on_cancel();
@@ -290,18 +309,14 @@ where
                     }
                 }
                 HotkeyType::Combo => {
-                    if let Some(ref modifier_matcher) = settings.modifier_matcher {
-                        if modifier_matcher.matches(key) {
-                            st.modifier_held = true;
-                        } else if settings.key_matcher.matches(key)
-                            && st.modifier_held
-                            && !st.key_down
-                        {
-                            st.key_down = true;
-                            st.key_consumed = true;
-                            on_trigger();
-                            return true;
-                        }
+                    if settings.key_matcher.matches(key)
+                        && held_keys_active(settings, &st.pressed_keys)
+                        && !st.key_down
+                    {
+                        st.key_down = true;
+                        st.key_consumed = true;
+                        on_trigger();
+                        return true;
                     }
                 }
                 HotkeyType::Hold => {
@@ -319,6 +334,7 @@ where
         }
         EventType::KeyRelease(key) => {
             if key == &Key::Escape {
+                forget_pressed_key(&mut st.pressed_keys, key);
                 let consumed = st.esc_consumed;
                 st.esc_down = false;
                 st.esc_consumed = false;
@@ -327,6 +343,7 @@ where
 
             match settings.hotkey_type {
                 HotkeyType::Single => {
+                    forget_pressed_key(&mut st.pressed_keys, key);
                     let consumed = st.key_consumed;
                     if settings.key_matcher.matches(key) && st.key_down && !st.other_key_pressed {
                         st.key_down = false;
@@ -340,6 +357,7 @@ where
                     consumed
                 }
                 HotkeyType::DoubleTap => {
+                    forget_pressed_key(&mut st.pressed_keys, key);
                     let consumed = st.key_consumed;
                     if settings.key_matcher.matches(key) && st.key_down && !st.other_key_pressed {
                         st.key_down = false;
@@ -365,22 +383,28 @@ where
                 }
                 HotkeyType::Combo => {
                     if settings.key_matcher.matches(key) {
+                        forget_pressed_key(&mut st.pressed_keys, key);
                         let consumed = st.key_consumed;
                         st.key_down = false;
                         st.key_consumed = false;
                         return consumed;
                     }
-                    if let Some(ref modifier_matcher) = settings.modifier_matcher {
-                        if modifier_matcher.matches(key) {
-                            st.modifier_held = false;
-                            st.key_down = false;
-                            st.key_consumed = false;
-                        }
+                    if settings
+                        .held_key_matchers
+                        .iter()
+                        .any(|matcher| matcher.matches(key))
+                    {
+                        forget_pressed_key(&mut st.pressed_keys, key);
+                        st.key_down = false;
+                        st.key_consumed = false;
+                        return false;
                     }
+                    forget_pressed_key(&mut st.pressed_keys, key);
                     false
                 }
                 HotkeyType::Hold => {
                     if settings.key_matcher.matches(key) {
+                        forget_pressed_key(&mut st.pressed_keys, key);
                         // After ESC cancel, consume the release to avoid a
                         // phantom key-up reaching the OS.
                         if st.pending_consume_release {
@@ -405,6 +429,7 @@ where
                             return consumed;
                         }
                     }
+                    forget_pressed_key(&mut st.pressed_keys, key);
                     false
                 }
             }
@@ -454,7 +479,7 @@ where
             key_consumed: false,
             other_key_pressed: false,
             last_trigger_time: None,
-            modifier_held: false,
+            pressed_keys: Vec::new(),
             hold_active: false,
             hold_start: None,
             esc_down: false,
@@ -527,7 +552,7 @@ mod tests {
             key_consumed: false,
             other_key_pressed: false,
             last_trigger_time: None,
-            modifier_held: false,
+            pressed_keys: Vec::new(),
             hold_active: false,
             hold_start: None,
             esc_down: false,
@@ -542,8 +567,8 @@ mod tests {
             hotkey_type: HotkeyType::Hold,
             key: Key::ControlRight,
             key_matcher: KeyMatcher::Exact(Key::ControlRight),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -570,8 +595,8 @@ mod tests {
             hotkey_type: HotkeyType::Hold,
             key: Key::Alt,
             key_matcher: KeyMatcher::Exact(Key::Alt),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -623,8 +648,8 @@ mod tests {
             hotkey_type: HotkeyType::Single,
             key: Key::Alt,
             key_matcher: KeyMatcher::Exact(Key::Alt),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -662,8 +687,8 @@ mod tests {
             hotkey_type: HotkeyType::Hold,
             key: Key::Alt,
             key_matcher: KeyMatcher::Exact(Key::Alt),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -725,8 +750,8 @@ mod tests {
             hotkey_type: HotkeyType::Combo,
             key: Key::Unknown('a' as u32),
             key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
-            modifier: Some(Key::ControlLeft),
-            modifier_matcher: Some(KeyMatcher::Exact(Key::ControlLeft)),
+            held_keys: vec![Key::ControlLeft],
+            held_key_matchers: vec![KeyMatcher::Exact(Key::ControlLeft)],
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -755,8 +780,8 @@ mod tests {
             hotkey_type: HotkeyType::Combo,
             key: Key::Unknown('a' as u32),
             key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
-            modifier: Some(Key::ControlLeft),
-            modifier_matcher: Some(KeyMatcher::Exact(Key::ControlLeft)),
+            held_keys: vec![Key::ControlLeft],
+            held_key_matchers: vec![KeyMatcher::Exact(Key::ControlLeft)],
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -776,8 +801,8 @@ mod tests {
             hotkey_type: HotkeyType::DoubleTap,
             key: Key::ControlRight,
             key_matcher: KeyMatcher::Exact(Key::ControlRight),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -802,8 +827,8 @@ mod tests {
             hotkey_type: HotkeyType::DoubleTap,
             key: Key::ControlRight,
             key_matcher: KeyMatcher::Exact(Key::ControlRight),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -830,8 +855,8 @@ mod tests {
             hotkey_type: HotkeyType::Hold,
             key: Key::Alt,
             key_matcher: KeyMatcher::Exact(Key::Alt),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -858,8 +883,8 @@ mod tests {
             hotkey_type: HotkeyType::Single,
             key: Key::Unknown('a' as u32),
             key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -882,8 +907,8 @@ mod tests {
             hotkey_type: HotkeyType::Single,
             key: Key::Unknown('a' as u32),
             key_matcher: KeyMatcher::Exact(Key::Unknown('a' as u32)),
-            modifier: None,
-            modifier_matcher: None,
+            held_keys: Vec::new(),
+            held_key_matchers: Vec::new(),
             double_tap_interval_ms: 300,
         };
         let mut state = fresh_state();
@@ -896,5 +921,31 @@ mod tests {
         handle_event_type(&EventType::KeyPress(Key::Unknown('b' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
         handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
+    }
+
+    #[test]
+    fn combo_supports_multiple_held_keys() {
+        let settings = HotkeySettings {
+            hotkey_type: HotkeyType::Combo,
+            key: Key::Unknown('c' as u32),
+            key_matcher: KeyMatcher::Exact(Key::Unknown('c' as u32)),
+            held_keys: vec![Key::ControlLeft, Key::ShiftLeft],
+            held_key_matchers: vec![
+                KeyMatcher::Exact(Key::ControlLeft),
+                KeyMatcher::Exact(Key::ShiftLeft),
+            ],
+            double_tap_interval_ms: 300,
+        };
+        let mut state = fresh_state();
+        let trigger_count = AtomicUsize::new(0);
+        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_cancel = || false;
+
+        handle_event_type(&EventType::KeyPress(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(&EventType::KeyPress(Key::ShiftLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('c' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+
+        assert!(consumed);
+        assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
     }
 }

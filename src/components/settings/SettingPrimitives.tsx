@@ -4,8 +4,8 @@ type Tone = "default" | "accent" | "success" | "warning" | "danger";
 
 /* ─── Section ─── */
 
-interface SectionProps extends HTMLAttributes<HTMLElement> {
-  title: string;
+interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+  title: ReactNode;
   description?: string;
   aside?: ReactNode;
   children: ReactNode;

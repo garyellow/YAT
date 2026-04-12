@@ -6,10 +6,20 @@ import { getDefaultSystemPrompt } from "../../lib/defaultSettings";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { isTauriRuntime } from "../../lib/tauriRuntime";
 import { Notice, Section } from "./SettingPrimitives";
+import Toggle from "../ui/Toggle";
+import { HintTip } from "../ui/Tooltip";
 import type { SettingsTab } from "./tabs";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
+
+function getPlatform(): "macos" | "windows" | "linux" {
+  if (typeof navigator !== "undefined") {
+    if (/mac/i.test(navigator.platform)) return "macos";
+    if (/linux/i.test(navigator.platform)) return "linux";
+  }
+  return "windows";
+}
 
 interface PromptTabProps {
   onNavigate?: (tab: SettingsTab) => void;
@@ -20,6 +30,8 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvancedContext, setShowAdvancedContext] = useState(false);
+  const platform = getPlatform();
 
   if (!settings) return null;
   const prompt = settings.prompt;
@@ -30,6 +42,13 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
 
   const previewText = buildPromptPreview(prompt);
   const llmDisabled = !settings.llm.enabled;
+  const enabledContextCount = [
+    prompt.context_clipboard,
+    prompt.context_selection,
+    prompt.context_active_app,
+    prompt.context_input_field,
+    prompt.context_screenshot,
+  ].filter(Boolean).length;
 
   const insertPreset = (preset: string) => {
     const current = prompt.user_instructions;
@@ -102,6 +121,120 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
               ) : null}
             </div>
           </div>
+        </div>
+      </Section>
+
+      {/* Context Sources */}
+      <Section
+        title={(
+          <span className="inline-flex items-center gap-1.5">
+            <span>{t("prompt.contextSourcesTitle")}</span>
+            <HintTip text={t("prompt.contextSourcesTooltip")} />
+          </span>
+        )}
+        description={t("prompt.contextSourcesDesc")}
+      >
+        <div className="space-y-3">
+          {enabledContextCount > 0 ? (
+            <Notice title={t("prompt.contextEnabledTitle")} tone="warning">
+              {t("prompt.contextEnabledBody", { count: enabledContextCount })}
+            </Notice>
+          ) : null}
+
+          {/* ── Basic context sources ── */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-4 py-1">
+              <div>
+                <p id="context-clipboard-label" className="text-[13px] font-medium">{t("prompt.contextClipboard")}</p>
+                <p className={hintCls}>{t("prompt.contextClipboardHint")}</p>
+              </div>
+              <Toggle
+                checked={prompt.context_clipboard}
+                onChange={(v) => update({ context_clipboard: v })}
+                ariaLabelledBy="context-clipboard-label"
+                disabled={llmDisabled}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 py-1">
+              <div>
+                <p id="context-selection-label" className="text-[13px] font-medium">{t("prompt.contextSelection")}</p>
+                <p className={hintCls}>{t("prompt.contextSelectionHint", { shortcut: platform === "macos" ? "Cmd+C" : "Ctrl+C" })}</p>
+              </div>
+              <Toggle
+                checked={prompt.context_selection}
+                onChange={(v) => update({ context_selection: v })}
+                ariaLabelledBy="context-selection-label"
+                disabled={llmDisabled}
+              />
+            </div>
+          </div>
+
+          {/* ── Divider + advanced toggle ── */}
+          <div className="border-t border-[var(--border)] pt-2">
+            <button
+              type="button"
+              className="btn btn-ghost text-xs w-full text-left flex items-center gap-1"
+              onClick={() => setShowAdvancedContext(!showAdvancedContext)}
+            >
+              <span className="text-[var(--text-muted)] text-[10px] transition-transform" style={{ transform: showAdvancedContext ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+              {showAdvancedContext ? t("prompt.hideAdvancedContext") : t("prompt.showAdvancedContext")}
+            </button>
+          </div>
+
+          {/* ── Advanced context sources (collapsible) ── */}
+          {showAdvancedContext ? (
+            <div className="space-y-2 pl-1">
+              <div className="flex items-center justify-between gap-4 py-1">
+                <div>
+                  <p id="context-active-app-label" className="text-[13px] font-medium">{t("prompt.contextActiveApp")}</p>
+                  <p className={hintCls}>{t("prompt.contextActiveAppHint")}</p>
+                  {platform === "macos" ? (
+                    <p className="text-[10px] text-amber-500 mt-0.5">{t("prompt.contextActiveAppMacNote")}</p>
+                  ) : null}
+                </div>
+                <Toggle
+                  checked={prompt.context_active_app}
+                  onChange={(v) => update({ context_active_app: v })}
+                  ariaLabelledBy="context-active-app-label"
+                  disabled={llmDisabled}
+                />
+              </div>
+              {platform !== "linux" && (
+              <div className="flex items-center justify-between gap-4 py-1">
+                <div>
+                  <p id="context-input-field-label" className="text-[13px] font-medium">{t("prompt.contextInputField")}</p>
+                  <p className={hintCls}>{t("prompt.contextInputFieldHint")}</p>
+                  <p className="text-[10px] text-amber-500 mt-0.5">
+                    {platform === "windows"
+                      ? t("prompt.contextInputFieldNoteWindows")
+                      : platform === "macos"
+                        ? t("prompt.contextInputFieldNoteMacos")
+                        : t("prompt.contextInputFieldNote")}
+                  </p>
+                </div>
+                <Toggle
+                  checked={prompt.context_input_field}
+                  onChange={(v) => update({ context_input_field: v })}
+                  ariaLabelledBy="context-input-field-label"
+                  disabled={llmDisabled}
+                />
+              </div>
+              )}
+              <div className="flex items-center justify-between gap-4 py-1">
+                <div>
+                  <p id="context-screenshot-label" className="text-[13px] font-medium">{t("prompt.contextScreenshot")}</p>
+                  <p className={hintCls}>{t("prompt.contextScreenshotHint")}</p>
+                  <p className="text-[10px] text-amber-500 mt-0.5">{t("prompt.contextScreenshotNote")}</p>
+                </div>
+                <Toggle
+                  checked={prompt.context_screenshot}
+                  onChange={(v) => update({ context_screenshot: v })}
+                  ariaLabelledBy="context-screenshot-label"
+                  disabled={llmDisabled}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
       </Section>
 

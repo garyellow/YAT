@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryStore } from "../../stores/historyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { AppSettings } from "../../stores/settingsStore";
 import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+import ConfirmDialog from "../ui/ConfirmDialog";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
@@ -32,6 +33,7 @@ export default function HistoryTab() {
 
   const [query, setQuery] = useState(searchQuery);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "clearOld" } | { type: "delete"; id: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const didMountSearchRef = useRef(false);
 
@@ -73,6 +75,20 @@ export default function HistoryTab() {
     }
   };
 
+  const handleConfirm = useCallback(() => {
+    if (!confirmAction) return;
+    if (confirmAction.type === "clearOld") clearOld();
+    else void deleteEntry(confirmAction.id);
+    setConfirmAction(null);
+  }, [confirmAction, clearOld, deleteEntry]);
+
+  const confirmMessage =
+    confirmAction?.type === "clearOld"
+      ? t("history.confirmClearOld")
+      : confirmAction?.type === "delete"
+        ? t("history.confirmDelete")
+        : "";
+
   return (
     <div className="space-y-10">
       <Notice title={t("history.summaryTitle")} tone="accent">
@@ -80,54 +96,60 @@ export default function HistoryTab() {
       </Notice>
 
       {/* Retention & Search */}
-      <Section title={t("history.controlsTitle")} description={t("history.controlsDesc")}>
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="retention-hours" className={labelCls}>{t("history.retention")}</label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="retention-hours"
-                  name="retention-hours"
-                  type="number"
-                  value={history.retention_hours}
-                  onChange={(e) => updateHistory({ retention_hours: Number(e.target.value) })}
-                  className="field-input max-w-28"
-                  min={1}
-                  max={8760}
-                  step={1}
-                  inputMode="numeric"
-                />
-                <span className="text-xs text-[var(--text-muted)]">{t("history.hours")}</span>
-              </div>
-              <p className={hintCls}>{t("history.metrics.retentionHint")}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="history-search" className={labelCls}>{t("history.search")}</label>
-              <input
-                id="history-search"
-                name="history-search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="field-input"
-                placeholder={t("history.searchPlaceholder")}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
-
+      <Section
+        title={t("history.controlsTitle")}
+        description={t("history.controlsDesc")}
+        aside={
           <button
             type="button"
             className="btn btn-danger text-xs"
-            onClick={() => {
-              if (window.confirm(t("history.confirmClearOld"))) clearOld();
-            }}
+            onClick={() => setConfirmAction({ type: "clearOld" })}
           >
             {t("history.clearOld")}
           </button>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="retention-hours" className={labelCls}>{t("history.retention")}</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="retention-hours"
+                name="retention-hours"
+                type="number"
+                value={history.retention_hours}
+                onChange={(e) => updateHistory({ retention_hours: Number(e.target.value) })}
+                className="field-input max-w-28"
+                min={1}
+                max={8760}
+                step={1}
+                inputMode="numeric"
+              />
+              <span className="text-xs text-[var(--text-muted)]">{t("history.hours")}</span>
+            </div>
+            <p className={hintCls}>{t("history.metrics.retentionHint")}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="history-search" className={labelCls}>{t("history.search")}</label>
+            <input
+              id="history-search"
+              name="history-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="field-input"
+              placeholder={t("history.searchPlaceholder")}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
         </div>
+
+        {history.retention_hours < 24 ? (
+          <Notice title={t("history.retentionWarningTitle")} tone="warning">
+            {t("history.retentionWarningBody")}
+          </Notice>
+        ) : null}
       </Section>
 
       {/* Entries */}
@@ -186,7 +208,7 @@ export default function HistoryTab() {
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-100">
+                  <div className="flex shrink-0 gap-1 transition-opacity duration-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                     {(entry.polished_text || entry.raw_text) ? (
                       <button
                         type="button"
@@ -209,11 +231,7 @@ export default function HistoryTab() {
                     <button
                       type="button"
                       className="btn btn-danger text-xs"
-                      onClick={() => {
-                        if (window.confirm(t("history.confirmDelete"))) {
-                          void deleteEntry(entry.id);
-                        }
-                      }}
+                      onClick={() => setConfirmAction({ type: "delete", id: entry.id })}
                     >
                       {t("actions.delete")}
                     </button>
@@ -224,6 +242,14 @@ export default function HistoryTab() {
           </div>
         )}
       </Section>
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        message={confirmMessage}
+        tone="danger"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

@@ -111,7 +111,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
       value: !settings.llm.enabled
         ? t("overview.metricValues.off")
         : llmReady
-          ? t("overview.metricValues.active")
+          ? t("overview.metricValues.ready")
           : t("overview.metricValues.pending"),
       detail: !settings.llm.enabled
         ? t("overview.summary.polishOff")

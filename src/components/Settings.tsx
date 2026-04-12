@@ -394,12 +394,12 @@ export default function Settings() {
   };
 
   return (
-    <div className="shell mx-auto flex max-md:flex-col">
+    <div className="shell flex max-md:flex-col">
       <Toast message={toastMessage} visible={toastVisible} onDone={hideToast} tone={toastTone} />
 
       <aside className="sidebar shrink-0 flex flex-col p-3">
         <div className="px-2 pt-2 pb-4">
-          <p className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">
+          <p className="text-[15px] font-semibold tracking-tight text-[var(--text)]">
             YAT
           </p>
         </div>
@@ -476,7 +476,8 @@ export default function Settings() {
             </div>
           </header>
 
-          <main id="settings-content" className="flex-1 overflow-y-auto px-6 pb-10 pt-6">
+          <main id="settings-content" className="flex-1 overflow-y-auto pb-10 pt-6">
+            <div className="mx-auto max-w-3xl px-6">
             {statusNotice ? (
               <div className="mb-4">
                 <Notice title={statusNotice.title} tone={statusNotice.tone}>
@@ -485,6 +486,7 @@ export default function Settings() {
               </div>
             ) : null}
             {renderActivePanel()}
+            </div>
           </main>
         </div>
       </section>

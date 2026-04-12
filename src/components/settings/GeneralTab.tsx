@@ -6,6 +6,8 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import {
   browserCodeToRdevName,
   formatHotkeyKey,
+  getHotkeyAdvice,
+  getRecommendedHotkeyLabel,
   sortModifiersFirst,
   validateHotkeyConfig,
 } from "../../lib/settingsFormatters";
@@ -58,6 +60,7 @@ export default function GeneralTab() {
   };
 
   const hotkeyValidation = validateHotkeyConfig(g.hotkey);
+  const hotkeyAdvice = getHotkeyAdvice(g.hotkey);
 
   const refreshDevices = () => {
     if (!isTauriRuntime()) {
@@ -119,14 +122,14 @@ export default function GeneralTab() {
           );
           if (orderedUnique.length < 2) return null;
 
-          const modifier = orderedUnique[0]?.key ?? null;
           const key = orderedUnique[orderedUnique.length - 1]?.key;
-          if (!modifier || !key) return null;
+          const heldKeys = orderedUnique.slice(0, -1).map((entry) => entry.key);
+          if (heldKeys.length === 0 || !key) return null;
 
           return {
             hotkey_type: "combo" as const,
             key,
-            modifier,
+            held_keys: heldKeys,
             double_tap_interval_ms: 300,
           };
         };
@@ -151,7 +154,7 @@ export default function GeneralTab() {
             finalize({
               hotkey_type: "double_tap",
               key: mapped,
-              modifier: null,
+              held_keys: [],
               double_tap_interval_ms: Math.round(now - firstTap.releasedAt) + 100,
             });
             return;
@@ -203,7 +206,7 @@ export default function GeneralTab() {
             finalize({
               hotkey_type: "hold",
               key: mapped,
-              modifier: null,
+              held_keys: [],
               double_tap_interval_ms: 300,
             });
             return;
@@ -216,7 +219,7 @@ export default function GeneralTab() {
               finalize({
                 hotkey_type: "single",
                 key: firstTap?.key ?? mapped,
-                modifier: null,
+                held_keys: [],
                 double_tap_interval_ms: 300,
               });
             }, DOUBLE_TAP_WINDOW_MS + 50);
@@ -273,11 +276,16 @@ export default function GeneralTab() {
             <div className="space-y-1">
               <p className="text-[11px] text-[var(--text-muted)]">{t("general.currentHotkey")}</p>
               <div className="flex flex-wrap items-center gap-2">
-                {g.hotkey.hotkey_type === "combo" && g.hotkey.modifier ? (
-                  <>
-                    <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">{formatHotkeyKey(g.hotkey.modifier)}</kbd>
-                    <span className="text-xs text-[var(--text-muted)]">+</span>
-                  </>
+                {g.hotkey.hotkey_type === "combo"
+                  ? g.hotkey.held_keys.map((heldKey, index) => (
+                      <Fragment key={`${heldKey}-${index}`}>
+                        {index > 0 ? <span className="text-xs text-[var(--text-muted)]">+</span> : null}
+                        <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">{formatHotkeyKey(heldKey)}</kbd>
+                      </Fragment>
+                    ))
+                  : null}
+                {g.hotkey.hotkey_type === "combo" && g.hotkey.held_keys.length > 0 ? (
+                  <span className="text-xs text-[var(--text-muted)]">+</span>
                 ) : null}
                 <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">{formatHotkeyKey(g.hotkey.key)}</kbd>
                 <span className="rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-xs font-medium text-[var(--accent)]">
@@ -322,6 +330,12 @@ export default function GeneralTab() {
               {t(HOTKEY_VALIDATION_COPY[hotkeyValidation.code])}
             </Notice>
           ) : null}
+
+          <Notice title={t(hotkeyAdvice.titleKey)} tone={hotkeyAdvice.tone}>
+            {t(hotkeyAdvice.bodyKey, {
+              recommended: getRecommendedHotkeyLabel(platform),
+            })}
+          </Notice>
         </div>
       </Section>
 

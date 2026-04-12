@@ -20,6 +20,7 @@ export default function LlmTab() {
 
   if (!settings) return null;
   const llm = settings.llm;
+  const screenshotContextEnabled = settings.prompt.context_screenshot;
   const apiKeyHint = isLocalEndpointUrl(llm.base_url)
     ? t("llm.apiKeyHintLocal")
     : t("llm.apiKeyHintRemote");
@@ -65,70 +66,72 @@ export default function LlmTab() {
         <>
           {/* Connection */}
           <Section title={t("llm.connectionTitle")} description={t("llm.connectionDesc")}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="llm-base-url" className={labelCls}>{t("llm.baseUrl")}</label>
-                  <input
-                    id="llm-base-url"
-                    name="llm-base-url"
-                    type="url"
-                    value={llm.base_url}
-                    onChange={(e) => update({ base_url: e.target.value })}
-                    className="field-input"
-                    placeholder="https://api.openai.com/v1"
-                    autoComplete="off"
-                    inputMode="url"
-                    spellCheck={false}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label htmlFor="llm-api-key" className={labelCls}>{t("llm.apiKey")}</label>
-                  <div className="relative">
-                    <input
-                      id="llm-api-key"
-                      name="llm-api-key"
-                      type={showKey ? "text" : "password"}
-                      value={llm.api_key}
-                      onChange={(e) => update({ api_key: e.target.value })}
-                      className="field-input pr-16"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey(!showKey)}
-                      className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
-                      aria-label={showKey ? t("llm.hideKey") : t("llm.showKey")}
-                    >
-                      {showKey ? t("llm.hideKeyShort") : t("llm.showKeyShort")}
-                    </button>
-                  </div>
-                  <p className={hintCls}>{apiKeyHint}</p>
-                </div>
+            <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label htmlFor="llm-base-url" className={labelCls}>{t("llm.baseUrl")}</label>
+                <input
+                  id="llm-base-url"
+                  name="llm-base-url"
+                  type="url"
+                  value={llm.base_url}
+                  onChange={(e) => update({ base_url: e.target.value })}
+                  className="field-input"
+                  placeholder="https://api.openai.com/v1"
+                  autoComplete="off"
+                  inputMode="url"
+                  spellCheck={false}
+                />
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="llm-model" className={labelCls}>{t("llm.model")}</label>
+              <div className="space-y-1.5">
+                <label htmlFor="llm-model" className={labelCls}>{t("llm.model")}</label>
+                <input
+                  id="llm-model"
+                  name="llm-model"
+                  value={llm.model}
+                  onChange={(e) => update({ model: e.target.value })}
+                  className="field-input"
+                  placeholder="gpt-4o-mini"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <p className={hintCls}>{t("llm.modelHint")}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="llm-api-key" className={labelCls}>{t("llm.apiKey")}</label>
+                <div className="relative">
                   <input
-                    id="llm-model"
-                    name="llm-model"
-                    value={llm.model}
-                    onChange={(e) => update({ model: e.target.value })}
-                    className="field-input"
-                    placeholder="gpt-4o-mini"
+                    id="llm-api-key"
+                    name="llm-api-key"
+                    type={showKey ? "text" : "password"}
+                    value={llm.api_key}
+                    onChange={(e) => update({ api_key: e.target.value })}
+                    className="field-input pr-16"
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <p className={hintCls}>{t("llm.modelHint")}</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                    aria-label={showKey ? t("llm.hideKey") : t("llm.showKey")}
+                  >
+                    {showKey ? t("llm.hideKeyShort") : t("llm.showKeyShort")}
+                  </button>
                 </div>
+                <p className={hintCls}>{apiKeyHint}</p>
+              </div>
 
-                <Notice title={t("llm.bestUseTitle")} tone="default">
-                  {t("llm.bestUseBody")}
+              <Notice title={t("llm.bestUseTitle")} tone="default">
+                {t("llm.bestUseBody")}
+              </Notice>
+
+              {screenshotContextEnabled ? (
+                <Notice title={t("llm.visionNoticeTitle")} tone="warning">
+                  {t("llm.visionNoticeBody")}
                 </Notice>
-              </div>
+              ) : null}
             </div>
           </Section>
 

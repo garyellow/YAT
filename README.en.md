@@ -2,176 +2,80 @@
 
 [繁體中文](./README.md) | [English](./README.en.md)
 
-> Hold the hotkey. Start talking.
-> Release it, and the text lands where your cursor already is.
+**Speak your mind, shape your text.**
+YAT is a cross-platform desktop voice input tool. Simply hold a hotkey, speak into your microphone, and release the key. Your words are instantly transcribed, polished, and magically pasted exactly where you were typing.
 
-**👉 [Download latest release](../../releases) ｜ [3-minute setup](#3-minute-setup) ｜ [Feature overview](#feature-overview) ｜ [FAQ](#faq)**
+Stop letting your typing speed hold back your thoughts.
 
-YAT is a desktop voice input tool. Hold your hotkey, speak naturally, and YAT turns speech into text. If you configure text polishing, it also cleans the output so it feels closer to something you can send right away.
+**👉 [Download latest release](../../releases) ｜ [Quick Start](#quick-start) ｜ [Why YAT?](#why-yat) ｜ [FAQ](#faq)**
 
-## Quick look
+---
 
-| If you want | YAT helps by |
-|---|---|
-| Faster input | Hold the hotkey, speak, and release |
-| Something that works in any app | Paste into the current cursor position or copy to the clipboard |
-| Cleaner text | Remove filler, add punctuation, and organize paragraphs or lists |
-| Natural mixed-language speech | Keep code-switching instead of flattening everything into one language |
-| More reliable terminology | Use vocabulary rules for brands, product names, and recurring terms |
+## Why choose YAT?
 
-## A great fit for
+Whether you're a writer, a developer, or just someone answering endless messages, typing can sometimes feel like a bottleneck. You think faster than your fingers can move. YAT is built for precisely those moments.
 
-- People who think faster than they type
-- Developers dictating messages, notes, docs, or commit messages
-- People who naturally mix Chinese and English
-- People who want less keyboard load
-- Anyone who wants “speak, then paste” to feel simple
+- ⚡️ **Works everywhere, instantly**: Whether you're in Word, Notion, VS Code, or a chat app—just hold the hotkey to speak, and let go to paste.
+- 🧠 **Not just dictation—your AI editor**: Powered by Large Language Models (like OpenAI, Groq, etc.), YAT doesn't just transcribe. It **removes filler words, adds punctuation, fixes stutters, and formats paragraphs**. The result? Perfect, ready-to-send text every single time.
+- 🌍 **Flawless code-switching**: Do you mix English and other languages naturally? YAT understands. It preserves your natural phrasing without awkwardly forcing everything into a single language.
+- 🎯 **Never misspell a brand name again**: Using the "Terms" vocabulary list, you can define product names, personal names, or industry jargon so YAT gets them right 100% of the time.
+- 🔒 **Privacy first, BYOK (Bring Your Own Key)**: Your audio and data are sent *only* to the API providers you explicitly configure. Nothing runs through our servers. Your request history stays safely on your local machine.
 
-## 3-minute setup
+## Who is this for?
 
-> **👉 First time here? Do these three things first: download, set up Speech, start talking.**
+- **Developers**: Dictate long commit messages, architecture thoughts, or documentation in seconds.
+- **Content Creators**: Capture fleeting inspiration without breaking your creative flow.
+- **Heavy Keyboard Users**: Give your wrists a well-deserved break.
+- **Anyone**: If "speak it and paste it" sounds like it would make your life easier, YAT is for you.
 
-### 1. Download and install
+## Quick Start (Under 3 minutes)
 
-| Platform | What to get |
-|---|---|
-| Windows | Windows build |
-| macOS | macOS build |
-| Linux | Linux build |
+Getting started is incredibly easy. Just follow these three steps:
 
-- Go to [Releases](../../releases)
-- Install YAT
-- Open Settings from the tray icon
+### 1. Get YAT
+Go to the [Releases page](../../releases) and download the build for your OS (Windows, macOS, or Linux). Install and launch it. You'll see the YAT icon pop up in your system tray.
 
-### 2. Set up **Speech** first
+### 2. Connect your brain (Configure API)
+YAT relies on your own API keys. It supports any API compatible with the OpenAI format.
+1. Click the system tray icon and open **Settings**.
+2. Go to the **Speech** tab, and enter your chosen API Base URL, Model name, and API Key.
+3. Click **Test Connection** to make sure you're good to go!
+*(Pro tip: Setup the **Polish** tab with another endpoint to have the AI clean up your formatting and grammar!)*
 
-- Open the **Speech** tab
-- Enter your OpenAI-compatible API base URL and model name
-- Paste your API key
-- Click **Test Connection**
+### 3. Start Talking
+You're ready! Place your cursor in any text field:
+- **Windows / Linux**: Hold down the **Right Ctrl** key.
+- **macOS**: Hold down the **Right Cmd** key.
 
-### 3. Start speaking
+Once you see the floating status capsule appear, start speaking. Release the key when you're done, and watch your text appear.
 
-- The default hotkey is **hold-to-talk**
-  - Windows / Linux: **Right Ctrl**
-  - macOS: **Right Cmd**
-- Hold to start recording, release to stop
-- If you have not filled in the **Polish** API key yet, YAT outputs the raw transcript
-- If you want cleaner output, configure **Polish** next
+> 💡 **Tip:** Afraid it'll paste in the wrong place? You can change the "Output Mode" to **Clipboard only** in the settings. YAT will silently save the text to your clipboard, allowing you to paste it manually.
 
-> **👉 Want the safest way to start?**
-> Set output mode to **Clipboard only** first, then switch back to **Auto-paste** once everything feels solid.
+## Dive Deeper
 
-## A recommended way to begin
+YAT is more than just a record button. It's packed with quality-of-life features:
 
-| What matters most right now | Best first move |
-|---|---|
-| I want to start fast | Set up **Speech** first |
-| I want cleaner output | Configure **Polish** next |
-| I do not want text pasted into the wrong place | Start with **Clipboard only** |
-| I use brand names or technical terms a lot | Set up **Terms** early |
-| I want YAT ready after login | Turn on auto-start |
-
-## Feature overview
-
-### Input and control
-
-- **Global hotkeys**: hold-to-talk, single key, double-tap, or combo
-- **Floating status capsule**: shows recording state, elapsed time (with countdown), and microphone level
-- **Esc to cancel**: works during recording and processing
-- **Tray-first workflow**: stays in the background until you need it
-
-### Output modes
-
-| Mode | Best when |
-|---|---|
-| **Auto-paste** | You want the result to appear immediately at the cursor |
-| **Clipboard only** | You want to review first, or you often hit permission / compatibility issues |
-
-- Even if auto-paste fails, the result still stays in the clipboard
-- You can choose whether the latest result always remains in the clipboard
-
-### Text cleanup
-
-- **Text polishing**: removes filler, repetition, and stuttering; adds punctuation, paragraphs, and lists
-- **Natural code-switching**: mixed-language speech stays mixed
-- **Terms**: keep product names, brands, and proper nouns consistent
-- **Prompt / custom rules**: tweak tone and formatting without changing the original meaning
-
-### Day-to-day use
-
-- **History**: search, copy, retry, or delete past outputs
-- **Sound cues**: feedback for start, stop, completion, and errors
-- **Auto-mute while recording**: supported on Windows and macOS
-- **Pause media during recording**: automatically pause playing music or video and resume when done (Windows / macOS)
-- **DND during recording**: suppress notification pop-ups while recording (Windows / macOS)
-- **Tray recording indicator**: tray tooltip changes to "🔴 Recording…" during recording
-- **Countdown timer**: capsule shows remaining time in amber during the last 60 seconds with a sound cue
-- **Theme options**: dark, light, or follow system
-- **Bilingual UI**: Traditional Chinese by default, with English available in settings
-- **Auto-start on login**: keep YAT ready in the background
-
-## Which provider should you use?
-
-YAT uses your own API keys (BYOK). Requests go directly to the provider you configure.
-
-Any OpenAI-compatible endpoint works, including OpenAI, Groq, self-hosted services, and more.
-You can use different providers for Speech and Polish independently.
-
-| Job | Required API endpoint |
-|---|---|
-| Speech-to-text | `/audio/transcriptions` (OpenAI-compatible) |
-| Text polishing | `/chat/completions` (OpenAI-compatible) |
-
-> **👉 Easiest starting point:**
-> Get Speech working first, then decide whether you want Polish on top.
-
-## What you can change in Settings
-
-| Tab | What you do there |
-|---|---|
-| **Overview** | See whether setup is complete and review the latest output |
-| **General** | Change hotkeys, output mode, microphone, theme, UI language, sound effects, auto-mute, pause media, DND, timeout, retries, and auto-start |
-| **Speech** | Set provider, API URL, API key, model, and language hint |
-| **Polish** | Turn AI cleanup on or off, then set provider, API URL, API key, and model |
-| **Prompt** | Add simple rules, or go deeper with the advanced system prompt |
-| **Terms** | Manage brands, product names, and recurring terminology fixes |
-| **History** | Search, copy, retry, and clean up past outputs |
-
-## Platform notes
-
-| Platform | What to know first |
-|---|---|
-| **macOS** | You need microphone permission, and auto-paste / global hotkeys usually also need Accessibility permission |
-| **Windows** | Auto-paste can fail if the target app is running as administrator; **Clipboard only** is usually the safest fallback |
-| **Linux** | Global hotkeys currently need X11 or a compatibility layer; if paste feels unreliable, use **Clipboard only**; auto-mute, pause media, and DND are not supported on Linux |
-
-- Extra note: on Linux, pressing **Esc** to cancel may still send that key to the foreground app.
+- **Fully customizable hotkeys**: Not a fan of "hold-to-talk"? Change it to click-to-toggle, double-tap, or complex combos (like `Ctrl + Shift + C`).
+- **Context-Aware AI (Advanced)**: YAT can optionally read your clipboard, selected text, active application name, input field content, or even take a **screen capture** to provide the AI with context, adjusting the tone and format accordingly. *(Note: For your privacy, **all of these features are turned OFF by default**.)*
+- **Distraction-free recording**: Automatically pause playing media, mute system mics, or enable Do Not Disturb mode while you are speaking (varies by OS).
 
 ## FAQ
 
-| Question | Answer |
-|---|---|
-| What do I need to set up first? | Set up **Speech** first. That is enough to start using YAT. |
-| Do I have to use Polish? | No. Even if you have not filled in the API key yet, YAT can still output the raw transcript. |
-| What is the default UI language? | Traditional Chinese. You can switch to English in **General** settings. |
-| What is the default hotkey? | Right Ctrl on Windows / Linux, Right Cmd on macOS, using hold-to-talk by default. |
-| What is the default output mode? | **Auto-paste**, while also keeping the result in the clipboard. |
-| What should I do if auto-paste fails? | Switch to **Clipboard only**. That is usually the most reliable option. |
-| How long is history kept? | 30 days by default. |
-| Does YAT send my API key to its own servers? | No. The key stays on your device and is only sent to the endpoint you configured. |
+**Q: Do I *have* to use the Text Polish feature?**
+A: Nope! If you only configure the "Speech" section, YAT will output the raw transcription. Polishing is just there to make your text look perfectly edited.
 
-## Privacy and data
+**Q: What if auto-paste doesn't work?**
+A: Security features on certain operating systems (like missing Accessibility permissions on macOS, or typing in Admin-level apps on Windows) can block automated pasting. If this happens, simply switch the output mode to **Clipboard only**.
 
-- **API keys stay local**: they are stored on your device and sent only to the endpoint you configured
-- **Audio is not stored**: recordings stay in memory only while being processed
-- **History stays local**: transcription history is stored in a local SQLite database and kept for 30 days by default
-- **No telemetry**: YAT does not collect usage analytics
+**Q: Is my API Key and data secure?**
+A: Yes. Your API keys are stored locally on your device. Your request history is kept securely in a local SQLite database (for 30 days by default). YAT contains zero tracking or telemetry.
 
-## Build from source
+---
 
-- Node.js 20+
-- Rust 1.77+
+### For Developers: Build from source
+
+If you'd like to build YAT yourself or contribute:
+Prerequisites: Node.js 20+, Rust 1.77+
 
 ```bash
 npm install
@@ -179,8 +83,4 @@ npm run tauri dev
 npm run tauri build
 ```
 
-> **👉 Want to try it now?** [Download the latest release](../../releases)
-
-## License
-
-MIT
+YAT is released under the [MIT License](./LICENSE). Feel free to open an Issue or submit a PR to make YAT even better!

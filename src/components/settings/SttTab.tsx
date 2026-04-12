@@ -47,81 +47,77 @@ export default function SttTab() {
 
       {/* Connection */}
       <Section title={t("stt.connectionTitle")} description={t("stt.connectionDesc")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")}</label>
-              <input
-                id="stt-base-url"
-                name="stt-base-url"
-                type="url"
-                value={stt.base_url}
-                onChange={(e) => update({ base_url: e.target.value })}
-                className="field-input"
-                placeholder="https://api.openai.com/v1"
-                autoComplete="off"
-                inputMode="url"
-                spellCheck={false}
-              />
-              <p className={hintCls}>{t("stt.baseUrlHint")}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")}</label>
-              <div className="relative">
-                <input
-                  id="stt-api-key"
-                  name="stt-api-key"
-                  type={showKey ? "text" : "password"}
-                  value={stt.api_key}
-                  onChange={(e) => update({ api_key: e.target.value })}
-                  className="field-input pr-16"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
-                  aria-label={showKey ? t("stt.hideKey") : t("stt.showKey")}
-                >
-                  {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
-                </button>
-              </div>
-              <p className={hintCls}>{apiKeyHint}</p>
-            </div>
+        <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="stt-base-url" className={labelCls}>{t("stt.baseUrl")}</label>
+            <input
+              id="stt-base-url"
+              name="stt-base-url"
+              type="url"
+              value={stt.base_url}
+              onChange={(e) => update({ base_url: e.target.value })}
+              className="field-input"
+              placeholder="https://api.openai.com/v1"
+              autoComplete="off"
+              inputMode="url"
+              spellCheck={false}
+            />
+            <p className={hintCls}>{t("stt.baseUrlHint")}</p>
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
-              <input
-                id="stt-model"
-                name="stt-model"
-                value={stt.model}
-                onChange={(e) => update({ model: e.target.value })}
-                className="field-input"
-                placeholder="whisper-1"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <p className={hintCls}>{t("stt.modelHint")}</p>
-            </div>
+          <div className="space-y-1.5">
+            <label htmlFor="stt-model" className={labelCls}>{t("stt.model")}</label>
+            <input
+              id="stt-model"
+              name="stt-model"
+              value={stt.model}
+              onChange={(e) => update({ model: e.target.value })}
+              className="field-input"
+              placeholder="whisper-1"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className={hintCls}>{t("stt.modelHint")}</p>
+          </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="stt-language" className={labelCls}>{t("stt.language")}</label>
+          <div className="space-y-1.5">
+            <label htmlFor="stt-api-key" className={labelCls}>{t("stt.apiKey")}</label>
+            <div className="relative">
               <input
-                id="stt-language"
-                name="stt-language"
-                value={stt.language ?? ""}
-                onChange={(e) => update({ language: e.target.value || null })}
-                className="field-input"
-                placeholder="zh"
+                id="stt-api-key"
+                name="stt-api-key"
+                type={showKey ? "text" : "password"}
+                value={stt.api_key}
+                onChange={(e) => update({ api_key: e.target.value })}
+                className="field-input pr-16"
                 autoComplete="off"
                 spellCheck={false}
               />
-              <p className={hintCls}>{t("stt.languageHint")}</p>
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="btn btn-ghost absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs"
+                aria-label={showKey ? t("stt.hideKey") : t("stt.showKey")}
+              >
+                {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
+              </button>
             </div>
+            <p className={hintCls}>{apiKeyHint}</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="stt-language" className={labelCls}>{t("stt.language")}</label>
+            <input
+              id="stt-language"
+              name="stt-language"
+              value={stt.language ?? ""}
+              onChange={(e) => update({ language: e.target.value || null })}
+              className="field-input"
+              placeholder="zh"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className={hintCls}>{t("stt.languageHint")}</p>
           </div>
         </div>
       </Section>
