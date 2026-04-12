@@ -95,8 +95,8 @@ pub fn read_selected_text() -> Option<String> {
 ///   fields) or `TextPattern` (rich text controls).  Works in most
 ///   native controls; some apps (e.g. Firefox, Chrome) may not expose
 ///   these patterns.
-/// - **macOS**: Accessibility API via `kAXValueAttribute` on the focused
-///   UI element.  Requires Accessibility permission.
+/// - **macOS**: Accessibility API via the focused element's `AXValue`
+///   attribute. Requires Accessibility permission.
 /// - **Linux**: Not available — returns `None`.
 pub fn read_input_field_text() -> Option<String> {
     #[cfg(target_os = "windows")]
@@ -149,8 +149,11 @@ fn read_input_field_text_windows() -> Option<String> {
 // ── macOS: Accessibility API ────────────────────────────────────────
 
 #[cfg(target_os = "macos")]
+const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+
+#[cfg(target_os = "macos")]
 fn read_input_field_text_macos() -> Option<String> {
-    use std::ffi::c_void;
+    use std::ffi::{c_char, c_void, CString};
     use std::ptr;
 
     // Core Foundation + Accessibility types are available through the
@@ -162,19 +165,43 @@ fn read_input_field_text_macos() -> Option<String> {
             attribute: *const c_void,
             value: *mut *mut c_void,
         ) -> i32;
-        fn CFRelease(cf: *mut c_void);
+        fn CFRelease(cf: *const c_void);
+        fn CFStringCreateWithCString(
+            alloc: *const c_void,
+            c_str: *const c_char,
+            encoding: u32,
+        ) -> *const c_void;
     }
 
-    // CFString constants for accessibility attributes
-    #[link(name = "ApplicationServices", kind = "framework")]
-    extern "C" {
-        static kAXFocusedUIElementAttribute: *const c_void;
-        static kAXValueAttribute: *const c_void;
-    }
+    let focused_attribute_name = CString::new("AXFocusedUIElement").ok()?;
+    let value_attribute_name = CString::new("AXValue").ok()?;
 
     unsafe {
+        let focused_attribute = CFStringCreateWithCString(
+            ptr::null(),
+            focused_attribute_name.as_ptr(),
+            K_CF_STRING_ENCODING_UTF8,
+        );
+        let value_attribute = CFStringCreateWithCString(
+            ptr::null(),
+            value_attribute_name.as_ptr(),
+            K_CF_STRING_ENCODING_UTF8,
+        );
+
+        if focused_attribute.is_null() || value_attribute.is_null() {
+            if !focused_attribute.is_null() {
+                CFRelease(focused_attribute);
+            }
+            if !value_attribute.is_null() {
+                CFRelease(value_attribute);
+            }
+            return None;
+        }
+
         let system_wide = AXUIElementCreateSystemWide();
         if system_wide.is_null() {
+            CFRelease(focused_attribute);
+            CFRelease(value_attribute);
             return None;
         }
 
@@ -182,17 +209,19 @@ fn read_input_field_text_macos() -> Option<String> {
         let mut focused: *mut c_void = ptr::null_mut();
         let err = AXUIElementCopyAttributeValue(
             system_wide,
-            kAXFocusedUIElementAttribute,
+            focused_attribute,
             &mut focused,
         );
         if err != 0 || focused.is_null() {
             CFRelease(system_wide);
+            CFRelease(focused_attribute);
+            CFRelease(value_attribute);
             return None;
         }
 
         // Read the value attribute (full text of the input field)
         let mut value: *mut c_void = ptr::null_mut();
-        let err = AXUIElementCopyAttributeValue(focused, kAXValueAttribute, &mut value);
+        let err = AXUIElementCopyAttributeValue(focused, value_attribute, &mut value);
 
         let result = if err == 0 && !value.is_null() {
             cfstring_to_string(value)
@@ -205,6 +234,8 @@ fn read_input_field_text_macos() -> Option<String> {
         }
         CFRelease(focused);
         CFRelease(system_wide);
+        CFRelease(focused_attribute);
+        CFRelease(value_attribute);
 
         result.filter(|s| !s.trim().is_empty())
     }
@@ -222,8 +253,6 @@ unsafe fn cfstring_to_string(cfstr: *mut std::ffi::c_void) -> Option<String> {
             encoding: u32,
         ) -> bool;
     }
-
-    const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
 
     let len = CFStringGetLength(cfstr);
     if len <= 0 {

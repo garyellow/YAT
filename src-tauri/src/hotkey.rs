@@ -517,7 +517,7 @@ where
             let settings = settings.lock().clone();
             let mut st = state.lock();
             let trigger_enabled = triggers_enabled.load(Ordering::SeqCst);
-            let _ = handle_event(
+            handle_event(
                 &event,
                 &settings,
                 &mut st,

@@ -67,7 +67,6 @@ export function buildDefaultAppSettings(): AppSettings {
       sound_effects: true,
       auto_mute: true,
       auto_pause_media: false,
-      auto_dnd: false,
       microphone_device: null,
       close_to_tray: true,
       start_minimized: true,
@@ -98,6 +97,10 @@ export function cloneSettings(settings: AppSettings): AppSettings {
 
 function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): AppSettings {
   const defaults = buildDefaultAppSettings();
+  const { auto_dnd: _deprecatedAutoDnd, ...legacyGeneral } = (
+    (partial?.general ?? {}) as Partial<AppSettings["general"]> & { auto_dnd?: boolean }
+  );
+
   return {
     stt: {
       ...defaults.stt,
@@ -109,10 +112,10 @@ function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): Ap
     },
     general: {
       ...defaults.general,
-      ...partial?.general,
+      ...legacyGeneral,
       hotkey: {
         ...defaults.general.hotkey,
-        ...partial?.general?.hotkey,
+        ...legacyGeneral.hotkey,
       },
     },
     prompt: {

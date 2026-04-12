@@ -69,8 +69,16 @@ impl HistoryManager {
         )?;
 
         // Migration: add app_name column for databases created before this version.
-        // SQLite silently ignores duplicate column additions, so we just try it.
-        let _ = conn.execute_batch("ALTER TABLE history ADD COLUMN app_name TEXT;");
+        // Ignore only the expected duplicate-column error and surface everything else.
+        match conn.execute_batch("ALTER TABLE history ADD COLUMN app_name TEXT;") {
+            Ok(()) => log::info!("history migration applied: added app_name column"),
+            Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+                if message.contains("duplicate column name: app_name") =>
+            {
+                log::debug!("history migration skipped: app_name column already exists");
+            }
+            Err(error) => return Err(HistoryError::Db(error)),
+        }
 
         Ok(Self { conn })
     }

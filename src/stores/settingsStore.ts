@@ -43,7 +43,6 @@ export interface GeneralConfig {
   sound_effects: boolean;
   auto_mute: boolean;
   auto_pause_media: boolean;
-  auto_dnd: boolean;
   microphone_device: string | null;
   close_to_tray: boolean;
   start_minimized: boolean;
@@ -98,6 +97,10 @@ interface SettingsState {
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function sanitizeSettings(settings: AppSettings): AppSettings {
+  const { auto_dnd: _deprecatedAutoDnd, ...general } = (
+    settings.general as AppSettings["general"] & { auto_dnd?: boolean }
+  );
+
   return {
     ...cloneSettings(settings),
     stt: {
@@ -114,15 +117,15 @@ function sanitizeSettings(settings: AppSettings): AppSettings {
       model: settings.llm.model.trim(),
     },
     general: {
-      ...settings.general,
-      theme: settings.general.theme.trim(),
-      language: settings.general.language.trim(),
+      ...general,
+      theme: general.theme.trim(),
+      language: general.language.trim(),
       hotkey: {
-        ...settings.general.hotkey,
-        key: settings.general.hotkey.key.trim(),
+        ...general.hotkey,
+        key: general.hotkey.key.trim(),
         held_keys: Array.from(
           new Set(
-            settings.general.hotkey.held_keys
+            general.hotkey.held_keys
               .map((key) => key.trim())
               .filter(Boolean),
           ),

@@ -57,7 +57,7 @@ YAT is more than just a record button. It's packed with quality-of-life features
 
 - **Fully customizable hotkeys**: Not a fan of "hold-to-talk"? Change it to click-to-toggle, double-tap, or complex combos (like `Ctrl + Shift + C`).
 - **Extra reference info (advanced)**: When you really need it, YAT can optionally read your clipboard, selected text, active app, current input field, or even take a **screen capture** before polishing. This helps the AI stay closer to what you are already working on. *(For privacy, **all of these are OFF by default**, and only the items you enable are sent.)*
-- **Distraction-free recording**: Automatically pause playing media, mute system mics, or enable Do Not Disturb mode while you are speaking (varies by OS).
+- **Distraction-free recording**: Automatically pause playing media or mute system audio while you are speaking (varies by OS).
 
 ## FAQ
 

@@ -126,8 +126,13 @@ pub fn output_text(
                                     .get_text()
                                     .is_ok_and(|current| current == expected);
                                 if still_ours {
-                                    let _ = cb.clear();
-                                    log::debug!("clipboard cleared after successful paste");
+                                    if let Err(error) = cb.clear() {
+                                        log::debug!(
+                                            "failed to clear clipboard after successful paste: {error}"
+                                        );
+                                    } else {
+                                        log::debug!("clipboard cleared after successful paste");
+                                    }
                                 } else {
                                     log::debug!(
                                         "clipboard content changed since paste; skipping clear"

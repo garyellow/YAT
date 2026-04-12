@@ -1,9 +1,15 @@
 //! Recording environment management — all side-effects that should be applied
 //! when recording starts and reverted when it stops.
 //!
-//! Consolidates system mute, media pause, and DND into a single module with
-//! a unified `prepare()` / `restore()` API so the caller does not have to
-//! coordinate multiple modules.
+//! Consolidates system mute and media pause into a single module with a unified
+//! `prepare()` / `restore()` API so the caller does not have to coordinate
+//! multiple modules.
+//!
+//! We intentionally do **not** toggle system-wide Do Not Disturb / Focus modes.
+//! The available techniques on macOS and Windows rely on undocumented defaults,
+//! registry state, or UI-level automation that is brittle across OS releases.
+//! Keeping this module limited to supported and reversible operations makes the
+//! recording lifecycle more predictable long-term.
 
 use crate::config::GeneralConfig;
 
@@ -15,7 +21,6 @@ use crate::config::GeneralConfig;
 pub struct RecordingEnvState {
     was_muted: bool,
     paused_sessions: Vec<String>,
-    dnd_was_off: bool,
 }
 
 /// Prepare the recording environment according to the user's settings.
@@ -25,7 +30,6 @@ pub struct RecordingEnvState {
 /// Order of operations matters:
 /// 1. Pause media first (stops audio production)
 /// 2. Mute system audio (silences remaining sounds + prevents feedback)
-/// 3. Enable DND (suppresses visual/audio notifications)
 pub fn prepare(general: &GeneralConfig) -> RecordingEnvState {
     let mut env = RecordingEnvState::default();
 
@@ -43,25 +47,12 @@ pub fn prepare(general: &GeneralConfig) -> RecordingEnvState {
         }
     }
 
-    if general.auto_dnd {
-        match enable_dnd() {
-            Ok(was_off) => env.dnd_was_off = was_off,
-            Err(e) => log::warn!("auto-dnd failed: {e}"),
-        }
-    }
-
     env
 }
 
 /// Restore the recording environment to its pre-recording state.
 /// Operations run in reverse order of [`prepare`].
 pub fn restore(general: &GeneralConfig, env: &RecordingEnvState) {
-    if general.auto_dnd {
-        if let Err(e) = disable_dnd(env.dnd_was_off) {
-            log::warn!("auto-dnd restore failed: {e}");
-        }
-    }
-
     if general.auto_mute {
         if let Err(e) = restore_system(env.was_muted) {
             log::warn!("auto-mute restore failed: {e}");
@@ -235,7 +226,6 @@ fn restore_system(was_muted: bool) -> Result<(), String> {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn mute_system() -> Result<bool, String> {
-    log::warn!("auto-mute not supported on this platform");
     Ok(false)
 }
 
@@ -437,207 +427,10 @@ fn resume_media(paused_ids: &[String]) -> Result<(), String> {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn pause_media() -> Result<Vec<String>, String> {
-    log::warn!("media pause not supported on this platform");
     Ok(Vec::new())
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn resume_media(_paused_ids: &[String]) -> Result<(), String> {
-    Ok(())
-}
-
-// ════════════════════════════════════════════════════════════════════
-// §3  Do Not Disturb / Focus Mode
-// ════════════════════════════════════════════════════════════════════
-
-// ── Windows (toast notification suppression via registry) ───────────
-
-#[cfg(target_os = "windows")]
-fn enable_dnd() -> Result<bool, String> {
-    use std::process::Command;
-
-    // Read current toast-enabled state (1 = toasts on, 0 = toasts off)
-    let output = Command::new("reg")
-        .args([
-            "query",
-            r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications",
-            "/v",
-            "ToastEnabled",
-        ])
-        .output()
-        .map_err(|e| format!("reg query: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Parse "ToastEnabled    REG_DWORD    0x1" → toasts were enabled
-    let toasts_were_on = stdout.contains("0x1");
-
-    // Disable toast notifications
-    let result = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications",
-            "/v",
-            "ToastEnabled",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "0",
-            "/f",
-        ])
-        .output()
-        .map_err(|e| format!("reg add: {e}"))?;
-
-    if !result.status.success() {
-        return Err("failed to disable toast notifications".into());
-    }
-
-    log::info!("DND enabled: toast notifications disabled (were_on={toasts_were_on})");
-    Ok(toasts_were_on)
-}
-
-#[cfg(target_os = "windows")]
-fn disable_dnd(was_off: bool) -> Result<(), String> {
-    if !was_off {
-        log::info!("DND was already active before recording, not restoring");
-        return Ok(());
-    }
-
-    use std::process::Command;
-
-    let result = Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications",
-            "/v",
-            "ToastEnabled",
-            "/t",
-            "REG_DWORD",
-            "/d",
-            "1",
-            "/f",
-        ])
-        .output()
-        .map_err(|e| format!("reg add: {e}"))?;
-
-    if !result.status.success() {
-        return Err("failed to re-enable toast notifications".into());
-    }
-
-    log::info!("DND disabled: toast notifications re-enabled");
-    Ok(())
-}
-
-// ── macOS (Notification Center defaults) ────────────────────────────
-
-#[cfg(target_os = "macos")]
-fn enable_dnd() -> Result<bool, String> {
-    use std::process::Command;
-
-    // Check current DND state
-    let output = Command::new("defaults")
-        .args([
-            "-currentHost",
-            "read",
-            "com.apple.notificationcenterui",
-            "doNotDisturb",
-        ])
-        .output()
-        .map_err(|e| format!("read DND state: {e}"))?;
-
-    let currently_on = String::from_utf8_lossy(&output.stdout).trim() == "1";
-
-    if currently_on {
-        log::info!("DND already active, skipping");
-        return Ok(false); // was NOT off → don't restore later
-    }
-
-    // Enable DND
-    Command::new("defaults")
-        .args([
-            "-currentHost",
-            "write",
-            "com.apple.notificationcenterui",
-            "doNotDisturb",
-            "-boolean",
-            "true",
-        ])
-        .output()
-        .map_err(|e| format!("enable DND: {e}"))?;
-
-    // Set DND time range to cover all day
-    Command::new("defaults")
-        .args([
-            "-currentHost",
-            "write",
-            "com.apple.notificationcenterui",
-            "dndStart",
-            "-float",
-            "0",
-        ])
-        .output()
-        .ok();
-
-    Command::new("defaults")
-        .args([
-            "-currentHost",
-            "write",
-            "com.apple.notificationcenterui",
-            "dndEnd",
-            "-float",
-            "1440",
-        ])
-        .output()
-        .ok();
-
-    // Restart NotificationCenter to apply
-    Command::new("killall")
-        .arg("NotificationCenter")
-        .output()
-        .ok();
-
-    log::info!("DND enabled (macOS defaults)");
-    Ok(true) // was off → should restore later
-}
-
-#[cfg(target_os = "macos")]
-fn disable_dnd(was_off: bool) -> Result<(), String> {
-    if !was_off {
-        log::info!("DND was already active before recording, not restoring");
-        return Ok(());
-    }
-
-    use std::process::Command;
-
-    Command::new("defaults")
-        .args([
-            "-currentHost",
-            "write",
-            "com.apple.notificationcenterui",
-            "doNotDisturb",
-            "-boolean",
-            "false",
-        ])
-        .output()
-        .map_err(|e| format!("disable DND: {e}"))?;
-
-    Command::new("killall")
-        .arg("NotificationCenter")
-        .output()
-        .ok();
-
-    log::info!("DND disabled (macOS defaults)");
-    Ok(())
-}
-
-// ── Linux (no-op) ───────────────────────────────────────────────────
-
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-fn enable_dnd() -> Result<bool, String> {
-    log::warn!("DND not supported on this platform");
-    Ok(false)
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-fn disable_dnd(_was_off: bool) -> Result<(), String> {
     Ok(())
 }

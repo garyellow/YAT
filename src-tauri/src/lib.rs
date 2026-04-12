@@ -44,7 +44,7 @@ pub struct AppState {
     pub history: Mutex<HistoryManager>,
     pub hotkey_settings: Arc<Mutex<HotkeySettings>>,
     pub mic_level: Arc<AtomicU32>,
-    /// Snapshot of the recording environment (mute, media, DND) captured on
+    /// Snapshot of the recording environment (mute, media) captured on
     /// recording start; used to restore everything when recording stops.
     pub recording_env_state: Mutex<recording_env::RecordingEnvState>,
     /// Incremented each time a new recording starts; auto-stop timers capture
@@ -449,16 +449,27 @@ fn load_hotkey_settings(settings: &mut AppSettings) -> HotkeySettings {
     }
 }
 
+fn warn_if_err<T, E: std::fmt::Display>(result: Result<T, E>, action: &str) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(error) => {
+            log::warn!("{action}: {error}");
+            None
+        }
+    }
+}
+
 fn emit_status(app: &AppHandle, status: &str, text: Option<&str>, error: Option<&str>) {
-    app.emit(
+    if let Err(emit_error) = app.emit(
         "pipeline-status",
         pipeline::PipelineStatus {
             status: status.into(),
             text: text.map(String::from),
             error: error.map(String::from),
         },
-    )
-    .ok();
+    ) {
+        log::warn!("failed to emit pipeline-status: {emit_error}");
+    }
 }
 
 #[tauri::command]
@@ -495,13 +506,16 @@ async fn toggle_recording(
         let _busy = BusyGuard::new(&state.pipeline_busy);
         let settings = state.settings.lock().clone();
 
-        // Restore recording environment (mute, media, DND)
+        // Restore recording environment (mute, media)
         let env_snapshot = state.recording_env_state.lock().clone();
         recording_env::restore(&settings.general, &env_snapshot);
 
         // Update tray indicator
         if let Some(tray) = app.tray_by_id("yat-tray") {
-            tray.set_tooltip(Some("YAT – Voice to Text")).ok();
+            warn_if_err(
+                tray.set_tooltip(Some("YAT – Voice to Text")),
+                "failed to reset tray tooltip",
+            );
         }
 
         // Skip pipeline for very short recordings (< 1s) — accidental taps, noise
@@ -749,7 +763,7 @@ async fn toggle_recording(
                 return Ok("already recording".into());
             }
 
-            // Prepare recording environment (pause media, mute, enable DND)
+            // Prepare recording environment (pause media, mute)
             // inside the lock so a losing concurrent trigger cannot conflict.
             let env_state = recording_env::prepare(&general);
             *state.recording_env_state.lock() = env_state;
@@ -776,7 +790,10 @@ async fn toggle_recording(
 
         // Update tray indicator
         if let Some(tray) = app.tray_by_id("yat-tray") {
-            tray.set_tooltip(Some("YAT – 🔴 Recording…")).ok();
+            warn_if_err(
+                tray.set_tooltip(Some("YAT – 🔴 Recording…")),
+                "failed to update tray tooltip for recording",
+            );
         }
 
         // Auto-stop timer — only fires if the recording generation still
@@ -811,7 +828,9 @@ async fn toggle_recording(
                     break;
                 }
                 let level = f32::from_bits(state.mic_level.load(Ordering::Relaxed));
-                app_mic.emit("mic-level", level).ok();
+                if let Err(error) = app_mic.emit("mic-level", level) {
+                    log::warn!("failed to emit mic-level: {error}");
+                }
             }
         });
 
@@ -851,7 +870,7 @@ async fn cancel_recording(
 
     abort_context_capture_task(&state);
 
-    // Restore recording environment (mute, media, DND) if recording was active
+    // Restore recording environment (mute, media) if recording was active
     if restore_audio {
         let settings = state.settings.lock().clone();
         let env_snapshot = state.recording_env_state.lock().clone();
@@ -860,14 +879,13 @@ async fn cancel_recording(
 
     // Reset tray indicator
     if let Some(tray) = app.tray_by_id("yat-tray") {
-        tray.set_tooltip(Some("YAT – Voice to Text")).ok();
+        warn_if_err(
+            tray.set_tooltip(Some("YAT – Voice to Text")),
+            "failed to reset tray tooltip after cancellation",
+        );
     }
 
-    app.emit("pipeline-status", pipeline::PipelineStatus {
-        status: "idle".into(),
-        text: None,
-        error: None,
-    }).ok();
+    emit_status(&app, "idle", None, None);
     hide_capsule(&app);
     Ok(())
 }
@@ -1176,19 +1194,24 @@ fn show_capsule(app: &AppHandle, status: &str) {
             // Center horizontally on that monitor, 16 lp below the top edge
             let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
             let y = mon_y + 16.0;
-            window
-                .set_position(Position::Logical(LogicalPosition::new(x, y)))
-                .ok();
+            warn_if_err(
+                window.set_position(Position::Logical(LogicalPosition::new(x, y))),
+                "failed to position capsule window",
+            );
         }
     };
 
     if let Some(capsule) = app.get_webview_window("capsule") {
-        capsule
-            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, height)))
-            .ok();
+        warn_if_err(
+            capsule.set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, height))),
+            "failed to resize capsule window",
+        );
         position_on_active_monitor(app, &capsule);
-        capsule.show().ok();
-        capsule.set_ignore_cursor_events(true).ok();
+        warn_if_err(capsule.show(), "failed to show capsule window");
+        warn_if_err(
+            capsule.set_ignore_cursor_events(true),
+            "failed to ignore cursor events for capsule window",
+        );
     } else {
         match WebviewWindowBuilder::new(
             app,
@@ -1206,18 +1229,23 @@ fn show_capsule(app: &AppHandle, status: &str) {
         {
             Ok(w) => {
                 position_on_active_monitor(app, &w);
-                w.set_ignore_cursor_events(true).ok();
+                warn_if_err(
+                    w.set_ignore_cursor_events(true),
+                    "failed to ignore cursor events for new capsule window",
+                );
                 log::info!("capsule window created");
             }
             Err(e) => log::error!("failed to create capsule: {e}"),
         }
     }
-    app.emit("capsule-status", status).ok();
+    if let Err(error) = app.emit("capsule-status", status) {
+        log::warn!("failed to emit capsule-status: {error}");
+    }
 }
 
 fn hide_capsule(app: &AppHandle) {
     if let Some(capsule) = app.get_webview_window("capsule") {
-        capsule.hide().ok();
+        warn_if_err(capsule.hide(), "failed to hide capsule window");
     }
 }
 
@@ -1227,9 +1255,10 @@ fn hide_capsule(app: &AppHandle) {
 fn resize_capsule(app: AppHandle, height: f64) {
     let h = height.clamp(CAPSULE_HEIGHT, CAPSULE_MAX_HEIGHT);
     if let Some(capsule) = app.get_webview_window("capsule") {
-        capsule
-            .set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, h)))
-            .ok();
+        warn_if_err(
+            capsule.set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, h))),
+            "failed to resize capsule window from frontend",
+        );
         // Re-centre on the active monitor (top position stays the same
         // regardless of height since we anchor to the top edge)
         let monitor = app
@@ -1246,9 +1275,10 @@ fn resize_capsule(app: AppHandle, height: f64) {
             let mon_w = mon_size.width as f64 / scale;
             let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
             let y = mon_y + 16.0;
-            capsule
-                .set_position(Position::Logical(LogicalPosition::new(x, y)))
-                .ok();
+            warn_if_err(
+                capsule.set_position(Position::Logical(LogicalPosition::new(x, y))),
+                "failed to reposition capsule window from frontend",
+            );
         }
     }
 }
@@ -1431,7 +1461,9 @@ fn sync_macos_activation_policy(app: &AppHandle, main_window_visible: bool) {
         tauri::ActivationPolicy::Accessory
     };
 
-    app.set_activation_policy(policy);
+    if let Err(error) = app.set_activation_policy(policy) {
+        log::warn!("failed to update macOS activation policy: {error}");
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1440,13 +1472,13 @@ fn sync_macos_activation_policy(_app: &AppHandle, _main_window_visible: bool) {}
 fn toggle_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         if win.is_visible().unwrap_or(false) {
-            win.hide().ok();
+            warn_if_err(win.hide(), "failed to hide main window");
             sync_macos_activation_policy(app, false);
         } else {
             sync_macos_activation_policy(app, true);
-            win.unminimize().ok();
-            win.show().ok();
-            win.set_focus().ok();
+            warn_if_err(win.unminimize(), "failed to unminimize main window");
+            warn_if_err(win.show(), "failed to show main window");
+            warn_if_err(win.set_focus(), "failed to focus main window");
         }
         refresh_tray_menu(app);
     }
@@ -1475,7 +1507,7 @@ fn refresh_tray_menu(app: &AppHandle) {
                     .item(&quit_item)
                     .build()
                 {
-                    tray.set_menu(Some(menu)).ok();
+                    warn_if_err(tray.set_menu(Some(menu)), "failed to refresh tray menu");
                 }
             }
         }
@@ -1552,7 +1584,10 @@ pub fn run() {
                             if close_to_tray {
                                 api.prevent_close();
                                 if let Some(win) = handle_for_events.get_webview_window("main") {
-                                    win.hide().ok();
+                                    warn_if_err(
+                                        win.hide(),
+                                        "failed to hide main window on close-to-tray",
+                                    );
                                 }
                                 sync_macos_activation_policy(&handle_for_events, false);
                                 refresh_tray_menu(&handle_for_events);
@@ -1562,9 +1597,9 @@ pub fn run() {
                                     .close_to_tray_hinted
                                     .swap(true, Ordering::SeqCst)
                                 {
-                                    handle_for_events
-                                        .emit("close-to-tray-hint", ())
-                                        .ok();
+                                    if let Err(error) = handle_for_events.emit("close-to-tray-hint", ()) {
+                                        log::warn!("failed to emit close-to-tray-hint: {error}");
+                                    }
                                 }
                             }
                         }
@@ -1633,9 +1668,12 @@ pub fn run() {
             if !(launched_by_autostart && start_minimized) {
                 if let Some(win) = handle.get_webview_window("main") {
                     sync_macos_activation_policy(&handle, true);
-                    win.unminimize().ok();
-                    win.show().ok();
-                    win.set_focus().ok();
+                    warn_if_err(
+                        win.unminimize(),
+                        "failed to unminimize main window during startup",
+                    );
+                    warn_if_err(win.show(), "failed to show main window during startup");
+                    warn_if_err(win.set_focus(), "failed to focus main window during startup");
                 }
             } else {
                 sync_macos_activation_policy(&handle, false);
@@ -1646,7 +1684,9 @@ pub fn run() {
             let handle2 = handle.clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle2.state::<AppState>();
-                clear_old_history(state).ok();
+                if let Err(error) = clear_old_history(state) {
+                    log::warn!("failed to clear old history on startup: {error}");
+                }
             });
 
             Ok(())
