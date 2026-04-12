@@ -67,7 +67,7 @@ export function HintTip({ text }: { text: string }) {
         aria-label={text}
         tabIndex={0}
       >
-        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
           <circle cx="8" cy="8" r="6.5" />
           <path d="M8 11V7.5M8 5.5v-.01" strokeLinecap="round" />
         </svg>

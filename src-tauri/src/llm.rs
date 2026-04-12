@@ -61,9 +61,10 @@ fn build_user_content(raw_text: &str, screenshot_base64: Option<&str>) -> serde_
 
 fn error_looks_like_vision_unsupported(error: &LlmError) -> bool {
     match error {
-        LlmError::ApiError { status, body }
-            if matches!(status, 400 | 404 | 415 | 422 | 501) =>
-        {
+        LlmError::ApiError {
+            status: 400 | 404 | 415 | 422 | 501,
+            body,
+        } => {
             let body = body.to_lowercase();
             [
                 "vision",
@@ -85,6 +86,7 @@ fn error_looks_like_vision_unsupported(error: &LlmError) -> bool {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn send_chat_request(
     client: &reqwest::Client,
     url: &str,

@@ -24,9 +24,34 @@ export default function LlmTab() {
   const apiKeyHint = isLocalEndpointUrl(llm.base_url)
     ? t("llm.apiKeyHintLocal")
     : t("llm.apiKeyHintRemote");
+  const serviceLabel = t("tabs.llm");
+  const remoteEndpointWithoutKey = !isLocalEndpointUrl(llm.base_url) && !llm.api_key.trim();
 
   const update = (patch: Partial<typeof llm>) => {
     updateSettings({ llm: { ...llm, ...patch } });
+  };
+
+  const formatConnectionError = (error: unknown) => {
+    const raw = error instanceof Error ? error.message : String(error);
+    const normalized = raw.toLowerCase();
+
+    if (/timeout|timed out|deadline exceeded/.test(normalized)) {
+      return t("settings.connectionErrorTimeout", { service: serviceLabel });
+    }
+    if (/401|unauthorized|authentication|invalid api key|api key required/.test(normalized)) {
+      return t("settings.connectionErrorUnauthorized", { service: serviceLabel });
+    }
+    if (/403|forbidden|permission denied|insufficient/.test(normalized)) {
+      return t("settings.connectionErrorForbidden", { service: serviceLabel });
+    }
+    if (/404|not found|no such model|model_not_found/.test(normalized)) {
+      return t("settings.connectionErrorNotFound", { service: serviceLabel });
+    }
+    if (/connection|network|dns|refused|socket|unreachable|failed to fetch/.test(normalized)) {
+      return t("settings.connectionErrorNetwork", { service: serviceLabel });
+    }
+
+    return t("settings.connectionErrorUnknown", { service: serviceLabel, error: raw });
   };
 
   const testConnection = async () => {
@@ -37,7 +62,7 @@ export default function LlmTab() {
       setTestMsg(msg);
     } catch (e) {
       setTestStatus("fail");
-      setTestMsg(String(e));
+      setTestMsg(formatConnectionError(e));
     }
   };
 
@@ -121,6 +146,12 @@ export default function LlmTab() {
                   </button>
                 </div>
                 <p className={hintCls}>{apiKeyHint}</p>
+
+                {remoteEndpointWithoutKey ? (
+                  <Notice title={t("settings.remoteApiKeyTitle")} tone="warning">
+                    {t("settings.remoteApiKeyBody", { service: serviceLabel })}
+                  </Notice>
+                ) : null}
               </div>
 
               <Notice title={t("llm.bestUseTitle")} tone="default">
@@ -164,15 +195,19 @@ export default function LlmTab() {
               </button>
 
               {testStatus === "ok" ? (
-                <Notice title={t("llm.validationSuccessTitle")} tone="success">
-                  {testMsg || t("llm.validationSuccessBody")}
-                </Notice>
+                <div role="status" aria-live="polite">
+                  <Notice title={t("llm.validationSuccessTitle")} tone="success">
+                    {testMsg || t("llm.validationSuccessBody")}
+                  </Notice>
+                </div>
               ) : null}
 
               {testStatus === "fail" ? (
-                <Notice title={t("llm.validationFailTitle")} tone="danger">
-                  {testMsg}
-                </Notice>
+                <div role="alert" aria-live="assertive">
+                  <Notice title={t("llm.validationFailTitle")} tone="danger">
+                    {testMsg}
+                  </Notice>
+                </div>
               ) : null}
             </div>
           </Section>

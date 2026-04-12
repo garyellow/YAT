@@ -22,9 +22,34 @@ export default function SttTab() {
   const apiKeyHint = isLocalEndpointUrl(stt.base_url)
     ? t("stt.apiKeyHintLocal")
     : t("stt.apiKeyHintRemote");
+  const serviceLabel = t("tabs.stt");
+  const remoteEndpointWithoutKey = !isLocalEndpointUrl(stt.base_url) && !stt.api_key.trim();
 
   const update = (patch: Partial<typeof stt>) => {
     updateSettings({ stt: { ...stt, ...patch } });
+  };
+
+  const formatConnectionError = (error: unknown) => {
+    const raw = error instanceof Error ? error.message : String(error);
+    const normalized = raw.toLowerCase();
+
+    if (/timeout|timed out|deadline exceeded/.test(normalized)) {
+      return t("settings.connectionErrorTimeout", { service: serviceLabel });
+    }
+    if (/401|unauthorized|authentication|invalid api key|api key required/.test(normalized)) {
+      return t("settings.connectionErrorUnauthorized", { service: serviceLabel });
+    }
+    if (/403|forbidden|permission denied|insufficient/.test(normalized)) {
+      return t("settings.connectionErrorForbidden", { service: serviceLabel });
+    }
+    if (/404|not found|no such model|model_not_found/.test(normalized)) {
+      return t("settings.connectionErrorNotFound", { service: serviceLabel });
+    }
+    if (/connection|network|dns|refused|socket|unreachable|failed to fetch/.test(normalized)) {
+      return t("settings.connectionErrorNetwork", { service: serviceLabel });
+    }
+
+    return t("settings.connectionErrorUnknown", { service: serviceLabel, error: raw });
   };
 
   const testConnection = async () => {
@@ -35,7 +60,7 @@ export default function SttTab() {
       setTestMsg(msg);
     } catch (e) {
       setTestStatus("fail");
-      setTestMsg(String(e));
+      setTestMsg(formatConnectionError(e));
     }
   };
 
@@ -103,6 +128,12 @@ export default function SttTab() {
               </button>
             </div>
             <p className={hintCls}>{apiKeyHint}</p>
+
+            {remoteEndpointWithoutKey ? (
+              <Notice title={t("settings.remoteApiKeyTitle")} tone="warning">
+                {t("settings.remoteApiKeyBody", { service: serviceLabel })}
+              </Notice>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
@@ -151,15 +182,19 @@ export default function SttTab() {
           </button>
 
           {testStatus === "ok" ? (
-            <Notice title={t("stt.validationSuccessTitle")} tone="success">
-              {testMsg || t("stt.validationSuccessBody")}
-            </Notice>
+            <div role="status" aria-live="polite">
+              <Notice title={t("stt.validationSuccessTitle")} tone="success">
+                {testMsg || t("stt.validationSuccessBody")}
+              </Notice>
+            </div>
           ) : null}
 
           {testStatus === "fail" ? (
-            <Notice title={t("stt.validationFailTitle")} tone="danger">
-              {testMsg}
-            </Notice>
+            <div role="alert" aria-live="assertive">
+              <Notice title={t("stt.validationFailTitle")} tone="danger">
+                {testMsg}
+              </Notice>
+            </div>
           ) : null}
         </div>
       </Section>

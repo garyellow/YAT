@@ -86,6 +86,7 @@ pub struct PipelineResult {
 
 /// Run the full pipeline: STT → LLM polish → output.
 /// Caller is responsible for history insertion.
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     app: &AppHandle,
     audio_data: Vec<u8>,

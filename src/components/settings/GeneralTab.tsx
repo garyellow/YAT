@@ -54,6 +54,9 @@ export default function GeneralTab() {
   if (!settings) return null;
 
   const g = settings.general;
+  const statusAreaLabel = platform === "macos"
+    ? t("general.statusAreaMacos")
+    : t("general.statusAreaDefault");
 
   const update = (patch: Partial<AppSettings["general"]>) => {
     updateSettings({ general: { ...g, ...patch } });
@@ -459,18 +462,55 @@ export default function GeneralTab() {
 
       {/* ── Appearance ── */}
       <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
-        <Notice title={t("general.appearanceQuickToggleTitle")} tone="default">
-          {t("general.appearanceQuickToggleBody")}
-        </Notice>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="appearance-theme" className={labelCls}>{t("general.theme")}</label>
+              <select
+                id="appearance-theme"
+                name="appearance-theme"
+                value={g.theme}
+                onChange={(e) => update({ theme: e.target.value as AppSettings["general"]["theme"] })}
+                className="field-select"
+              >
+                <option value="system">{t("general.system")}</option>
+                <option value="light">{t("general.light")}</option>
+                <option value="dark">{t("general.dark")}</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="appearance-language" className={labelCls}>{t("general.language")}</label>
+              <select
+                id="appearance-language"
+                name="appearance-language"
+                value={g.language}
+                onChange={(e) => update({ language: e.target.value as AppSettings["general"]["language"] })}
+                className="field-select"
+              >
+                <option value="zh-TW">{t("general.languageTraditionalChinese")}</option>
+                <option value="en">{t("general.languageEnglish")}</option>
+              </select>
+            </div>
+          </div>
+
+          <Notice title={t("general.appearanceQuickToggleTitle")} tone="default">
+            {t("general.appearanceQuickToggleBody")}
+          </Notice>
+        </div>
       </Section>
 
       {/* ── Window Behavior ── */}
       <Section title={t("general.sectionWindow")} description={t("general.windowBehaviorDesc")}>
         <div className="space-y-5">
+          <Notice title={t("general.backgroundAccessTitle")} tone="default">
+            {t("general.backgroundAccessBody", { place: statusAreaLabel })}
+          </Notice>
+
           <div className="flex items-center justify-between gap-4 py-1">
             <div className="flex items-center gap-1.5">
               <p id="close-to-tray-label" className="text-[13px] font-medium">{t("general.closeToTray")}</p>
-              <HintTip text={t("general.closeToTrayHint")} />
+              <HintTip text={t("general.closeToTrayHint", { place: statusAreaLabel })} />
             </div>
             <Toggle checked={g.close_to_tray} onChange={(v) => update({ close_to_tray: v })} ariaLabelledBy="close-to-tray-label" />
           </div>
@@ -487,7 +527,7 @@ export default function GeneralTab() {
             <div className="flex items-center justify-between gap-4 py-1 pl-4 border-l-2 border-[var(--border)]">
               <div className="flex items-center gap-1.5">
                 <p id="start-minimized-label" className="text-[13px] font-medium">{t("general.startMinimized")}</p>
-                <HintTip text={t("general.startMinimizedHint")} />
+                <HintTip text={t("general.startMinimizedHint", { place: statusAreaLabel })} />
               </div>
               <Toggle checked={g.start_minimized} onChange={(v) => update({ start_minimized: v })} ariaLabelledBy="start-minimized-label" />
             </div>

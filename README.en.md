@@ -33,11 +33,11 @@ Whether you're a writer, a developer, or just someone answering endless messages
 Getting started is incredibly easy. Just follow these three steps:
 
 ### 1. Get YAT
-Go to the [Releases page](../../releases) and download the build for your OS (Windows, macOS, or Linux). Install and launch it. You'll see the YAT icon pop up in your system tray.
+Go to the [Releases page](../../releases) and download the build for your OS (Windows, macOS, or Linux). Install and launch it. You will see the YAT icon appear in the menu bar or system tray.
 
-### 2. Connect your brain (Configure API)
-YAT relies on your own API keys. It supports any API compatible with the OpenAI format.
-1. Click the system tray icon and open **Settings**.
+### 2. Connect your speech provider
+YAT uses your own API keys and supports any API compatible with the OpenAI format. You can start with speech recognition only, then turn on polishing later if you want cleaner output.
+1. Click the menu bar or system tray icon and open **Settings**.
 2. Go to the **Speech** tab, and enter your chosen API Base URL, Model name, and API Key.
 3. Click **Test Connection** to make sure you're good to go!
 *(Pro tip: Setup the **Polish** tab with another endpoint to have the AI clean up your formatting and grammar!)*
@@ -56,7 +56,7 @@ Once you see the floating status capsule appear, start speaking. Release the key
 YAT is more than just a record button. It's packed with quality-of-life features:
 
 - **Fully customizable hotkeys**: Not a fan of "hold-to-talk"? Change it to click-to-toggle, double-tap, or complex combos (like `Ctrl + Shift + C`).
-- **Context-Aware AI (Advanced)**: YAT can optionally read your clipboard, selected text, active application name, input field content, or even take a **screen capture** to provide the AI with context, adjusting the tone and format accordingly. *(Note: For your privacy, **all of these features are turned OFF by default**.)*
+- **Extra reference info (advanced)**: When you really need it, YAT can optionally read your clipboard, selected text, active app, current input field, or even take a **screen capture** before polishing. This helps the AI stay closer to what you are already working on. *(For privacy, **all of these are OFF by default**, and only the items you enable are sent.)*
 - **Distraction-free recording**: Automatically pause playing media, mute system mics, or enable Do Not Disturb mode while you are speaking (varies by OS).
 
 ## FAQ

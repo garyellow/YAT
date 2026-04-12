@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryStore } from "../../stores/historyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -9,15 +9,8 @@ import ConfirmDialog from "../ui/ConfirmDialog";
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
 
-const dtf = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 export default function HistoryTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const entries = useHistoryStore((s) => s.entries);
@@ -33,9 +26,16 @@ export default function HistoryTab() {
 
   const [query, setQuery] = useState(searchQuery);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: "clearOld" } | { type: "delete"; id: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const didMountSearchRef = useRef(false);
+  const dtf = useMemo(() => new Intl.DateTimeFormat(i18n.resolvedLanguage || undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }), [i18n.resolvedLanguage]);
 
   useEffect(() => {
     void loadHistory();
@@ -68,10 +68,12 @@ export default function HistoryTab() {
   const copyText = async (id: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopyError(null);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
-      /* clipboard fallback not needed in tauri */
+      setCopyError(t("history.copyFailedBody"));
+      setTimeout(() => setCopyError(null), 2500);
     }
   };
 
@@ -88,6 +90,11 @@ export default function HistoryTab() {
       : confirmAction?.type === "delete"
         ? t("history.confirmDelete")
         : "";
+  const confirmTitle = confirmAction?.type === "clearOld"
+    ? t("history.clearOld")
+    : confirmAction?.type === "delete"
+      ? t("actions.delete")
+      : t("actions.confirm");
 
   return (
     <div className="space-y-10">
@@ -163,9 +170,18 @@ export default function HistoryTab() {
         }
       >
         {retryError ? (
-          <Notice title={t("history.retryFailed")} tone="danger">
-            {retryError}
-          </Notice>
+          <div role="alert" aria-live="assertive">
+            <Notice title={t("history.retryFailed")} tone="danger">
+              {retryError}
+            </Notice>
+          </div>
+        ) : null}
+        {copyError ? (
+          <div role="alert" aria-live="assertive">
+            <Notice title={t("history.copyFailedTitle")} tone="danger">
+              {copyError}
+            </Notice>
+          </div>
         ) : null}
         {loading ? (
           <p className="py-4 text-xs text-[var(--text-muted)]">{t("status.loading")}</p>
@@ -208,7 +224,7 @@ export default function HistoryTab() {
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 gap-1 transition-opacity duration-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <div className="flex shrink-0 gap-1">
                     {(entry.polished_text || entry.raw_text) ? (
                       <button
                         type="button"
@@ -245,6 +261,7 @@ export default function HistoryTab() {
 
       <ConfirmDialog
         open={confirmAction !== null}
+        title={confirmTitle}
         message={confirmMessage}
         tone="danger"
         onConfirm={handleConfirm}

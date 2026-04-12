@@ -117,7 +117,7 @@ export default function VocabularyTab() {
           </div>
 
           {validationMsg ? (
-            <p className="text-xs text-[var(--red)]">{validationMsg}</p>
+            <p role="alert" aria-live="assertive" className="text-xs text-[var(--red)]">{validationMsg}</p>
           ) : (
             <p className={hintCls}>{t("vocabulary.emptyHint")}</p>
           )}
@@ -145,7 +145,7 @@ export default function VocabularyTab() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-danger text-xs shrink-0 transition-opacity duration-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                  className="btn btn-danger text-xs shrink-0"
                   onClick={() => setConfirmIndex(index)}
                 >
                   {t("actions.delete")}
@@ -158,6 +158,7 @@ export default function VocabularyTab() {
 
       <ConfirmDialog
         open={confirmIndex !== null}
+        title={t("actions.delete")}
         message={t("vocabulary.confirmDelete")}
         tone="danger"
         onConfirm={handleConfirmDelete}

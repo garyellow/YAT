@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useAppStore } from "../../stores/appStore";
 import { getDefaultSystemPrompt } from "../../lib/defaultSettings";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { isTauriRuntime } from "../../lib/tauriRuntime";
@@ -13,7 +14,7 @@ import type { SettingsTab } from "./tabs";
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
 const hintCls = "text-[11px] text-[var(--text-muted)]";
 
-function getPlatform(): "macos" | "windows" | "linux" {
+function getFallbackPlatform(): "macos" | "windows" | "linux" {
   if (typeof navigator !== "undefined") {
     if (/mac/i.test(navigator.platform)) return "macos";
     if (/linux/i.test(navigator.platform)) return "linux";
@@ -29,9 +30,10 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const appPlatform = useAppStore((s) => s.platform);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showAdvancedContext, setShowAdvancedContext] = useState(false);
-  const platform = getPlatform();
+  const platform = appPlatform === "unknown" ? getFallbackPlatform() : appPlatform;
 
   if (!settings) return null;
   const prompt = settings.prompt;
@@ -174,6 +176,8 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
             <button
               type="button"
               className="btn btn-ghost text-xs w-full text-left flex items-center gap-1"
+              aria-expanded={showAdvancedContext}
+              aria-controls="prompt-advanced-context-panel"
               onClick={() => setShowAdvancedContext(!showAdvancedContext)}
             >
               <span className="text-[var(--text-muted)] text-[10px] transition-transform" style={{ transform: showAdvancedContext ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
@@ -183,13 +187,13 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
 
           {/* ── Advanced context sources (collapsible) ── */}
           {showAdvancedContext ? (
-            <div className="space-y-2 pl-1">
+            <div id="prompt-advanced-context-panel" className="space-y-2 pl-1">
               <div className="flex items-center justify-between gap-4 py-1">
                 <div>
                   <p id="context-active-app-label" className="text-[13px] font-medium">{t("prompt.contextActiveApp")}</p>
                   <p className={hintCls}>{t("prompt.contextActiveAppHint")}</p>
                   {platform === "macos" ? (
-                    <p className="text-[10px] text-amber-500 mt-0.5">{t("prompt.contextActiveAppMacNote")}</p>
+                    <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">{t("prompt.contextActiveAppMacNote")}</p>
                   ) : null}
                 </div>
                 <Toggle
@@ -204,7 +208,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                 <div>
                   <p id="context-input-field-label" className="text-[13px] font-medium">{t("prompt.contextInputField")}</p>
                   <p className={hintCls}>{t("prompt.contextInputFieldHint")}</p>
-                  <p className="text-[10px] text-amber-500 mt-0.5">
+                  <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">
                     {platform === "windows"
                       ? t("prompt.contextInputFieldNoteWindows")
                       : platform === "macos"
@@ -224,7 +228,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                 <div>
                   <p id="context-screenshot-label" className="text-[13px] font-medium">{t("prompt.contextScreenshot")}</p>
                   <p className={hintCls}>{t("prompt.contextScreenshotHint")}</p>
-                  <p className="text-[10px] text-amber-500 mt-0.5">{t("prompt.contextScreenshotNote")}</p>
+                  <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">{t("prompt.contextScreenshotNote")}</p>
                 </div>
                 <Toggle
                   checked={prompt.context_screenshot}
@@ -275,13 +279,17 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
           <button
             type="button"
             className="btn btn-secondary text-xs"
+            aria-expanded={showAdvanced}
+            aria-controls="system-prompt-panel"
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
             {showAdvanced ? t("prompt.hideAdvanced") : t("prompt.showAdvanced")}
           </button>
 
           {showAdvanced ? (
-            <div className="space-y-3">
+            <div id="system-prompt-panel" className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="system-prompt" className={labelCls}>{t("prompt.advanced")}</label>
               <textarea
                 id="system-prompt"
                 name="system-prompt"
@@ -290,6 +298,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                 className="field-textarea"
                 rows={10}
               />
+              </div>
               <div className="flex gap-2">
                 <button type="button" className="btn btn-secondary text-xs" onClick={resetSystemPrompt}>
                   {t("prompt.resetToDefault")}

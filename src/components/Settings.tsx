@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { isSttConfigured } from "../lib/settingsFormatters";
 import { isTauriRuntime } from "../lib/tauriRuntime";
@@ -26,7 +27,7 @@ function ThemeIcon({ theme }: { theme: string }) {
   const cls = "h-3.5 w-3.5 text-current";
   if (theme === "light") {
     return (
-      <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="12" cy="12" r="4" />
         <path d="M12 3v2m0 14v2m-9-9h2m14 0h2m-3.64-6.36-1.41 1.41M7.05 16.95l-1.41 1.41m0-12.72 1.41 1.41m9.9 9.9 1.41 1.41" strokeLinecap="round" />
       </svg>
@@ -34,13 +35,13 @@ function ThemeIcon({ theme }: { theme: string }) {
   }
   if (theme === "dark") {
     return (
-      <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.03-.93A5.4 5.4 0 0 1 12 7.5c0-1.62.72-3.08 1.86-4.07A9.06 9.06 0 0 0 12 3Z" />
       </svg>
     );
   }
   return (
-    <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
       <rect x="4" y="5" width="16" height="12" rx="1.5" />
       <path d="M8 21h8m-4-4v4" strokeLinecap="round" />
     </svg>
@@ -49,7 +50,7 @@ function ThemeIcon({ theme }: { theme: string }) {
 
 function LanguageIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-current" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="h-3.5 w-3.5 text-current" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M12 3.75a8.25 8.25 0 1 0 0 16.5 8.25 8.25 0 0 0 0-16.5Z" />
       <path d="M4.5 12h15M12 4c1.9 2.1 3 4.92 3 8s-1.1 5.9-3 8c-1.9-2.1-3-4.92-3-8s1.1-5.9 3-8Z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -62,47 +63,47 @@ function NavIcon({ name }: { name: IconName }) {
   switch (name) {
     case "overview":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 5.5h16M4 12h16M4 18.5h10" strokeLinecap="round" />
         </svg>
       );
     case "general":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 3.75v2.5m0 11.5v2.5m8.25-8.25h-2.5M6.25 12h-2.5m12.1-5.85-1.77 1.77M7.92 16.08l-1.77 1.77m9.7 0-1.77-1.77M7.92 7.92 6.15 6.15" strokeLinecap="round" />
           <circle cx="12" cy="12" r="3.35" />
         </svg>
       );
     case "stt":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="9" y="3.5" width="6" height="11" rx="3" />
           <path d="M6 11.5v.75a6 6 0 0 0 12 0v-.75M12 18.25v2.25M8.75 20.5h6.5" strokeLinecap="round" />
         </svg>
       );
     case "llm":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 3.5 14 8l4.5 2-4.5 2-2 4.5-2-4.5L5.5 10 10 8 12 3.5Z" />
         </svg>
       );
     case "prompt":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M5.25 6.5h13.5v9.5H9.5l-4.25 3.5V6.5Z" strokeLinejoin="round" />
           <path d="M8.25 10h7.5M8.25 13h5.5" strokeLinecap="round" />
         </svg>
       );
     case "vocabulary":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M6 5.5h8.75a3.25 3.25 0 0 1 3.25 3.25V18.5H9.25A3.25 3.25 0 0 0 6 21.75V5.5Z" strokeLinejoin="round" />
           <path d="M6 5.5v13A3.25 3.25 0 0 1 9.25 15.25H18" strokeLinecap="round" />
         </svg>
       );
     case "history":
       return (
-        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 6.25v6l3.75 2.25" strokeLinecap="round" />
           <path d="M4.75 12a7.25 7.25 0 1 0 2.12-5.13" strokeLinecap="round" />
           <path d="M4.75 4.75v3.5h3.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -118,6 +119,13 @@ const tabGroups: Array<{ labelKey: string; tabs: SettingsTab[] }> = [
   { labelKey: "settings.groups.data", tabs: ["history"] },
 ];
 
+function getTabFromLocation(): SettingsTab {
+  const fromUrl = new URLSearchParams(window.location.search).get("tab");
+  return fromUrl && settingsTabs.includes(fromUrl as SettingsTab)
+    ? (fromUrl as SettingsTab)
+    : "overview";
+}
+
 export default function Settings() {
   const { t, i18n } = useTranslation();
   const [active, setActive] = useState<SettingsTab>("overview");
@@ -132,6 +140,7 @@ export default function Settings() {
   const validationError = useSettingsStore((s) => s.validationError);
   const flushSettings = useSettingsStore((s) => s.flushSettings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const platform = useAppStore((s) => s.platform);
 
   const tabTitle = t(`tabs.${active}`);
   const sttReady = isSttConfigured(settings);
@@ -139,18 +148,40 @@ export default function Settings() {
     ? settings.general.theme
     : "system";
   const currentLanguage: LanguageSetting = settings?.general.language === "en" ? "en" : "zh-TW";
+  const statusAreaLabel = platform === "macos"
+    ? t("general.statusAreaMacos")
+    : t("general.statusAreaDefault");
 
   useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get("tab");
-    if (fromUrl && settingsTabs.includes(fromUrl as SettingsTab)) {
-      setActive(fromUrl as SettingsTab);
-    }
+    const syncFromLocation = () => {
+      const nextTab = getTabFromLocation();
+      setActive(nextTab);
+
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("tab") !== nextTab) {
+        url.searchParams.set("tab", nextTab);
+        window.history.replaceState({ tab: nextTab }, "", url);
+      }
+    };
+
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
 
-  useEffect(() => {
+  const changeTab = useCallback((nextTab: SettingsTab) => {
     const url = new URL(window.location.href);
-    url.searchParams.set("tab", active);
-    window.history.replaceState({}, "", url);
+    if (active === nextTab && url.searchParams.get("tab") === nextTab) {
+      return;
+    }
+
+    url.searchParams.set("tab", nextTab);
+    window.history.pushState(
+      { tab: nextTab },
+      "",
+      url,
+    );
+    setActive(nextTab);
   }, [active]);
 
   useEffect(() => {
@@ -259,7 +290,7 @@ export default function Settings() {
       const { listen } = await import("@tauri-apps/api/event");
       unlisten = await listen("close-to-tray-hint", () => {
         setToastTone("info");
-        setToastMessage(t("general.closeToTrayNotice"));
+        setToastMessage(t("general.closeToTrayNotice", { place: statusAreaLabel }));
         setToastVisible(true);
       });
       if (disposed) unlisten?.();
@@ -269,7 +300,7 @@ export default function Settings() {
       disposed = true;
       unlisten?.();
     };
-  }, [t, i18n.resolvedLanguage]);
+  }, [statusAreaLabel, t, i18n.resolvedLanguage]);
 
   const handleSave = async () => {
     if (dirty && saveStatus !== "saving" && !validationError) {
@@ -369,7 +400,7 @@ export default function Settings() {
     const panel = (() => {
       switch (active) {
         case "overview":
-          return <OverviewTab onNavigate={setActive} />;
+          return <OverviewTab onNavigate={changeTab} />;
         case "general":
           return <GeneralTab />;
         case "stt":
@@ -377,7 +408,7 @@ export default function Settings() {
         case "llm":
           return <LlmTab />;
         case "prompt":
-          return <PromptTab onNavigate={setActive} />;
+          return <PromptTab onNavigate={changeTab} />;
         case "vocabulary":
           return <VocabularyTab />;
         case "history":
@@ -415,7 +446,7 @@ export default function Settings() {
                   key={tab}
                   type="button"
                   aria-current={active === tab ? "page" : undefined}
-                  onClick={() => setActive(tab)}
+                  onClick={() => changeTab(tab)}
                   className="nav-item"
                   data-active={active === tab ? "true" : "false"}
                 >

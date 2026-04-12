@@ -29,6 +29,15 @@ use config::AppSettings;
 use history::{HistoryEntry, HistoryManager};
 use hotkey::HotkeySettings;
 
+#[derive(Default)]
+struct CapturedContext {
+    clipboard: Option<String>,
+    selection: Option<String>,
+    app_info: Option<context::ActiveWindowInfo>,
+    input_field: Option<String>,
+    screenshot: Option<String>,
+}
+
 pub struct AppState {
     pub recorder: Mutex<AudioRecorder>,
     pub settings: Mutex<AppSettings>,
@@ -62,16 +71,8 @@ pub struct AppState {
     pub close_to_tray_hinted: AtomicBool,
     /// Consecutive paste failures; used to suggest clipboard-only mode.
     pub paste_fail_count: AtomicU32,
-    /// Clipboard content captured at the start of a recording, for LLM context.
-    pub captured_clipboard: Mutex<Option<String>>,
-    /// Selected text captured at the start of a recording, for LLM context.
-    pub captured_selection: Mutex<Option<String>>,
-    /// Active window info captured at the start of a recording.
-    pub captured_app_info: Mutex<Option<context::ActiveWindowInfo>>,
-    /// Focused input field text captured at the start of a recording.
-    pub captured_input_field: Mutex<Option<String>>,
-    /// Screenshot (base64-encoded PNG) captured at the start of a recording.
-    pub captured_screenshot: Mutex<Option<String>>,
+    /// Background context capture task for the current recording generation.
+    context_capture_task: Mutex<Option<(u64, tauri::async_runtime::JoinHandle<CapturedContext>)>>,
 }
 
 #[derive(Serialize)]
@@ -95,6 +96,7 @@ const CAPSULE_HIDE_DELAY_NO_SPEECH_SECS: u64 = 2;
 const MIN_RECORDING_DURATION_MS: u64 = 500;
 const POST_RECORDING_BUFFER_MS: u64 = 300;
 const AUTO_CLIPBOARD_FALLBACK_THRESHOLD: u32 = 3;
+const CONTEXT_CAPTURE_WAIT_MS: u64 = 1200;
 
 const KEYRING_SERVICE: &str = "com.garyellow.yat";
 
@@ -221,6 +223,113 @@ fn sync_hotkey_triggers_enabled(state: &AppState) {
     let enabled = !state.main_window_focused.load(Ordering::SeqCst)
         && !state.hotkey_capture_active.load(Ordering::SeqCst);
     state.hotkey_triggers_enabled.store(enabled, Ordering::SeqCst);
+}
+
+fn capture_context_snapshot(
+    context_enabled: bool,
+    prompt_cfg: config::PromptConfig,
+) -> CapturedContext {
+    if !context_enabled {
+        return CapturedContext::default();
+    }
+
+    // Active window must be captured first — it's needed before any
+    // simulated keystrokes (which may change focus).
+    let app_info = if prompt_cfg.context_active_app {
+        context::get_active_window_info()
+    } else {
+        None
+    };
+
+    let clipboard = if prompt_cfg.context_clipboard {
+        context::read_clipboard_text()
+    } else {
+        None
+    };
+
+    let selection = if prompt_cfg.context_selection {
+        context::read_selected_text()
+    } else {
+        None
+    };
+
+    let input_field = if prompt_cfg.context_input_field {
+        context::read_input_field_text()
+    } else {
+        None
+    };
+
+    let screenshot = if prompt_cfg.context_screenshot {
+        context::capture_screenshot_base64()
+    } else {
+        None
+    };
+
+    CapturedContext {
+        clipboard,
+        selection,
+        app_info,
+        input_field,
+        screenshot,
+    }
+}
+
+fn replace_context_capture_task(
+    state: &AppState,
+    generation: u64,
+    context_enabled: bool,
+    prompt_cfg: config::PromptConfig,
+) {
+    abort_context_capture_task(state);
+
+    if !context_enabled {
+        return;
+    }
+
+    let handle = tauri::async_runtime::spawn_blocking(move || {
+        capture_context_snapshot(context_enabled, prompt_cfg)
+    });
+
+    *state.context_capture_task.lock() = Some((generation, handle));
+}
+
+fn abort_context_capture_task(state: &AppState) {
+    if let Some((_generation, handle)) = state.context_capture_task.lock().take() {
+        handle.abort();
+    }
+}
+
+async fn await_context_capture(state: &AppState, generation: u64) -> CapturedContext {
+    let handle = {
+        let mut task = state.context_capture_task.lock();
+        match task.take() {
+            Some((expected_generation, handle)) if expected_generation == generation => Some(handle),
+            Some((_stale_generation, handle)) => {
+                handle.abort();
+                None
+            }
+            None => None,
+        }
+    };
+
+    let Some(handle) = handle else {
+        return CapturedContext::default();
+    };
+
+    match tokio::time::timeout(Duration::from_millis(CONTEXT_CAPTURE_WAIT_MS), handle).await {
+        Ok(Ok(context)) => context,
+        Ok(Err(error)) => {
+            log::warn!("context capture task failed: {error}");
+            CapturedContext::default()
+        }
+        Err(_) => {
+            log::warn!(
+                "context capture did not finish within {}ms; continuing without extra context",
+                CONTEXT_CAPTURE_WAIT_MS
+            );
+            CapturedContext::default()
+        }
+    }
 }
 
 // ── Tauri Commands ──────────────────────────────────────────────────
@@ -423,6 +532,7 @@ async fn toggle_recording(
         };
 
         if too_short {
+            abort_context_capture_task(&state);
             let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
             emit_status(&app, "dismissed", None, None);
             schedule_capsule_hide(
@@ -434,11 +544,13 @@ async fn toggle_recording(
             return Ok(String::new());
         }
 
-        let captured_clipboard_ctx = state.captured_clipboard.lock().take();
-        let captured_selection_ctx = state.captured_selection.lock().take();
-        let captured_app_info = state.captured_app_info.lock().take();
-        let captured_input_field_ctx = state.captured_input_field.lock().take();
-        let captured_screenshot_ctx = state.captured_screenshot.lock().take();
+        let CapturedContext {
+            clipboard: captured_clipboard_ctx,
+            selection: captured_selection_ctx,
+            app_info: captured_app_info,
+            input_field: captured_input_field_ctx,
+            screenshot: captured_screenshot_ctx,
+        } = await_context_capture(&state, operation_generation).await;
 
         // Respect the *current* settings when deciding whether captured context
         // should still be used. This avoids leaking stale context if the user
@@ -623,52 +735,8 @@ async fn toggle_recording(
         let device_name = general.microphone_device.clone();
         let max_secs = general.max_recording_seconds as u64;
 
-        // Offload context capture (screenshot, clipboard, active app, etc.) to a background thread.
-        // This ensures the microphone starts immediately without blocking on potentially slow I/O.
         let context_enabled = settings_snapshot.llm.enabled;
         let prompt_cfg = settings_snapshot.prompt;
-
-        use tauri::Manager;
-        let app_handle_for_bg = app.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            let state_for_bg = app_handle_for_bg.state::<AppState>();
-            let (app_info, clip_ctx, sel_ctx, input_ctx, screenshot_ctx) = if context_enabled {
-                let app_info = if prompt_cfg.context_active_app {
-                    context::get_active_window_info()
-                } else {
-                    None
-                };
-                let clip_ctx = if prompt_cfg.context_clipboard {
-                    context::read_clipboard_text()
-                } else {
-                    None
-                };
-                let sel_ctx = if prompt_cfg.context_selection {
-                    context::read_selected_text()
-                } else {
-                    None
-                };
-                let input_ctx = if prompt_cfg.context_input_field {
-                    context::read_input_field_text()
-                } else {
-                    None
-                };
-                let screenshot_ctx = if prompt_cfg.context_screenshot {
-                    context::capture_screenshot_base64()
-                } else {
-                    None
-                };
-                (app_info, clip_ctx, sel_ctx, input_ctx, screenshot_ctx)
-            } else {
-                (None, None, None, None, None)
-            };
-
-            *state_for_bg.captured_clipboard.lock() = clip_ctx;
-            *state_for_bg.captured_selection.lock() = sel_ctx;
-            *state_for_bg.captured_app_info.lock() = app_info;
-            *state_for_bg.captured_input_field.lock() = input_ctx;
-            *state_for_bg.captured_screenshot.lock() = screenshot_ctx;
-        });
 
         let mic_level = Arc::clone(&state.mic_level);
 
@@ -697,6 +765,11 @@ async fn toggle_recording(
                 })?;
             generation
         };
+
+        // Capture context in the background after the mic starts so dictation
+        // begins instantly, while still keeping the result tied to this exact
+        // recording generation.
+        replace_context_capture_task(&state, generation, context_enabled, prompt_cfg);
 
         emit_status(&app, "recording", None, None);
         show_capsule(&app, "recording");
@@ -775,6 +848,8 @@ async fn cancel_recording(
     if !cancelled {
         return Ok(());
     }
+
+    abort_context_capture_task(&state);
 
     // Restore recording environment (mute, media, DND) if recording was active
     if restore_audio {
@@ -1297,10 +1372,22 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
-    let _tray = TrayIconBuilder::with_id("yat-tray")
+    let mut tray_builder = TrayIconBuilder::with_id("yat-tray")
         .menu(&menu)
+        .icon_as_template(true)
         .show_menu_on_left_click(show_menu_on_left_click)
-        .tooltip("YAT – Voice to Text")
+        .tooltip("YAT – Voice to Text");
+
+    if let Some(icon) = app.default_window_icon() {
+        tray_builder = tray_builder.icon(icon.clone());
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Ok(cache_dir) = app.path().app_cache_dir() {
+        tray_builder = tray_builder.temp_dir_path(cache_dir);
+    }
+
+    let _tray = tray_builder
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "toggle_window" => {
                 toggle_main_window(app);
@@ -1317,6 +1404,10 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
+            if cfg!(target_os = "linux") {
+                return;
+            }
+
             if let tauri::tray::TrayIconEvent::Click {
                 button: tauri::tray::MouseButton::Left,
                 button_state: tauri::tray::MouseButtonState::Up,
@@ -1332,11 +1423,28 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn sync_macos_activation_policy(app: &AppHandle, main_window_visible: bool) {
+    let policy = if main_window_visible {
+        tauri::ActivationPolicy::Regular
+    } else {
+        tauri::ActivationPolicy::Accessory
+    };
+
+    app.set_activation_policy(policy);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn sync_macos_activation_policy(_app: &AppHandle, _main_window_visible: bool) {}
+
 fn toggle_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         if win.is_visible().unwrap_or(false) {
             win.hide().ok();
+            sync_macos_activation_policy(app, false);
         } else {
+            sync_macos_activation_policy(app, true);
+            win.unminimize().ok();
             win.show().ok();
             win.set_focus().ok();
         }
@@ -1424,11 +1532,7 @@ pub fn run() {
                 hotkey_capture_active: AtomicBool::new(false),
                 close_to_tray_hinted: AtomicBool::new(false),
                 paste_fail_count: AtomicU32::new(0),
-                captured_clipboard: Mutex::new(None),
-                captured_selection: Mutex::new(None),
-                captured_app_info: Mutex::new(None),
-                captured_input_field: Mutex::new(None),
-                captured_screenshot: Mutex::new(None),
+                context_capture_task: Mutex::new(None),
             };
             app.manage(state);
             sync_hotkey_triggers_enabled(&handle.state::<AppState>());
@@ -1450,6 +1554,7 @@ pub fn run() {
                                 if let Some(win) = handle_for_events.get_webview_window("main") {
                                     win.hide().ok();
                                 }
+                                sync_macos_activation_policy(&handle_for_events, false);
                                 refresh_tray_menu(&handle_for_events);
 
                                 // Show a one-time education hint the first time the window hides to tray
@@ -1527,9 +1632,13 @@ pub fn run() {
             let start_minimized = handle.state::<AppState>().settings.lock().general.start_minimized;
             if !(launched_by_autostart && start_minimized) {
                 if let Some(win) = handle.get_webview_window("main") {
+                    sync_macos_activation_policy(&handle, true);
+                    win.unminimize().ok();
                     win.show().ok();
                     win.set_focus().ok();
                 }
+            } else {
+                sync_macos_activation_policy(&handle, false);
             }
             refresh_tray_menu(&handle);
 

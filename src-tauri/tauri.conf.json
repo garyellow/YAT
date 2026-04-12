@@ -23,11 +23,6 @@
         "minHeight": 620
       }
     ],
-    "trayIcon": {
-      "id": "yat-tray",
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*"
     }

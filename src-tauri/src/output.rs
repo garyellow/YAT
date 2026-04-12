@@ -124,7 +124,7 @@ pub fn output_text(
                             if let Ok(mut cb) = Clipboard::new() {
                                 let still_ours = cb
                                     .get_text()
-                                    .map_or(false, |current| current == expected);
+                                    .is_ok_and(|current| current == expected);
                                 if still_ours {
                                     let _ = cb.clear();
                                     log::debug!("clipboard cleared after successful paste");

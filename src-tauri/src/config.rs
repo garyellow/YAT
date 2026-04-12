@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // ── STT Configuration ───────────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SttConfig {
     pub base_url: String,
@@ -10,36 +10,14 @@ pub struct SttConfig {
     pub language: Option<String>,
 }
 
-impl Default for SttConfig {
-    fn default() -> Self {
-        Self {
-            base_url: String::new(),
-            api_key: String::new(),
-            model: String::new(),
-            language: None,
-        }
-    }
-}
-
 // ── LLM Configuration ──────────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct LlmConfig {
     pub enabled: bool,
     pub base_url: String,
     pub api_key: String,
     pub model: String,
-}
-
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            base_url: String::new(),
-            api_key: String::new(),
-            model: String::new(),
-        }
-    }
 }
 
 // ── Hotkey Configuration ────────────────────────────────────────────
@@ -226,7 +204,7 @@ impl Default for HistoryConfig {
 }
 
 // ── App Settings (top-level) ────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AppSettings {
     pub stt: SttConfig,
@@ -234,16 +212,4 @@ pub struct AppSettings {
     pub general: GeneralConfig,
     pub prompt: PromptConfig,
     pub history: HistoryConfig,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            stt: SttConfig::default(),
-            llm: LlmConfig::default(),
-            general: GeneralConfig::default(),
-            prompt: PromptConfig::default(),
-            history: HistoryConfig::default(),
-        }
-    }
 }

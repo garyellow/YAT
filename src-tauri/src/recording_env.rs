@@ -1,9 +1,9 @@
-/// Recording environment management — all side-effects that should be applied
-/// when recording starts and reverted when it stops.
-///
-/// Consolidates system mute, media pause, and DND into a single module with
-/// a unified `prepare()` / `restore()` API so the caller does not have to
-/// coordinate multiple modules.
+//! Recording environment management — all side-effects that should be applied
+//! when recording starts and reverted when it stops.
+//!
+//! Consolidates system mute, media pause, and DND into a single module with
+//! a unified `prepare()` / `restore()` API so the caller does not have to
+//! coordinate multiple modules.
 
 use crate::config::GeneralConfig;
 
@@ -343,7 +343,7 @@ fn resume_media(paused_ids: &[String]) -> Result<(), String> {
             .map(|s| s.to_string())
             .unwrap_or_default();
 
-        if !paused_ids.iter().any(|id| *id == app_id) {
+        if !paused_ids.contains(&app_id) {
             continue;
         }
 

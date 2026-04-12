@@ -27,7 +27,7 @@ pub(crate) enum KeyMatcher {
 impl KeyMatcher {
     pub(crate) fn primary_key(&self) -> Key {
         match self {
-            Self::Exact(key) => key.clone(),
+            Self::Exact(key) => *key,
             Self::EitherCtrl => Key::ControlLeft,
             Self::EitherShift => Key::ShiftLeft,
             Self::EitherMeta => Key::MetaLeft,
@@ -228,7 +228,7 @@ fn should_consume_single_or_double_tap(key: &Key) -> bool {
 
 fn remember_pressed_key(pressed_keys: &mut Vec<Key>, key: &Key) {
     if !pressed_keys.iter().any(|pressed| pressed == key) {
-        pressed_keys.push(key.clone());
+        pressed_keys.push(*key);
     }
 }
 
@@ -416,7 +416,7 @@ where
                             let consumed = st.key_consumed;
                             let too_short = st
                                 .hold_start
-                                .map_or(false, |t| t.elapsed().as_millis() < 150);
+                                .is_some_and(|t| t.elapsed().as_millis() < 150);
                             st.hold_active = false;
                             st.hold_start = None;
                             st.key_consumed = false;
