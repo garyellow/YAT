@@ -14,7 +14,9 @@ export default function App() {
   const theme = useSettingsStore((s) => s.settings?.general.theme);
   const init = useRecordingStore((s) => s.init);
   const loadPlatform = useAppStore((s) => s.loadPlatform);
+  const loadPermissions = useAppStore((s) => s.loadPermissions);
   const platformLoaded = useAppStore((s) => s.platformLoaded);
+  const permissionsLoaded = useAppStore((s) => s.permissionsLoaded);
 
   useEffect(() => {
     void loadSettings().catch((error) => {
@@ -22,7 +24,8 @@ export default function App() {
     });
     init();
     void loadPlatform();
-  }, [loadPlatform, loadSettings, init]);
+    void loadPermissions();
+  }, [loadPlatform, loadPermissions, loadSettings, init]);
 
   useEffect(() => {
     if (language) {
@@ -59,7 +62,7 @@ export default function App() {
     }
   }, [theme]);
 
-  if (loading || !settings || !platformLoaded) {
+  if (loading || !settings || !platformLoaded || !permissionsLoaded) {
     return (
       <div className="loading-screen" aria-live="polite">
         <p className="text-sm text-[var(--text-muted)]">{t("status.loading")}</p>

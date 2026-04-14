@@ -6,19 +6,22 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import {
   browserCodeToRdevName,
   formatHotkeyKey,
-  getHotkeyAdvice,
-  getRecommendedHotkeyLabel,
   sortModifiersFirst,
   validateHotkeyConfig,
 } from "../../lib/settingsFormatters";
 import { isTauriRuntime } from "../../lib/tauriRuntime";
 import type { AppSettings } from "../../stores/settingsStore";
-import { Notice, OptionCard, Section } from "./SettingPrimitives";
+import {
+  Notice,
+  OptionCard,
+  PageIntro,
+  RangeField,
+  Section,
+  SettingList,
+  SettingRow,
+  SummaryPill,
+} from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
-import { HintTip } from "../ui/Tooltip";
-
-const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
 
 const HOTKEY_VALIDATION_COPY: Record<string, string> = {
   missing_key: "general.hotkeyValidationMissingKey",
@@ -30,6 +33,40 @@ const HOTKEY_VALIDATION_COPY: Record<string, string> = {
   invalid_double_tap_interval: "general.hotkeyValidationDoubleTapRange",
 };
 
+function DisclosureButton({
+  summary,
+  open,
+  onClick,
+  controlsId,
+  hint,
+}: {
+  summary: string;
+  open: boolean;
+  onClick: () => void;
+  controlsId: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn-secondary btn-compact disclosure-btn"
+      aria-expanded={open}
+      aria-controls={controlsId}
+      onClick={onClick}
+      title={hint}
+    >
+      <span className="disclosure-btn-value">{summary}</span>
+      <span
+        className="disclosure-btn-chevron"
+        style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+        aria-hidden="true"
+      >
+        ▶
+      </span>
+    </button>
+  );
+}
+
 export default function GeneralTab() {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
@@ -37,7 +74,10 @@ export default function GeneralTab() {
   const [audioDevices, setAudioDevices] = useState<string[]>([]);
   const [recording, setRecording] = useState(false);
   const [pressedKeys, setPressedKeys] = useState<string[]>([]);
+  const [showBackgroundAudio, setShowBackgroundAudio] = useState(false);
+  const [showOutputOptions, setShowOutputOptions] = useState(false);
   const platform = useAppStore((s) => s.platform);
+  const permissions = useAppStore((s) => s.permissions);
   const recordingRef = useRef(false);
 
   useEffect(() => {
@@ -54,6 +94,7 @@ export default function GeneralTab() {
   if (!settings) return null;
 
   const g = settings.general;
+  const backgroundAudioRemaining = 100 - g.background_audio_ducking_percent;
   const statusAreaLabel = platform === "macos"
     ? t("general.statusAreaMacos")
     : t("general.statusAreaDefault");
@@ -63,7 +104,6 @@ export default function GeneralTab() {
   };
 
   const hotkeyValidation = validateHotkeyConfig(g.hotkey);
-  const hotkeyAdvice = getHotkeyAdvice(g.hotkey);
 
   const refreshDevices = () => {
     if (!isTauriRuntime()) {
@@ -270,306 +310,475 @@ export default function GeneralTab() {
     }
   };
 
+  const currentHotkeySequence = g.hotkey.hotkey_type === "combo"
+    ? [...g.hotkey.held_keys, g.hotkey.key]
+    : [g.hotkey.key];
+
+  const backgroundAudioSummary = g.background_audio_mode === "off"
+    ? t("general.backgroundAudioOff")
+    : g.background_audio_mode === "mute"
+      ? t("general.backgroundAudioMute")
+      : `${t("general.backgroundAudioDuck")} · ${g.background_audio_ducking_percent}%`;
+
+  const outputSummary = g.output_mode === "auto_paste"
+    ? g.clipboard_behavior === "always"
+      ? `${t("general.autoPaste")} · ${t("general.alwaysCopyToggle")}`
+      : t("general.autoPaste")
+    : t("general.clipboardOnly");
+
+  const autoPauseMediaDetail = platform === "macos"
+    ? t("general.autoPauseMediaDetailMacos")
+    : platform === "linux"
+      ? t("general.autoPauseMediaDetailLinux")
+      : null;
+
+  const renderKeySequence = (keys: string[], subtle = false) => (
+    <div className="flex min-h-10 flex-wrap items-center gap-2">
+      {keys.map((key, index) => (
+        <Fragment key={`${key}-${index}`}>
+          {index > 0 ? <span className="text-xs text-[var(--text-muted)]">+</span> : null}
+          <kbd
+            className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-semibold ${
+              subtle
+                ? "border-[var(--border)] bg-[var(--bg-muted)] text-[var(--text)]"
+                : "border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)]"
+            }`}
+          >
+            {formatHotkeyKey(key)}
+          </kbd>
+        </Fragment>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="space-y-10">
-      {/* ── Hotkey ── */}
+    <div className="space-y-6">
+      <PageIntro
+        eyebrow={t("settings.groups.capture")}
+        title={t("tabs.general")}
+        description={`${t("general.recordingDesc")} ${t("general.outputDesc")}`}
+      />
+
       <Section title={t("general.hotkey")} description={t("general.hotkeyDesc")}>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4 shadow-sm">
-            <div className="space-y-1">
-              <p className="text-[11px] text-[var(--text-muted)]">{t("general.currentHotkey")}</p>
+        <SettingList>
+          <SettingRow
+            label={t("general.currentHotkey")}
+            control={
               <div className="flex flex-wrap items-center gap-2">
-                {g.hotkey.hotkey_type === "combo"
-                  ? g.hotkey.held_keys.map((heldKey, index) => (
-                      <Fragment key={`${heldKey}-${index}`}>
-                        {index > 0 ? <span className="text-xs text-[var(--text-muted)]">+</span> : null}
-                        <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">{formatHotkeyKey(heldKey)}</kbd>
-                      </Fragment>
-                    ))
-                  : null}
-                {g.hotkey.hotkey_type === "combo" && g.hotkey.held_keys.length > 0 ? (
-                  <span className="text-xs text-[var(--text-muted)]">+</span>
-                ) : null}
-                <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">{formatHotkeyKey(g.hotkey.key)}</kbd>
-                <span className="rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-xs font-medium text-[var(--accent)]">
-                  {modeLabel(g.hotkey.hotkey_type)}
-                </span>
+                {renderKeySequence(currentHotkeySequence)}
+                <SummaryPill tone="accent">{modeLabel(g.hotkey.hotkey_type)}</SummaryPill>
+                <button
+                  type="button"
+                  className={`btn btn-compact shrink-0 ${recording ? "btn-primary animate-pulse" : "btn-secondary"}`}
+                  onClick={recordHotkey}
+                  disabled={recording}
+                  title={recording ? t("general.recordingHotkeyBody") : t("general.hotkeyDesc")}
+                >
+                  {recording ? t("general.recordingHotkey") : t("general.recordHotkey")}
+                </button>
               </div>
-            </div>
+            }
+          >
 
-            <button
-              type="button"
-              className={`btn shrink-0 ${recording ? "btn-primary animate-pulse" : "btn-secondary"}`}
-              onClick={recordHotkey}
-              disabled={recording}
-            >
-              {recording ? t("general.recordingHotkey") : t("general.recordHotkey")}
-            </button>
-          </div>
-
-          {recording ? (
-            <div className="rounded-xl border border-[var(--accent)] bg-[var(--accent-subtle)] p-4">
-              <p className="text-[13px] font-medium text-[var(--text)] mb-2">{t("general.recordingHotkeyTitle")}</p>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">{t("general.recordingHotkeyBody")}</p>
-              <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg)] px-3 py-2">
-                {pressedKeys.length > 0 ? (
-                  pressedKeys.map((key, index) => (
-                    <Fragment key={key}>
-                      {index > 0 ? <span className="text-xs text-[var(--text-muted)]">+</span> : null}
-                      <kbd className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] shadow-sm">
-                        {formatHotkeyKey(key)}
-                      </kbd>
-                    </Fragment>
-                  ))
-                ) : (
-                  <span className="text-xs text-[var(--text-muted)]">{t("general.recordingWaitingKeys")}</span>
-                )}
+            {recording ? (
+              <div className="rounded-xl border border-[var(--accent)] bg-[var(--accent-subtle)] px-4 py-3">
+                <p className="text-[13px] font-semibold text-[var(--text)]">
+                  {t("general.recordingHotkeyTitle")}
+                </p>
+                <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">
+                  {t("general.recordingHotkeyBody")}
+                </p>
+                <div className="mt-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-3">
+                  {pressedKeys.length > 0 ? (
+                    renderKeySequence(pressedKeys, true)
+                  ) : (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {t("general.recordingWaitingKeys")}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </SettingRow>
+        </SettingList>
 
-          {hotkeyValidation ? (
+        {hotkeyValidation ? (
+          <div className="mt-4">
             <Notice title={t("general.hotkeyValidationTitle")} tone="danger">
               {t(HOTKEY_VALIDATION_COPY[hotkeyValidation.code])}
             </Notice>
-          ) : null}
-
-          <Notice title={t(hotkeyAdvice.titleKey)} tone={hotkeyAdvice.tone}>
-            {t(hotkeyAdvice.bodyKey, {
-              recommended: getRecommendedHotkeyLabel(platform),
-            })}
-          </Notice>
-        </div>
+          </div>
+        ) : null}
       </Section>
 
-      {/* ── Recording ── */}
       <Section title={t("general.sectionRecording")} description={t("general.recordingDesc")}>
-        <div className="space-y-5">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="microphone-device" className={labelCls}>{t("general.microphoneDevice")}</label>
-              <button type="button" onClick={refreshDevices} className="btn btn-ghost text-xs">
+        <SettingList>
+          <SettingRow
+            labelId="microphone-device-label"
+            label={t("general.microphoneDevice")}
+            description={t("general.microphoneHint")}
+            control={
+              <button
+                type="button"
+                onClick={refreshDevices}
+                className="btn btn-ghost btn-compact text-xs"
+                title={t("general.microphoneHint")}
+              >
                 {t("general.refreshDevices")}
               </button>
+            }
+          >
+            <div className="w-full">
+              <select
+                id="microphone-device"
+                name="microphone-device"
+                aria-labelledby="microphone-device-label"
+                value={g.microphone_device ?? ""}
+                onChange={(e) => update({ microphone_device: e.target.value || null })}
+                className="field-select"
+              >
+                <option value="">{t("general.defaultDevice")}</option>
+                {audioDevices.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
-            <select
-              id="microphone-device"
-              name="microphone-device"
-              value={g.microphone_device ?? ""}
-              onChange={(e) => update({ microphone_device: e.target.value || null })}
-              className="field-select"
-            >
-              <option value="">{t("general.defaultDevice")}</option>
-              {audioDevices.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-            <p className={hintCls}>{t("general.microphoneHint")}</p>
-          </div>
+          </SettingRow>
 
-          <div className="space-y-1.5">
-            <label htmlFor="max-recording" className={labelCls}>{t("general.maxRecording")}</label>
-            <div className="flex items-center gap-3">
-              <input
+          <SettingRow
+            labelId="max-recording-label"
+            label={t("general.maxRecording")}
+            description={t("general.maxRecordingHint")}
+          >
+            <div className="w-full">
+              <RangeField
                 id="max-recording"
                 name="max-recording"
-                type="range"
+                aria-labelledby="max-recording-label"
                 value={g.max_recording_seconds}
-                onChange={(e) => update({ max_recording_seconds: Number(e.target.value) })}
-                className="flex-1 accent-[var(--accent)]"
+                onChange={(value) => update({ max_recording_seconds: value })}
                 min={10}
                 max={600}
                 step={10}
+                formatValue={(value) => `${value}${t("general.seconds")}`}
               />
-              <span className="w-14 text-right text-xs font-medium tabular-nums text-[var(--text-secondary)]">{g.max_recording_seconds}{t("general.seconds")}</span>
             </div>
-            <p className={hintCls}>{t("general.maxRecordingHint")}</p>
-          </div>
+          </SettingRow>
 
-          <div className="flex items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-1.5">
-              <p id="sound-effects-label" className="text-[13px] font-medium">{t("general.soundEffects")}</p>
-              <HintTip text={t("general.soundEffectsHint")} />
-            </div>
-            <Toggle checked={g.sound_effects} onChange={(v) => update({ sound_effects: v })} ariaLabelledBy="sound-effects-label" />
-          </div>
-
-          {platform !== "linux" ? (
-            <div className="flex items-center justify-between gap-4 py-1">
-              <div className="flex items-center gap-1.5">
-                <p id="auto-mute-label" className="text-[13px] font-medium">{t("general.autoMute")}</p>
-                <HintTip text={t("general.autoMuteHint")} />
-              </div>
-              <Toggle checked={g.auto_mute} onChange={(v) => update({ auto_mute: v })} ariaLabelledBy="auto-mute-label" />
-            </div>
-          ) : null}
-
-          {platform !== "linux" ? (
-            <div className="flex items-center justify-between gap-4 py-1">
-              <div className="flex items-center gap-1.5">
-                <p id="auto-pause-media-label" className="text-[13px] font-medium">{t("general.autoPauseMedia")}</p>
-                <HintTip text={t("general.autoPauseMediaHint")} />
-              </div>
-              <Toggle checked={g.auto_pause_media} onChange={(v) => update({ auto_pause_media: v })} ariaLabelledBy="auto-pause-media-label" />
-            </div>
-          ) : null}
-        </div>
-      </Section>
-
-      {/* ── Output ── */}
-      <Section title={t("general.sectionOutput")} description={t("general.outputDesc")}>
-        <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <OptionCard
-              title={t("general.autoPaste")}
-              description={t("general.autoPasteDesc")}
-              selected={g.output_mode === "auto_paste"}
-              onClick={() => update({ output_mode: "auto_paste" })}
-            />
-            <OptionCard
-              title={t("general.clipboardOnly")}
-              description={t("general.clipboardOnlyDesc")}
-              selected={g.output_mode === "clipboard_only"}
-              onClick={() => update({ output_mode: "clipboard_only" })}
-            />
-          </div>
-
-          {g.output_mode === "auto_paste" ? (
-            <div className="flex items-center justify-between gap-4 py-1">
-              <div className="flex items-center gap-1.5">
-                <p id="clipboard-behavior-label" className="text-[13px] font-medium">{t("general.alwaysCopyToggle")}</p>
-                <HintTip text={t("general.alwaysCopyToggleHint")} />
-              </div>
+          <SettingRow
+            labelId="sound-effects-label"
+            label={t("general.soundEffects")}
+            description={t("general.soundEffectsHint")}
+            control={
               <Toggle
-                checked={g.clipboard_behavior === "always"}
-                onChange={(v) => update({ clipboard_behavior: v ? "always" : "only_on_paste_fail" })}
-                ariaLabelledBy="clipboard-behavior-label"
+                checked={g.sound_effects}
+                onChange={(v) => update({ sound_effects: v })}
+                ariaLabelledBy="sound-effects-label"
               />
-            </div>
-          ) : null}
-        </div>
-      </Section>
+            }
+          />
 
-      {/* ── Appearance ── */}
-      <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="appearance-theme" className={labelCls}>{t("general.theme")}</label>
-              <select
-                id="appearance-theme"
-                name="appearance-theme"
-                value={g.theme}
-                onChange={(e) => update({ theme: e.target.value as AppSettings["general"]["theme"] })}
-                className="field-select"
-              >
-                <option value="system">{t("general.system")}</option>
-                <option value="light">{t("general.light")}</option>
-                <option value="dark">{t("general.dark")}</option>
-              </select>
-            </div>
+          <SettingRow
+            label={t("general.backgroundAudio")}
+            description={t("general.backgroundAudioHint")}
+            control={
+              <DisclosureButton
+                summary={backgroundAudioSummary}
+                open={showBackgroundAudio}
+                controlsId="background-audio-panel"
+                hint={t("general.backgroundAudioHint")}
+                onClick={() => setShowBackgroundAudio((value) => !value)}
+              />
+            }
+          >
+            {showBackgroundAudio ? (
+              <div id="background-audio-panel" className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <OptionCard
+                    title={t("general.backgroundAudioOff")}
+                    description={t("general.backgroundAudioOffDesc")}
+                    selected={g.background_audio_mode === "off"}
+                    onClick={() => update({ background_audio_mode: "off" })}
+                  />
+                  <OptionCard
+                    title={t("general.backgroundAudioDuck")}
+                    description={t("general.backgroundAudioDuckDesc")}
+                    selected={g.background_audio_mode === "duck"}
+                    onClick={() => update({ background_audio_mode: "duck" })}
+                  />
+                  <OptionCard
+                    title={t("general.backgroundAudioMute")}
+                    description={t("general.backgroundAudioMuteDesc")}
+                    selected={g.background_audio_mode === "mute"}
+                    onClick={() => update({ background_audio_mode: "mute" })}
+                  />
+                </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="appearance-language" className={labelCls}>{t("general.language")}</label>
-              <select
-                id="appearance-language"
-                name="appearance-language"
-                value={g.language}
-                onChange={(e) => update({ language: e.target.value as AppSettings["general"]["language"] })}
-                className="field-select"
-              >
-                <option value="zh-TW">{t("general.languageTraditionalChinese")}</option>
-                <option value="en">{t("general.languageEnglish")}</option>
-              </select>
-            </div>
-          </div>
-
-          <Notice title={t("general.appearanceQuickToggleTitle")} tone="default">
-            {t("general.appearanceQuickToggleBody")}
-          </Notice>
-        </div>
-      </Section>
-
-      {/* ── Window Behavior ── */}
-      <Section title={t("general.sectionWindow")} description={t("general.windowBehaviorDesc")}>
-        <div className="space-y-5">
-          <Notice title={t("general.backgroundAccessTitle")} tone="default">
-            {t("general.backgroundAccessBody", { place: statusAreaLabel })}
-          </Notice>
-
-          <div className="flex items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-1.5">
-              <p id="close-to-tray-label" className="text-[13px] font-medium">{t("general.closeToTray")}</p>
-              <HintTip text={t("general.closeToTrayHint", { place: statusAreaLabel })} />
-            </div>
-            <Toggle checked={g.close_to_tray} onChange={(v) => update({ close_to_tray: v })} ariaLabelledBy="close-to-tray-label" />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-1.5">
-              <p id="auto-start-label" className="text-[13px] font-medium">{t("general.autoStart")}</p>
-              <HintTip text={t("general.autoStartHint")} />
-            </div>
-            <Toggle checked={g.auto_start} onChange={(v) => update({ auto_start: v })} ariaLabelledBy="auto-start-label" />
-          </div>
-
-          {g.auto_start ? (
-            <div className="flex items-center justify-between gap-4 py-1 pl-4 border-l-2 border-[var(--border)]">
-              <div className="flex items-center gap-1.5">
-                <p id="start-minimized-label" className="text-[13px] font-medium">{t("general.startMinimized")}</p>
-                <HintTip text={t("general.startMinimizedHint", { place: statusAreaLabel })} />
+                {g.background_audio_mode === "duck" ? (
+                  <SettingRow
+                    inset
+                    labelId="background-audio-ducking-percent-label"
+                    label={t("general.backgroundAudioDuckAmount")}
+                    description={t("general.backgroundAudioDuckAmountBody", {
+                      percent: g.background_audio_ducking_percent,
+                      remaining: backgroundAudioRemaining,
+                    })}
+                  >
+                    <div className="w-full">
+                      <RangeField
+                        id="background-audio-ducking-percent"
+                        name="background-audio-ducking-percent"
+                        aria-labelledby="background-audio-ducking-percent-label"
+                        value={g.background_audio_ducking_percent}
+                        onChange={(value) => update({ background_audio_ducking_percent: value })}
+                        min={20}
+                        max={90}
+                        step={5}
+                        formatValue={(value) => `${value}%`}
+                      />
+                    </div>
+                  </SettingRow>
+                ) : null}
               </div>
-              <Toggle checked={g.start_minimized} onChange={(v) => update({ start_minimized: v })} ariaLabelledBy="start-minimized-label" />
-            </div>
+            ) : null}
+          </SettingRow>
+
+          <SettingRow
+            labelId="auto-pause-media-label"
+            label={t("general.autoPauseMedia")}
+            description={t("general.autoPauseMediaHint")}
+            hint={autoPauseMediaDetail ?? undefined}
+            control={
+              <Toggle
+                checked={g.auto_pause_media}
+                onChange={(v) => update({ auto_pause_media: v })}
+                ariaLabelledBy="auto-pause-media-label"
+              />
+            }
+          />
+        </SettingList>
+
+        <div className="mt-4 space-y-3 empty:hidden">
+          {g.background_audio_mode !== "off" && platform === "linux" && permissions?.pactl_available === false ? (
+            <Notice title={t("general.backgroundAudioPactlMissing")} tone="danger">
+              {t("general.backgroundAudioPactlMissingBody")}
+            </Notice>
+          ) : null}
+
+          {g.auto_pause_media && platform === "linux" && permissions?.playerctl_available === false ? (
+            <Notice title={t("general.autoPausePlayerctlMissing")} tone="danger">
+              {t("general.autoPausePlayerctlMissingBody")}
+            </Notice>
+          ) : null}
+
+          {g.auto_pause_media && platform === "macos" && permissions?.accessibility !== "granted" ? (
+            <Notice title={t("general.autoPauseAccessibilityRequired")} tone="warning">
+              {t("general.autoPauseAccessibilityRequiredBody")}
+            </Notice>
           ) : null}
         </div>
       </Section>
 
-      {/* ── Network ── */}
+      <Section title={t("general.sectionOutput")} description={t("general.outputDesc")}>
+        <SettingList>
+          <SettingRow
+            label={t("general.outputMode")}
+            control={
+              <DisclosureButton
+                summary={outputSummary}
+                open={showOutputOptions}
+                controlsId="output-options-panel"
+                hint={t("general.outputDesc")}
+                onClick={() => setShowOutputOptions((value) => !value)}
+              />
+            }
+          >
+            {showOutputOptions ? (
+              <div id="output-options-panel" className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <OptionCard
+                    title={t("general.autoPaste")}
+                    description={t("general.autoPasteDesc")}
+                    selected={g.output_mode === "auto_paste"}
+                    onClick={() => update({ output_mode: "auto_paste" })}
+                  />
+                  <OptionCard
+                    title={t("general.clipboardOnly")}
+                    description={t("general.clipboardOnlyDesc")}
+                    selected={g.output_mode === "clipboard_only"}
+                    onClick={() => update({ output_mode: "clipboard_only" })}
+                  />
+                </div>
+
+                {g.output_mode === "auto_paste" ? (
+                  <SettingRow
+                    inset
+                    labelId="clipboard-behavior-label"
+                    label={t("general.alwaysCopyToggle")}
+                    description={t("general.alwaysCopyToggleHint")}
+                    control={
+                      <Toggle
+                        checked={g.clipboard_behavior === "always"}
+                        onChange={(v) => update({ clipboard_behavior: v ? "always" : "only_on_paste_fail" })}
+                        ariaLabelledBy="clipboard-behavior-label"
+                      />
+                    }
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </SettingRow>
+        </SettingList>
+
+        {g.output_mode === "auto_paste" && platform === "macos" && permissions?.accessibility !== "granted" ? (
+          <div className="mt-4">
+            <Notice title={t("general.autoPasteAccessibilityRequired")} tone="warning">
+              {t("general.autoPasteAccessibilityRequiredBody")}
+            </Notice>
+          </div>
+        ) : null}
+      </Section>
+
+      <Section title={t("general.sectionAppearance")} description={t("general.appearanceDesc")}>
+        <SettingList>
+          <SettingRow
+            labelId="appearance-theme-label"
+            label={t("general.theme")}
+            control={
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-labelledby="appearance-theme-label">
+                {(["system", "light", "dark"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={g.theme === value}
+                    className={`btn btn-compact ${
+                      g.theme === value ? "btn-primary" : "btn-ghost"
+                    }`}
+                    onClick={() => update({ theme: value })}
+                  >
+                    {t(`general.${value}`)}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+
+          <SettingRow
+            labelId="appearance-language-label"
+            label={t("general.language")}
+            control={
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-labelledby="appearance-language-label">
+                {(["zh-TW", "en"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={g.language === value}
+                    className={`btn btn-compact ${
+                      g.language === value ? "btn-primary" : "btn-ghost"
+                    }`}
+                    onClick={() => update({ language: value as AppSettings["general"]["language"] })}
+                  >
+                    {value === "zh-TW" ? t("general.languageTraditionalChinese") : t("general.languageEnglish")}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+        </SettingList>
+      </Section>
+
+      <Section title={t("general.sectionWindow")} description={t("general.windowBehaviorDesc")}>
+        <div className="space-y-4">
+          <SettingList>
+            <SettingRow
+              labelId="close-to-tray-label"
+              label={t("general.closeToTray")}
+              description={t("general.closeToTrayHint", { place: statusAreaLabel })}
+              control={
+                <Toggle
+                  checked={g.close_to_tray}
+                  onChange={(v) => update({ close_to_tray: v })}
+                  ariaLabelledBy="close-to-tray-label"
+                />
+              }
+            />
+
+            <SettingRow
+              labelId="auto-start-label"
+              label={t("general.autoStart")}
+              description={t("general.autoStartHint")}
+              control={
+                <Toggle
+                  checked={g.auto_start}
+                  onChange={(v) => update({ auto_start: v })}
+                  ariaLabelledBy="auto-start-label"
+                />
+              }
+            >
+              {g.auto_start ? (
+                <SettingRow
+                  inset
+                  labelId="start-minimized-label"
+                  label={t("general.startMinimized")}
+                  description={t("general.startMinimizedHint", { place: statusAreaLabel })}
+                  control={
+                    <Toggle
+                      checked={g.start_minimized}
+                      onChange={(v) => update({ start_minimized: v })}
+                      ariaLabelledBy="start-minimized-label"
+                    />
+                  }
+                />
+              ) : null}
+            </SettingRow>
+          </SettingList>
+        </div>
+      </Section>
+
       <Section title={t("general.sectionNetwork")} description={t("general.networkDesc")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="timeout-ms" className={labelCls}>{t("general.timeout")}</label>
-              <HintTip text={t("general.timeoutHint")} />
-            </div>
-            <div className="flex items-center gap-3">
-              <input
+        <SettingList>
+          <SettingRow
+            labelId="timeout-ms-label"
+            label={t("general.timeout")}
+            description={t("general.timeoutHint")}
+          >
+            <div className="w-full">
+              <RangeField
                 id="timeout-ms"
                 name="timeout-ms"
-                type="range"
+                aria-labelledby="timeout-ms-label"
                 value={g.timeout_ms}
-                onChange={(e) => update({ timeout_ms: Number(e.target.value) })}
-                className="flex-1 accent-[var(--accent)]"
+                onChange={(value) => update({ timeout_ms: value })}
                 min={5000}
                 max={120000}
                 step={1000}
+                formatValue={(value) => `${value / 1000}s`}
               />
-              <span className="w-12 text-right text-xs font-medium tabular-nums text-[var(--text-secondary)]">{g.timeout_ms / 1000}s</span>
             </div>
-          </div>
+          </SettingRow>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="max-retries" className={labelCls}>{t("general.maxRetries")}</label>
-              <HintTip text={t("general.maxRetriesHint")} />
-            </div>
-            <div className="flex items-center gap-3">
-              <input
+          <SettingRow
+            labelId="max-retries-label"
+            label={t("general.maxRetries")}
+            description={t("general.maxRetriesHint")}
+          >
+            <div className="w-full">
+              <RangeField
                 id="max-retries"
                 name="max-retries"
-                type="range"
+                aria-labelledby="max-retries-label"
                 value={g.max_retries}
-                onChange={(e) => update({ max_retries: Number(e.target.value) })}
-                className="flex-1 accent-[var(--accent)]"
+                onChange={(value) => update({ max_retries: value })}
                 min={0}
                 max={5}
                 step={1}
+                formatValue={(value) => value}
               />
-              <span className="w-8 text-right text-xs font-medium tabular-nums text-[var(--text-secondary)]">{g.max_retries}</span>
             </div>
-          </div>
-        </div>
+          </SettingRow>
+        </SettingList>
       </Section>
     </div>
   );

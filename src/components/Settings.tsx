@@ -11,11 +11,10 @@ import LlmTab from "./settings/LlmTab";
 import PromptTab from "./settings/PromptTab";
 import VocabularyTab from "./settings/VocabularyTab";
 import HistoryTab from "./settings/HistoryTab";
+import { SettingsTabIcon, AppTitleImage } from "./settings/icons";
 import { Notice, StatusDot } from "./settings/SettingPrimitives";
 import { settingsTabs, type SettingsTab } from "./settings/tabs";
 import Toast from "./ui/Toast";
-
-type IconName = "overview" | "general" | "stt" | "llm" | "prompt" | "vocabulary" | "history";
 
 const THEME_CYCLE = ["system", "light", "dark"] as const;
 const LANGUAGE_CYCLE = ["zh-TW", "en"] as const;
@@ -55,61 +54,6 @@ function LanguageIcon() {
       <path d="M4.5 12h15M12 4c1.9 2.1 3 4.92 3 8s-1.1 5.9-3 8c-1.9-2.1-3-4.92-3-8s1.1-5.9 3-8Z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-}
-
-function NavIcon({ name }: { name: IconName }) {
-  const cls = "h-3.5 w-3.5 text-current";
-
-  switch (name) {
-    case "overview":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M4 5.5h16M4 12h16M4 18.5h10" strokeLinecap="round" />
-        </svg>
-      );
-    case "general":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 3.75v2.5m0 11.5v2.5m8.25-8.25h-2.5M6.25 12h-2.5m12.1-5.85-1.77 1.77M7.92 16.08l-1.77 1.77m9.7 0-1.77-1.77M7.92 7.92 6.15 6.15" strokeLinecap="round" />
-          <circle cx="12" cy="12" r="3.35" />
-        </svg>
-      );
-    case "stt":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="9" y="3.5" width="6" height="11" rx="3" />
-          <path d="M6 11.5v.75a6 6 0 0 0 12 0v-.75M12 18.25v2.25M8.75 20.5h6.5" strokeLinecap="round" />
-        </svg>
-      );
-    case "llm":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 3.5 14 8l4.5 2-4.5 2-2 4.5-2-4.5L5.5 10 10 8 12 3.5Z" />
-        </svg>
-      );
-    case "prompt":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M5.25 6.5h13.5v9.5H9.5l-4.25 3.5V6.5Z" strokeLinejoin="round" />
-          <path d="M8.25 10h7.5M8.25 13h5.5" strokeLinecap="round" />
-        </svg>
-      );
-    case "vocabulary":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M6 5.5h8.75a3.25 3.25 0 0 1 3.25 3.25V18.5H9.25A3.25 3.25 0 0 0 6 21.75V5.5Z" strokeLinejoin="round" />
-          <path d="M6 5.5v13A3.25 3.25 0 0 1 9.25 15.25H18" strokeLinecap="round" />
-        </svg>
-      );
-    case "history":
-      return (
-        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 6.25v6l3.75 2.25" strokeLinecap="round" />
-          <path d="M4.75 12a7.25 7.25 0 1 0 2.12-5.13" strokeLinecap="round" />
-          <path d="M4.75 4.75v3.5h3.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-  }
 }
 
 const tabGroups: Array<{ labelKey: string; tabs: SettingsTab[] }> = [
@@ -410,7 +354,7 @@ export default function Settings() {
         case "prompt":
           return <PromptTab onNavigate={changeTab} />;
         case "vocabulary":
-          return <VocabularyTab />;
+          return <VocabularyTab onNavigate={changeTab} />;
         case "history":
           return <HistoryTab />;
         default:
@@ -425,20 +369,21 @@ export default function Settings() {
   };
 
   return (
-    <div className="shell flex max-md:flex-col">
+    <div className="shell flex max-lg:flex-col">
       <Toast message={toastMessage} visible={toastVisible} onDone={hideToast} tone={toastTone} />
 
       <aside className="sidebar shrink-0 flex flex-col p-3">
-        <div className="px-2 pt-2 pb-4">
-          <p className="text-[15px] font-semibold tracking-tight text-[var(--text)]">
-            YAT
-          </p>
+        <div className="sidebar-brand flex items-center gap-2.5 px-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full">
+             <AppTitleImage className="h-full w-full object-cover" />
+          </div>
+          <p className="text-xl font-bold tracking-[-0.02em] text-[var(--text)]">YAT</p>
         </div>
 
-        <nav className="flex-1 space-y-4" aria-label={t("settings.navigationLabel")}>
+        <nav className="flex-1 space-y-5 px-1 pt-4" aria-label={t("settings.navigationLabel")}>
           {tabGroups.map((group) => (
-            <div key={group.labelKey} className="space-y-0.5">
-              <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            <div key={group.labelKey} className="nav-group">
+              <p className="nav-group-label">
                 {t(group.labelKey)}
               </p>
               {group.tabs.map((tab) => (
@@ -451,7 +396,7 @@ export default function Settings() {
                   data-active={active === tab ? "true" : "false"}
                 >
                   <span className="grid h-4 w-4 place-items-center" aria-hidden="true">
-                    <NavIcon name={tab} />
+                    <SettingsTabIcon name={tab} className="h-3.5 w-3.5" />
                   </span>
                   <span>{t(`tabs.${tab}`)}</span>
                 </button>
@@ -460,17 +405,30 @@ export default function Settings() {
           ))}
         </nav>
 
-        <div className="border-t border-[var(--border)] px-2 pt-3 pb-1">
+        <div className="sidebar-footer">
           <StatusDot tone={sttReady ? "success" : "warning"}>
             {sttReady ? t("overview.badges.ready") : t("overview.badges.setupNeeded")}
           </StatusDot>
+          <p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">
+            {sttReady
+              ? t("overview.summary.speechReady", { model: settings?.stt.model ?? "" })
+              : t("overview.summary.speechPending")}
+          </p>
         </div>
       </aside>
 
-      <section className="min-h-0 min-w-0 flex-1 border-l border-[var(--border)] max-md:border-l-0 max-md:border-t">
+      <section className="main-pane min-h-0 flex flex-col">
         <div className="flex h-full min-h-0 flex-col">
-          <header className="main-header flex items-center justify-between gap-4 px-6 py-3">
-            <h2 className="text-[14px] font-medium">{tabTitle}</h2>
+          <header className="main-header flex items-center justify-between gap-4 px-7 py-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                YAT
+              </p>
+              <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+                {tabTitle}
+              </h2>
+            </div>
+
             <div className="flex flex-wrap items-center justify-end gap-2" aria-live="polite">
               <button
                 type="button"
@@ -507,16 +465,16 @@ export default function Settings() {
             </div>
           </header>
 
-          <main id="settings-content" className="flex-1 overflow-y-auto pb-10 pt-6">
-            <div className="mx-auto max-w-3xl px-6">
-            {statusNotice ? (
-              <div className="mb-4">
-                <Notice title={statusNotice.title} tone={statusNotice.tone}>
-                  {statusNotice.body}
-                </Notice>
-              </div>
-            ) : null}
-            {renderActivePanel()}
+          <main id="settings-content" className="page-scroll flex-1 overflow-y-auto">
+            <div className="page-frame">
+              {statusNotice ? (
+                <div className="mb-6">
+                  <Notice title={statusNotice.title} tone={statusNotice.tone}>
+                    {statusNotice.body}
+                  </Notice>
+                </div>
+              ) : null}
+              {renderActivePanel()}
             </div>
           </main>
         </div>

@@ -54,12 +54,12 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div
-        className="dialog-backdrop absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="dialog-backdrop absolute inset-0 bg-black/40"
         onClick={onCancel}
         aria-hidden="true"
       />
       <div
-        className="dialog-panel relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-[var(--bg)] p-5 shadow-2xl"
+        className="dialog-panel relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-md"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

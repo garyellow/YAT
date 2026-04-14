@@ -1,13 +1,6 @@
 import type { AppSettings, HotkeyConfig, PromptConfig } from "../stores/settingsStore";
 
 export type DesktopPlatform = "windows" | "macos" | "linux" | "unknown";
-export type HotkeyAdviceTone = "accent" | "warning" | "danger";
-
-export interface HotkeyAdvice {
-  tone: HotkeyAdviceTone;
-  titleKey: string;
-  bodyKey: string;
-}
 
 const FRIENDLY_KEY_LABELS: Record<string, string> = {
   alt: "Alt",
@@ -225,33 +218,6 @@ function normalizeKeyToken(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function isModifierToken(token: string): boolean {
-  return [
-    "alt",
-    "lalt",
-    "ralt",
-    "altgr",
-    "ctrl",
-    "control",
-    "lctrl",
-    "rctrl",
-    "shift",
-    "lshift",
-    "rshift",
-    "meta",
-    "super",
-    "cmd",
-    "command",
-    "lmeta",
-    "rmeta",
-    "rcmd",
-  ].includes(token);
-}
-
-function isTypingToken(token: string): boolean {
-  return token.length === 1 || ["space", "tab", "enter", "return"].includes(token);
-}
-
 function isPrivateIpv4(hostname: string): boolean {
   const octets = hostname.split(".").map(Number);
   if (octets.length !== 4 || octets.some((part) => Number.isNaN(part))) {
@@ -343,7 +309,7 @@ export function isLocalEndpointUrl(value?: string | null): boolean {
   }
 }
 
-export function isFilled(value?: string | null): boolean {
+function isFilled(value?: string | null): boolean {
   return Boolean(value?.trim());
 }
 
@@ -434,9 +400,11 @@ export function buildPromptPreview(prompt: PromptConfig): string {
 
   if (prompt.vocabulary.length > 0) {
     const vocabularyBlock = prompt.vocabulary
-      .map((entry) => `- \"${entry.wrong}\" → \"${entry.correct}\"`)
+      .map((entry) => `- ${entry.text}`)
       .join("\n");
-    parts.push(`Vocabulary corrections (always apply these):\n${vocabularyBlock}`);
+    parts.push(
+      `Preferred vocabulary and spelling:\nUse these words or phrases when they match the speaker's intent. They are reference terms, not search-and-replace rules.\n${vocabularyBlock}`,
+    );
   }
 
   const ctxParts: string[] = [];
@@ -465,63 +433,6 @@ export function formatHotkeyKey(value?: string | null): string {
   }
 
   return value?.trim() || token;
-}
-
-export function getRecommendedHotkeyLabel(platform: DesktopPlatform): string {
-  return platform === "macos" ? "Right Cmd" : "Right Ctrl";
-}
-
-export function getHotkeyAdvice(hotkey: HotkeyConfig): HotkeyAdvice {
-  const key = normalizeKeyToken(hotkey.key);
-  const mode = hotkey.hotkey_type;
-  const isRightSideHold =
-    mode === "hold" && ["rctrl", "rmeta", "rcmd"].includes(key);
-
-  if (isRightSideHold) {
-    return {
-      tone: "accent",
-      titleKey: "general.hotkeyRecommendedTitle",
-      bodyKey: "general.hotkeyRecommendedBody",
-    };
-  }
-
-  if (mode === "combo") {
-    return {
-      tone: "accent",
-      titleKey: "general.hotkeyComboTitle",
-      bodyKey: "general.hotkeyComboBody",
-    };
-  }
-
-  if (mode === "hold" && isModifierToken(key)) {
-    return {
-      tone: "warning",
-      titleKey: "general.hotkeyModifierHoldTitle",
-      bodyKey: "general.hotkeyModifierHoldBody",
-    };
-  }
-
-  if ((mode === "single" || mode === "double_tap") && isModifierToken(key)) {
-    return {
-      tone: "danger",
-      titleKey: "general.hotkeyModifierRiskTitle",
-      bodyKey: "general.hotkeyModifierRiskBody",
-    };
-  }
-
-  if ((mode === "single" || mode === "double_tap") && isTypingToken(key)) {
-    return {
-      tone: "danger",
-      titleKey: "general.hotkeyTypingRiskTitle",
-      bodyKey: "general.hotkeyTypingRiskBody",
-    };
-  }
-
-  return {
-    tone: "warning",
-    titleKey: "general.hotkeyCustomTitle",
-    bodyKey: "general.hotkeyCustomBody",
-  };
 }
 
 export function formatHotkeyCombo(hotkey: HotkeyConfig): string {

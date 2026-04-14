@@ -6,7 +6,7 @@ import { useAppStore } from "../../stores/appStore";
 import { getDefaultSystemPrompt } from "../../lib/defaultSettings";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { isTauriRuntime } from "../../lib/tauriRuntime";
-import { Notice, Section } from "./SettingPrimitives";
+import { Notice, PageIntro, Section, SettingList, SettingRow } from "./SettingPrimitives";
 import Toggle from "../ui/Toggle";
 import { HintTip } from "../ui/Tooltip";
 import type { SettingsTab } from "./tabs";
@@ -80,14 +80,32 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   ];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
+      <PageIntro
+        eyebrow={t("settings.groups.customize")}
+        title={t("tabs.prompt")}
+        description={t("prompt.pageDesc")}
+      />
+
       {llmDisabled ? (
         <Notice title={t("prompt.llmDisabledTitle")} tone="warning">
-          {t("prompt.llmDisabledBody")}
+          <div className="space-y-3">
+            <p>{t("prompt.llmDisabledBody")}</p>
+            {onNavigate ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-primary text-xs"
+                  onClick={() => onNavigate("llm")}
+                >
+                  {t("prompt.goEnableLlm")}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </Notice>
       ) : null}
 
-      {/* User Instructions */}
       <Section title={t("prompt.userInstructions")} description={t("prompt.userInstructionsDesc")}>
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -96,6 +114,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                 key={preset.key}
                 type="button"
                 className="btn btn-secondary text-xs"
+                title={preset.value}
                 onClick={() => insertPreset(preset.value)}
               >
                 {preset.label}
@@ -117,7 +136,12 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
             />
             <div className="flex items-center justify-between">
               {prompt.user_instructions.trim().length > 0 ? (
-                <button type="button" className="btn btn-ghost text-xs" onClick={() => update({ user_instructions: "" })}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact text-xs"
+                  title={t("prompt.userInstructionsHint")}
+                  onClick={() => update({ user_instructions: "" })}
+                >
                   {t("prompt.clearInstructions")}
                 </button>
               ) : null}
@@ -126,7 +150,6 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         </div>
       </Section>
 
-      {/* Context Sources */}
       <Section
         title={(
           <span className="inline-flex items-center gap-1.5">
@@ -143,106 +166,123 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
             </Notice>
           ) : null}
 
-          {/* ── Basic context sources ── */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4 py-1">
-              <div>
-                <p id="context-clipboard-label" className="text-[13px] font-medium">{t("prompt.contextClipboard")}</p>
-                <p className={hintCls}>{t("prompt.contextClipboardHint")}</p>
-              </div>
-              <Toggle
-                checked={prompt.context_clipboard}
-                onChange={(v) => update({ context_clipboard: v })}
-                ariaLabelledBy="context-clipboard-label"
-                disabled={llmDisabled}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-4 py-1">
-              <div>
-                <p id="context-selection-label" className="text-[13px] font-medium">{t("prompt.contextSelection")}</p>
-                <p className={hintCls}>{t("prompt.contextSelectionHint", { shortcut: platform === "macos" ? "Cmd+C" : "Ctrl+C" })}</p>
-              </div>
-              <Toggle
-                checked={prompt.context_selection}
-                onChange={(v) => update({ context_selection: v })}
-                ariaLabelledBy="context-selection-label"
-                disabled={llmDisabled}
-              />
-            </div>
-          </div>
+          <SettingList>
+            <SettingRow
+              labelId="context-clipboard-label"
+              label={t("prompt.contextClipboard")}
+              description={t("prompt.contextClipboardHint")}
+              control={
+                <Toggle
+                  checked={prompt.context_clipboard}
+                  onChange={(v) => update({ context_clipboard: v })}
+                  ariaLabelledBy="context-clipboard-label"
+                  disabled={llmDisabled}
+                />
+              }
+            />
 
-          {/* ── Divider + advanced toggle ── */}
-          <div className="border-t border-[var(--border)] pt-2">
-            <button
-              type="button"
-              className="btn btn-ghost text-xs w-full text-left flex items-center gap-1"
-              aria-expanded={showAdvancedContext}
-              aria-controls="prompt-advanced-context-panel"
-              onClick={() => setShowAdvancedContext(!showAdvancedContext)}
+            <SettingRow
+              labelId="context-selection-label"
+              label={t("prompt.contextSelection")}
+              description={t("prompt.contextSelectionHintShort")}
+              hint={platform !== "macos" ? t("prompt.contextSelectionHint") : undefined}
+              control={
+                <Toggle
+                  checked={prompt.context_selection}
+                  onChange={(v) => update({ context_selection: v })}
+                  ariaLabelledBy="context-selection-label"
+                  disabled={llmDisabled}
+                />
+              }
+            />
+
+            <SettingRow
+              label={showAdvancedContext ? t("prompt.hideAdvancedContext") : t("prompt.showAdvancedContext")}
+              description={t("prompt.showAdvancedContextHint")}
+              control={
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact disclosure-btn"
+                  aria-expanded={showAdvancedContext}
+                  aria-controls="prompt-advanced-context-panel"
+                  title={t("prompt.contextSourcesTooltip")}
+                  onClick={() => setShowAdvancedContext(!showAdvancedContext)}
+                >
+                  <span className="disclosure-btn-value">{enabledContextCount}</span>
+                  <span
+                    className="disclosure-btn-chevron"
+                    style={{ transform: showAdvancedContext ? "rotate(90deg)" : "rotate(0deg)" }}
+                    aria-hidden="true"
+                  >
+                    ▶
+                  </span>
+                </button>
+              }
             >
-              <span className="text-[var(--text-muted)] text-[10px] transition-transform" style={{ transform: showAdvancedContext ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
-              {showAdvancedContext ? t("prompt.hideAdvancedContext") : t("prompt.showAdvancedContext")}
-            </button>
-          </div>
+              {showAdvancedContext ? (
+                <div id="prompt-advanced-context-panel">
+                  <SettingList>
+                    <SettingRow
+                      inset
+                      labelId="context-active-app-label"
+                      label={t("prompt.contextActiveApp")}
+                      description={t("prompt.contextActiveAppHint")}
+                      hint={platform === "macos" ? t("prompt.contextActiveAppMacNote") : undefined}
+                      control={
+                        <Toggle
+                          checked={prompt.context_active_app}
+                          onChange={(v) => update({ context_active_app: v })}
+                          ariaLabelledBy="context-active-app-label"
+                          disabled={llmDisabled}
+                        />
+                      }
+                    />
 
-          {/* ── Advanced context sources (collapsible) ── */}
-          {showAdvancedContext ? (
-            <div id="prompt-advanced-context-panel" className="space-y-2 pl-1">
-              <div className="flex items-center justify-between gap-4 py-1">
-                <div>
-                  <p id="context-active-app-label" className="text-[13px] font-medium">{t("prompt.contextActiveApp")}</p>
-                  <p className={hintCls}>{t("prompt.contextActiveAppHint")}</p>
-                  {platform === "macos" ? (
-                    <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">{t("prompt.contextActiveAppMacNote")}</p>
-                  ) : null}
+                    {platform !== "linux" ? (
+                      <SettingRow
+                        inset
+                        labelId="context-input-field-label"
+                        label={t("prompt.contextInputField")}
+                        description={t("prompt.contextInputFieldHint")}
+                        hint={platform === "windows"
+                          ? t("prompt.contextInputFieldNoteWindows")
+                          : platform === "macos"
+                            ? t("prompt.contextInputFieldNoteMacos")
+                            : t("prompt.contextInputFieldNote")}
+                        control={
+                          <Toggle
+                            checked={prompt.context_input_field}
+                            onChange={(v) => update({ context_input_field: v })}
+                            ariaLabelledBy="context-input-field-label"
+                            disabled={llmDisabled}
+                          />
+                        }
+                      />
+                    ) : null}
+
+                    <SettingRow
+                      inset
+                      labelId="context-screenshot-label"
+                      label={t("prompt.contextScreenshot")}
+                      description={t("prompt.contextScreenshotHint")}
+                      hint={t("prompt.contextScreenshotNote")}
+                      control={
+                        <Toggle
+                          checked={prompt.context_screenshot}
+                          onChange={(v) => update({ context_screenshot: v })}
+                          ariaLabelledBy="context-screenshot-label"
+                          disabled={llmDisabled}
+                        />
+                      }
+                    />
+                  </SettingList>
                 </div>
-                <Toggle
-                  checked={prompt.context_active_app}
-                  onChange={(v) => update({ context_active_app: v })}
-                  ariaLabelledBy="context-active-app-label"
-                  disabled={llmDisabled}
-                />
-              </div>
-              {platform !== "linux" && (
-              <div className="flex items-center justify-between gap-4 py-1">
-                <div>
-                  <p id="context-input-field-label" className="text-[13px] font-medium">{t("prompt.contextInputField")}</p>
-                  <p className={hintCls}>{t("prompt.contextInputFieldHint")}</p>
-                  <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">
-                    {platform === "windows"
-                      ? t("prompt.contextInputFieldNoteWindows")
-                      : platform === "macos"
-                        ? t("prompt.contextInputFieldNoteMacos")
-                        : t("prompt.contextInputFieldNote")}
-                  </p>
-                </div>
-                <Toggle
-                  checked={prompt.context_input_field}
-                  onChange={(v) => update({ context_input_field: v })}
-                  ariaLabelledBy="context-input-field-label"
-                  disabled={llmDisabled}
-                />
-              </div>
-              )}
-              <div className="flex items-center justify-between gap-4 py-1">
-                <div>
-                  <p id="context-screenshot-label" className="text-[13px] font-medium">{t("prompt.contextScreenshot")}</p>
-                  <p className={hintCls}>{t("prompt.contextScreenshotHint")}</p>
-                  <p className="mt-1 text-[11px] font-medium text-[var(--amber)]">{t("prompt.contextScreenshotNote")}</p>
-                </div>
-                <Toggle
-                  checked={prompt.context_screenshot}
-                  onChange={(v) => update({ context_screenshot: v })}
-                  ariaLabelledBy="context-screenshot-label"
-                  disabled={llmDisabled}
-                />
-              </div>
-            </div>
-          ) : null}
+              ) : null}
+            </SettingRow>
+          </SettingList>
         </div>
       </Section>
 
-      {/* Preview */}
       <Section
         title={t("prompt.previewTitle")}
         description={t("prompt.previewDesc")}
@@ -261,10 +301,18 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
           <div className="flex gap-2">
             {onNavigate ? (
               <>
-                <button className="btn btn-secondary text-xs" onClick={() => onNavigate("vocabulary")}>
+                <button
+                  className="btn btn-secondary text-xs"
+                  title={t("vocabulary.pageDesc")}
+                  onClick={() => onNavigate("vocabulary")}
+                >
                   {t("prompt.openVocabulary")}
                 </button>
-                <button className="btn btn-secondary text-xs" onClick={() => onNavigate("llm")}>
+                <button
+                  className="btn btn-secondary text-xs"
+                  title={t("llm.modeDesc")}
+                  onClick={() => onNavigate("llm")}
+                >
                   {t("prompt.openPolishSettings")}
                 </button>
               </>
@@ -273,14 +321,14 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         </div>
       </Section>
 
-      {/* Advanced: System Prompt */}
       <Section title={t("prompt.advanced")} description={t("prompt.systemPromptDesc")}>
         <div className="space-y-3">
           <button
             type="button"
-            className="btn btn-secondary text-xs"
+            className="btn btn-secondary btn-compact text-xs"
             aria-expanded={showAdvanced}
             aria-controls="system-prompt-panel"
+            title={t("prompt.systemPromptDesc")}
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
             {showAdvanced ? t("prompt.hideAdvanced") : t("prompt.showAdvanced")}
@@ -290,17 +338,22 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
             <div id="system-prompt-panel" className="space-y-3">
               <div className="space-y-1.5">
                 <label htmlFor="system-prompt" className={labelCls}>{t("prompt.advanced")}</label>
-              <textarea
-                id="system-prompt"
-                name="system-prompt"
-                value={prompt.system_prompt}
-                onChange={(e) => update({ system_prompt: e.target.value })}
-                className="field-textarea"
-                rows={10}
-              />
+                <textarea
+                  id="system-prompt"
+                  name="system-prompt"
+                  value={prompt.system_prompt}
+                  onChange={(e) => update({ system_prompt: e.target.value })}
+                  className="field-textarea"
+                  rows={10}
+                />
               </div>
               <div className="flex gap-2">
-                <button type="button" className="btn btn-secondary text-xs" onClick={resetSystemPrompt}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  title={t("prompt.systemPromptDesc")}
+                  onClick={resetSystemPrompt}
+                >
                   {t("prompt.resetToDefault")}
                 </button>
               </div>

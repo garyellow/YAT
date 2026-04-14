@@ -15,12 +15,12 @@ export default function Toggle({
 }: ToggleProps) {
   const stateClass = checked
     ? "border-[var(--accent)] bg-[var(--accent)]"
-    : "border-[var(--border)] bg-[var(--bg-subtle)]";
+    : "border-[var(--border-strong)] bg-[var(--bg-elevated)]";
   const hoverClass = disabled
     ? ""
     : checked
       ? "hover:opacity-90"
-      : "hover:border-[var(--text-muted)] hover:bg-[var(--bg)]";
+      : "hover:border-[var(--text-muted)] hover:bg-[var(--bg-muted)]";
 
   return (
     <button
@@ -36,7 +36,7 @@ export default function Toggle({
       } ${stateClass} ${hoverClass}`}
     >
       <span
-        className={`pointer-events-none inline-block h-[14px] w-[14px] rounded-full shadow-sm transition-transform duration-150 ${
+        className={`pointer-events-none inline-block h-[14px] w-[14px] rounded-full transition-transform duration-150 ${
           checked
             ? "translate-x-[20px] bg-[var(--accent-fg)]"
             : "translate-x-[3px] bg-[var(--text-secondary)]"

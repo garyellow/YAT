@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryStore } from "../../stores/historyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { AppSettings } from "../../stores/settingsStore";
-import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+import { EmptyState, Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
 import ConfirmDialog from "../ui/ConfirmDialog";
 
 const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
@@ -13,6 +13,7 @@ export default function HistoryTab() {
   const { t, i18n } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const flushSettings = useSettingsStore((s) => s.flushSettings);
   const entries = useHistoryStore((s) => s.entries);
   const loading = useHistoryStore((s) => s.loading);
   const searchQuery = useHistoryStore((s) => s.searchQuery);
@@ -27,7 +28,9 @@ export default function HistoryTab() {
   const [query, setQuery] = useState(searchQuery);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ type: "clearOld" } | { type: "delete"; id: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "clearOld" } | { type: "delete"; id: string } | { type: "reduceRetention"; newHours: number } | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [draftHours, setDraftHours] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const didMountSearchRef = useRef(false);
   const dtf = useMemo(() => new Intl.DateTimeFormat(i18n.resolvedLanguage || undefined, {
@@ -58,6 +61,13 @@ export default function HistoryTab() {
     };
   }, [query, loadHistory, setSearchQuery]);
 
+  const showCustomInput = !!settings && (customMode || ![24, 168, 720].includes(settings.history.retention_hours));
+  useEffect(() => {
+    if (showCustomInput && settings) {
+      setDraftHours(String(settings.history.retention_hours));
+    }
+  }, [showCustomInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!settings) return null;
   const history = settings.history;
 
@@ -77,32 +87,66 @@ export default function HistoryTab() {
     }
   };
 
-  const handleConfirm = useCallback(() => {
+  const trySetRetention = (newHours: number) => {
+    if (newHours < history.retention_hours) {
+      setConfirmAction({ type: "reduceRetention", newHours });
+    } else {
+      updateHistory({ retention_hours: newHours });
+    }
+  };
+
+  const commitDraft = () => {
+    const v = parseInt(draftHours, 10);
+    if (!Number.isFinite(v) || v < 1 || v > 8760) {
+      setDraftHours(String(history.retention_hours));
+      return;
+    }
+    setDraftHours(String(v));
+    if (v === history.retention_hours) return;
+    if (v < history.retention_hours) {
+      setConfirmAction({ type: "reduceRetention", newHours: v });
+    } else {
+      updateHistory({ retention_hours: v });
+    }
+  };
+
+  const handleConfirm = async () => {
     if (!confirmAction) return;
-    if (confirmAction.type === "clearOld") clearOld();
-    else void deleteEntry(confirmAction.id);
+    if (confirmAction.type === "clearOld") { void clearOld(); }
+    else if (confirmAction.type === "reduceRetention") {
+      updateHistory({ retention_hours: confirmAction.newHours });
+      setDraftHours(String(confirmAction.newHours));
+      await flushSettings();
+      void clearOld();
+    }
+    else { void deleteEntry(confirmAction.id); }
     setConfirmAction(null);
-  }, [confirmAction, clearOld, deleteEntry]);
+  };
 
   const confirmMessage =
     confirmAction?.type === "clearOld"
       ? t("history.confirmClearOld")
-      : confirmAction?.type === "delete"
-        ? t("history.confirmDelete")
-        : "";
+      : confirmAction?.type === "reduceRetention"
+        ? t("history.retentionReduceBody")
+        : confirmAction?.type === "delete"
+          ? t("history.confirmDelete")
+          : "";
   const confirmTitle = confirmAction?.type === "clearOld"
     ? t("history.clearOld")
-    : confirmAction?.type === "delete"
-      ? t("actions.delete")
-      : t("actions.confirm");
+    : confirmAction?.type === "reduceRetention"
+      ? t("history.retentionReduceTitle")
+      : confirmAction?.type === "delete"
+        ? t("actions.delete")
+        : t("actions.confirm");
 
   return (
-    <div className="space-y-10">
-      <Notice title={t("history.summaryTitle")} tone="accent">
-        {t("history.summaryBody")}
-      </Notice>
+    <div className="space-y-6">
+      <PageIntro
+        eyebrow={t("settings.groups.data")}
+        title={t("tabs.history")}
+        description={t("history.pageDesc")}
+      />
 
-      {/* Retention & Search */}
       <Section
         title={t("history.controlsTitle")}
         description={t("history.controlsDesc")}
@@ -110,34 +154,69 @@ export default function HistoryTab() {
           <button
             type="button"
             className="btn btn-danger text-xs"
+            title={t("history.controlsDesc")}
             onClick={() => setConfirmAction({ type: "clearOld" })}
           >
             {t("history.clearOld")}
           </button>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label htmlFor="retention-hours" className={labelCls}>{t("history.retention")}</label>
-            <div className="flex items-center gap-2">
-              <input
-                id="retention-hours"
-                name="retention-hours"
-                type="number"
-                value={history.retention_hours}
-                onChange={(e) => updateHistory({ retention_hours: Number(e.target.value) })}
-                className="field-input max-w-28"
-                min={1}
-                max={8760}
-                step={1}
-                inputMode="numeric"
-              />
-              <span className="text-xs text-[var(--text-muted)]">{t("history.hours")}</span>
+        <div className="form-grid">
+          <div className="form-block">
+            <label className={labelCls}>{t("history.retention")}</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { key: "retentionPreset1d", hours: 24 },
+                { key: "retentionPreset7d", hours: 168 },
+                { key: "retentionPreset30d", hours: 720 },
+              ] as const).map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  className={`btn btn-compact ${
+                    !customMode && history.retention_hours === preset.hours ? "btn-primary" : "btn-ghost"
+                  }`}
+                  onClick={() => { setCustomMode(false); trySetRetention(preset.hours); }}
+                >
+                  {t(`history.${preset.key}`)}
+                </button>
+              ))}
+              {customMode || ![24, 168, 720].includes(history.retention_hours) ? (
+                <span className="btn btn-compact btn-primary cursor-default gap-1">
+                  <input
+                    id="retention-hours"
+                    name="retention-hours"
+                    type="number"
+                    value={draftHours}
+                    onChange={(e) => setDraftHours(e.target.value)}
+                    onBlur={commitDraft}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    className="bg-transparent text-center text-xs font-medium text-inherit outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    style={{ width: `${Math.max(2, (draftHours || "0").length + 1)}ch` }}
+                    min={1}
+                    max={8760}
+                    step={1}
+                    inputMode="numeric"
+                  />
+                  <span className="text-xs font-medium">{t("history.hours")}</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-compact btn-ghost"
+                  onClick={() => {
+                    setDraftHours(String(history.retention_hours));
+                    setCustomMode(true);
+                  }}
+                >
+                  {t("history.retentionCustom")}
+                </button>
+              )}
             </div>
             <p className={hintCls}>{t("history.metrics.retentionHint")}</p>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="form-block">
             <label htmlFor="history-search" className={labelCls}>{t("history.search")}</label>
             <input
               id="history-search"
@@ -153,9 +232,11 @@ export default function HistoryTab() {
         </div>
 
         {history.retention_hours < 24 ? (
-          <Notice title={t("history.retentionWarningTitle")} tone="warning">
-            {t("history.retentionWarningBody")}
-          </Notice>
+          <div className="mt-4 form-support-stack">
+            <Notice title={t("history.retentionWarningTitle")} tone="warning">
+              {t("history.retentionWarningBody")}
+            </Notice>
+          </div>
         ) : null}
       </Section>
 
@@ -191,13 +272,13 @@ export default function HistoryTab() {
             description={t("history.emptyHint")}
           />
         ) : (
-          <div className="space-y-0">
+          <div className="space-y-3">
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="group py-3 border-b border-[var(--border)] last:border-b-0 transition-colors duration-100 hover:bg-[var(--bg-subtle)] -mx-2 px-2 rounded"
+                className="group rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 transition-colors duration-100 hover:bg-[var(--bg-muted)]"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <StatusDot tone={entry.status === "success" ? "success" : entry.status === "error" ? "danger" : "default"}>
@@ -214,21 +295,22 @@ export default function HistoryTab() {
                         <span className="text-[11px] text-[var(--text-muted)]">{entry.duration_seconds.toFixed(1)}s</span>
                       ) : null}
                     </div>
-                    <p className="pre-wrap text-[13px] text-[var(--text-secondary)]">
+                    <p className="pre-wrap text-[13px] leading-6 text-[var(--text-secondary)]">
                       {entry.polished_text || entry.raw_text || "-"}
                     </p>
                     {entry.polished_text && entry.raw_text && entry.raw_text !== entry.polished_text ? (
-                      <p className="pre-wrap mt-2 text-xs text-[var(--text-muted)] line-through">
+                      <p className="pre-wrap mt-2 text-xs leading-6 text-[var(--text-muted)] line-through">
                         {entry.raw_text}
                       </p>
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
                     {(entry.polished_text || entry.raw_text) ? (
                       <button
                         type="button"
-                        className="btn btn-ghost text-xs"
+                        className="btn btn-ghost btn-compact text-xs"
+                        title={t("actions.copy")}
                         onClick={() => copyText(entry.id, entry.polished_text || entry.raw_text)}
                       >
                         {copiedId === entry.id ? t("actions.copied") : t("actions.copy")}
@@ -239,6 +321,7 @@ export default function HistoryTab() {
                         type="button"
                         className="btn btn-secondary text-xs"
                         disabled={retryingId === entry.id}
+                        title={t("actions.retry")}
                         onClick={() => void retryEntry(entry.id)}
                       >
                         {retryingId === entry.id ? t("status.polishing") : t("actions.retry")}
@@ -247,6 +330,7 @@ export default function HistoryTab() {
                     <button
                       type="button"
                       className="btn btn-danger text-xs"
+                      title={t("history.confirmDelete")}
                       onClick={() => setConfirmAction({ type: "delete", id: entry.id })}
                     >
                       {t("actions.delete")}
@@ -265,7 +349,12 @@ export default function HistoryTab() {
         message={confirmMessage}
         tone="danger"
         onConfirm={handleConfirm}
-        onCancel={() => setConfirmAction(null)}
+        onCancel={() => {
+          if (confirmAction?.type === "reduceRetention") {
+            setDraftHours(String(history.retention_hours));
+          }
+          setConfirmAction(null);
+        }}
       />
     </div>
   );

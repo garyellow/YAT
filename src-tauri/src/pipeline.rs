@@ -40,7 +40,7 @@ fn was_cancelled(cancel_generation: &Arc<AtomicU64>, operation_generation: u64) 
     cancel_generation.load(Ordering::SeqCst) != operation_generation
 }
 
-/// Build the system prompt, appending user instructions and vocabulary entries.
+/// Build the system prompt, appending user instructions and preferred vocabulary.
 pub fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabulary: &[VocabularyEntry]) -> String {
     let mut prompt = base_prompt.to_string();
 
@@ -50,9 +50,15 @@ pub fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabular
     }
 
     if !vocabulary.is_empty() {
-        prompt.push_str("\n\nVocabulary corrections (always apply these):\n");
+        prompt.push_str(
+            "\n\nPreferred vocabulary and spelling:\nUse these words or phrases when they match the speaker's intent. They are reference terms, not search-and-replace rules.\n",
+        );
         for entry in vocabulary {
-            prompt.push_str(&format!("- \"{}\" → \"{}\"\n", entry.wrong, entry.correct));
+            let text = entry.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+            prompt.push_str(&format!("- {text}\n"));
         }
     }
 
@@ -226,7 +232,10 @@ pub async fn run(
     // Step 3: Output
     // Auto-fallback: if paste has failed consecutively too many times,
     // silently switch to clipboard-only for this operation.
-    let effective_output_mode = if paste_fail_count.load(Ordering::Relaxed) >= auto_clipboard_fallback_threshold {
+    let forced_clipboard_fallback = matches!(settings.general.output_mode, OutputMode::AutoPaste)
+        && paste_fail_count.load(Ordering::Relaxed) >= auto_clipboard_fallback_threshold;
+
+    let effective_output_mode = if forced_clipboard_fallback {
         &OutputMode::ClipboardOnly
     } else {
         &settings.general.output_mode
@@ -265,6 +274,12 @@ pub async fn run(
             paste_fail_count.store(0, Ordering::Relaxed);
             emit_status(app, "done", Some(final_text), None);
         }
+        output::OutputOutcome::CopiedToClipboard if forced_clipboard_fallback => {
+            // The streak has already been acted upon for this operation; reset it
+            // so future attempts can try auto-paste again.
+            paste_fail_count.store(0, Ordering::Relaxed);
+            emit_status(app, "done", Some(final_text), None);
+        }
         _ => {
             emit_status(app, "done", Some(final_text), None);
         }
@@ -300,23 +315,24 @@ mod tests {
     #[test]
     fn build_system_prompt_with_vocabulary() {
         let vocab = vec![
-            VocabularyEntry { wrong: "teh".into(), correct: "the".into() },
-            VocabularyEntry { wrong: "recieve".into(), correct: "receive".into() },
+            VocabularyEntry { text: "ChatGPT".into() },
+            VocabularyEntry { text: "DeepSeek".into() },
         ];
         let result = build_system_prompt("Base.", "", &vocab);
-        assert!(result.contains("Vocabulary corrections"));
-        assert!(result.contains("\"teh\" → \"the\""));
-        assert!(result.contains("\"recieve\" → \"receive\""));
+        assert!(result.contains("Preferred vocabulary and spelling"));
+        assert!(result.contains("reference terms, not search-and-replace rules"));
+        assert!(result.contains("- ChatGPT"));
+        assert!(result.contains("- DeepSeek"));
         assert!(!result.contains("Additional user instructions:"));
     }
 
     #[test]
     fn build_system_prompt_with_both() {
-        let vocab = vec![VocabularyEntry { wrong: "x".into(), correct: "y".into() }];
+        let vocab = vec![VocabularyEntry { text: "TypeScript".into() }];
         let result = build_system_prompt("Base.", "Be concise.", &vocab);
         assert!(result.contains("Additional user instructions:"));
         assert!(result.contains("Be concise."));
-        assert!(result.contains("\"x\" → \"y\""));
+        assert!(result.contains("TypeScript"));
     }
 
     #[test]

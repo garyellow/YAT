@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+
+const TOOLTIP_VIEWPORT_PADDING = 12;
 
 interface TooltipProps {
   content: ReactNode;
   children: ReactNode;
-  /** Side to prefer. Defaults to "top". */
   side?: "top" | "bottom";
 }
 
@@ -13,38 +14,44 @@ export default function Tooltip({ content, children, side = "top" }: TooltipProp
   const tipRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible || !tipRef.current || !wrapRef.current) return;
-    const rect = tipRef.current.getBoundingClientRect();
-    // Vertical flip
-    if (side === "top" && rect.top < 4) setFlipped(true);
-    else if (side === "bottom" && rect.bottom > window.innerHeight - 4) setFlipped(true);
-    else setFlipped(false);
-    // Horizontal clamping
-    if (rect.left < 4) {
-      const shift = 4 - rect.left;
-      tipRef.current.style.left = `calc(50% + ${shift}px)`;
-    } else if (rect.right > window.innerWidth - 4) {
-      const shift = rect.right - window.innerWidth + 4;
-      tipRef.current.style.left = `calc(50% - ${shift}px)`;
+
+    const tooltip = tipRef.current;
+    tooltip.style.left = "50%";
+
+    const rect = tooltip.getBoundingClientRect();
+
+    if (side === "top" && rect.top < TOOLTIP_VIEWPORT_PADDING) {
+      setFlipped(true);
+    } else if (side === "bottom" && rect.bottom > window.innerHeight - TOOLTIP_VIEWPORT_PADDING) {
+      setFlipped(true);
     } else {
-      tipRef.current.style.left = "50%";
+      setFlipped(false);
     }
-  }, [visible, side]);
+
+    if (rect.left < TOOLTIP_VIEWPORT_PADDING) {
+      const shift = TOOLTIP_VIEWPORT_PADDING - rect.left;
+      tooltip.style.left = `calc(50% + ${shift}px)`;
+    } else if (rect.right > window.innerWidth - TOOLTIP_VIEWPORT_PADDING) {
+      const shift = rect.right - window.innerWidth + TOOLTIP_VIEWPORT_PADDING;
+      tooltip.style.left = `calc(50% - ${shift}px)`;
+    }
+  }, [content, side, visible]);
 
   const placement = flipped ? (side === "top" ? "bottom" : "top") : side;
 
   return (
     <span
       ref={wrapRef}
-      className="relative inline-flex"
+      className="tooltip-anchor"
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
-      onFocus={() => setVisible(true)}
-      onBlur={() => setVisible(false)}
+      onFocusCapture={() => setVisible(true)}
+      onBlurCapture={() => setVisible(false)}
     >
       {children}
-      {visible && (
+      {visible ? (
         <div
           ref={tipRef}
           role="tooltip"
@@ -52,24 +59,34 @@ export default function Tooltip({ content, children, side = "top" }: TooltipProp
         >
           {content}
         </div>
-      )}
+      ) : null}
     </span>
   );
 }
 
-/** Small info icon that wraps text in a Tooltip. */
-export function HintTip({ text }: { text: string }) {
+export function HintTip({
+  text,
+  side = "top",
+  ariaLabel,
+}: {
+  text: ReactNode;
+  side?: "top" | "bottom";
+  ariaLabel?: string;
+}) {
+  const computedLabel = typeof text === "string"
+    ? text
+    : ariaLabel ?? "More information";
+
   return (
-    <Tooltip content={text} side="bottom">
+    <Tooltip content={text} side={side}>
       <button
         type="button"
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-        aria-label={text}
-        tabIndex={0}
+        className="hint-tip-btn"
+        aria-label={computedLabel}
       >
         <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <circle cx="8" cy="8" r="6.5" />
-          <path d="M8 11V7.5M8 5.5v-.01" strokeLinecap="round" />
+          <circle cx="8" cy="8" r="6.25" />
+          <path d="M8 7.1V10.2M8 5.35v.02" strokeLinecap="round" />
         </svg>
       </button>
     </Tooltip>

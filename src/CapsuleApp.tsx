@@ -69,6 +69,10 @@ export default function CapsuleApp() {
       .catch(() => {});
   }, [i18n]);
 
+  useEffect(() => {
+    document.documentElement.lang = i18n.resolvedLanguage || i18n.language || "zh-TW";
+  }, [i18n.language, i18n.resolvedLanguage]);
+
   /* ── Event listeners ── */
 
   useEffect(() => {

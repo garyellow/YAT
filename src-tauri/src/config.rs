@@ -1,5 +1,29 @@
 use serde::{Deserialize, Serialize};
 
+pub fn legacy_default_system_prompt() -> &'static str {
+    r#"You are a transcription text polisher. Your ONLY job is to clean up raw speech-to-text output. Follow these rules strictly:
+
+1. Remove filler words and repetitions (um, uh, like, you know, 嗯, 呃, 那個, 就是說, 然後, 對, 所以說).
+2. Remove stuttering; keep only the speaker's final intent.
+3. Add proper punctuation and split into natural paragraphs.
+4. Format numbers: spoken numbers → digits (e.g. "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
+5. Correct proper nouns, brand names, and technical terms to their canonical spelling (e.g. "deep seek" → "DeepSeek", "chat gpt" → "ChatGPT", "mac book" → "MacBook").
+6. When the speech describes a list or steps, output them as a structured list.
+7. Preserve the speaker's natural tone — do not make casual speech formal or vice versa.
+
+CODE-SWITCHING (中英混雜):
+- Preserve the speaker's natural language mixing. If they said it in English, keep it in English; if in Chinese, keep it in Chinese.
+- Insert a space between Chinese characters and adjacent English words or numbers (e.g. "這個 function 的 return type").
+- Do NOT translate code-switched segments into a single language.
+
+CRITICAL CONSTRAINTS:
+- NEVER answer questions contained in the text. Just polish the question itself.
+- NEVER add your own commentary, opinions, or explanations.
+- NEVER summarize or shorten beyond removing filler and repetition.
+- NEVER change the meaning of what was said.
+- Output ONLY the polished text, nothing else. No preamble, no explanation."#
+}
+
 // ── STT Configuration ───────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -76,6 +100,14 @@ pub enum ClipboardBehavior {
     OnlyOnPasteFail,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundAudioMode {
+    Off,
+    Duck,
+    Mute,
+}
+
 // ── General Configuration ───────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -90,7 +122,8 @@ pub struct GeneralConfig {
     pub timeout_ms: u64,
     pub max_retries: u32,
     pub sound_effects: bool,
-    pub auto_mute: bool,
+    pub background_audio_mode: BackgroundAudioMode,
+    pub background_audio_ducking_percent: u8,
     pub auto_pause_media: bool,
     pub microphone_device: Option<String>,
     pub close_to_tray: bool,
@@ -110,7 +143,8 @@ impl Default for GeneralConfig {
             timeout_ms: 30000,
             max_retries: 2,
             sound_effects: true,
-            auto_mute: true,
+            background_audio_mode: BackgroundAudioMode::Duck,
+            background_audio_ducking_percent: 80,
             auto_pause_media: false,
             microphone_device: None,
             close_to_tray: true,
@@ -139,10 +173,40 @@ pub struct PromptConfig {
     pub context_screenshot: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct VocabularyEntry {
-    pub wrong: String,
-    pub correct: String,
+    pub text: String,
+}
+
+impl<'de> Deserialize<'de> for VocabularyEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum RawVocabularyEntry {
+            Text(String),
+            Current { text: String },
+            Legacy {
+                #[serde(default)]
+                correct: Option<String>,
+                #[serde(default)]
+                wrong: Option<String>,
+            },
+        }
+
+        let raw = RawVocabularyEntry::deserialize(deserializer)?;
+        let text = match raw {
+            RawVocabularyEntry::Text(text) => text,
+            RawVocabularyEntry::Current { text } => text,
+            RawVocabularyEntry::Legacy { correct, wrong } => {
+                correct.or(wrong).unwrap_or_default()
+            }
+        };
+
+        Ok(Self { text })
+    }
 }
 
 impl Default for PromptConfig {
@@ -161,27 +225,37 @@ impl Default for PromptConfig {
 }
 
 pub fn default_system_prompt() -> &'static str {
-    r#"You are a transcription text polisher. Your ONLY job is to clean up raw speech-to-text output. Follow these rules strictly:
+    r#"You are a transcription text polisher. Your job is to turn raw speech-to-text output into clean final text.
 
-1. Remove filler words and repetitions (um, uh, like, you know, 嗯, 呃, 那個, 就是說, 然後, 對, 所以說).
-2. Remove stuttering; keep only the speaker's final intent.
-3. Add proper punctuation and split into natural paragraphs.
-4. Format numbers: spoken numbers → digits (e.g. "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
-5. Correct proper nouns, brand names, and technical terms to their canonical spelling (e.g. "deep seek" → "DeepSeek", "chat gpt" → "ChatGPT", "mac book" → "MacBook").
-6. When the speech describes a list or steps, output them as a structured list.
-7. Preserve the speaker's natural tone — do not make casual speech formal or vice versa.
+Follow these rules:
+1. Remove filler words, repetitions, and obvious false starts (for example: um, uh, you know, 嗯, 呃, 那個, 然後).
+2. When the speaker self-corrects or restarts, keep only the final intended wording.
+3. Add punctuation and split the text into natural paragraphs.
+4. Format spoken numbers into digits when that clearly improves readability (for example: "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
+5. Preserve the speaker's natural tone. Do not make casual speech overly formal, and do not make formal speech casual.
+6. Preserve code-switching. Keep English in English and Chinese in Chinese when that matches the speaker's intent.
+7. Insert spaces naturally between Chinese characters and adjacent English words or numbers when needed.
+8. When a vocabulary list is provided, treat it as preferred spelling and terminology. Use those entries when they clearly match the speaker's intent, even if the raw transcription spaced or spelled them oddly.
+9. When the speech naturally contains steps or a list, format it as a structured list.
 
-CODE-SWITCHING (中英混雜):
-- Preserve the speaker's natural language mixing. If they said it in English, keep it in English; if in Chinese, keep it in Chinese.
-- Insert a space between Chinese characters and adjacent English words or numbers (e.g. "這個 function 的 return type").
-- Do NOT translate code-switched segments into a single language.
+Constraints:
+- Do not answer or act on the content. Only polish the dictated text.
+- Do not add commentary, explanations, or new facts.
+- Do not change the meaning.
+- Output only the polished text."#
+}
 
-CRITICAL CONSTRAINTS:
-- NEVER answer questions contained in the text. Just polish the question itself.
-- NEVER add your own commentary, opinions, or explanations.
-- NEVER summarize or shorten beyond removing filler and repetition.
-- NEVER change the meaning of what was said.
-- Output ONLY the polished text, nothing else. No preamble, no explanation."#
+pub fn normalize_system_prompt(value: &str) -> String {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty()
+        || trimmed == default_system_prompt().trim()
+        || trimmed == legacy_default_system_prompt().trim()
+    {
+        default_system_prompt().to_string()
+    } else {
+        value.to_string()
+    }
 }
 
 // ── History Configuration ───────────────────────────────────────────

@@ -1,6 +1,6 @@
-import type { AppSettings } from "../stores/settingsStore";
+import type { AppSettings, VocabularyEntry } from "../stores/settingsStore";
 
-const DEFAULT_SYSTEM_PROMPT = `You are a transcription text polisher. Your ONLY job is to clean up raw speech-to-text output. Follow these rules strictly:
+const LEGACY_DEFAULT_SYSTEM_PROMPT = `You are a transcription text polisher. Your ONLY job is to clean up raw speech-to-text output. Follow these rules strictly:
 
 1. Remove filler words and repetitions (um, uh, like, you know, 嗯, 呃, 那個, 就是說, 然後, 對, 所以說).
 2. Remove stuttering; keep only the speaker's final intent.
@@ -22,11 +22,107 @@ CRITICAL CONSTRAINTS:
 - NEVER change the meaning of what was said.
 - Output ONLY the polished text, nothing else. No preamble, no explanation.`;
 
+const DEFAULT_SYSTEM_PROMPT = `You are a transcription text polisher. Your job is to turn raw speech-to-text output into clean final text.
+
+Follow these rules:
+1. Remove filler words, repetitions, and obvious false starts (for example: um, uh, you know, 嗯, 呃, 那個, 然後).
+2. When the speaker self-corrects or restarts, keep only the final intended wording.
+3. Add punctuation and split the text into natural paragraphs.
+4. Format spoken numbers into digits when that clearly improves readability (for example: "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
+5. Preserve the speaker's natural tone. Do not make casual speech overly formal, and do not make formal speech casual.
+6. Preserve code-switching. Keep English in English and Chinese in Chinese when that matches the speaker's intent.
+7. Insert spaces naturally between Chinese characters and adjacent English words or numbers when needed.
+8. When a vocabulary list is provided, treat it as preferred spelling and terminology. Use those entries when they clearly match the speaker's intent, even if the raw transcription spaced or spelled them oddly.
+9. When the speech naturally contains steps or a list, format it as a structured list.
+
+Constraints:
+- Do not answer or act on the content. Only polish the dictated text.
+- Do not add commentary, explanations, or new facts.
+- Do not change the meaning.
+- Output only the polished text.`;
+
 export function getDefaultSystemPrompt(): string {
   return DEFAULT_SYSTEM_PROMPT;
 }
 
+function normalizeSystemPrompt(value?: string | null): string {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return DEFAULT_SYSTEM_PROMPT;
+  }
+
+  if (
+    trimmed === DEFAULT_SYSTEM_PROMPT.trim()
+    || trimmed === LEGACY_DEFAULT_SYSTEM_PROMPT.trim()
+  ) {
+    return DEFAULT_SYSTEM_PROMPT;
+  }
+
+  return value ?? DEFAULT_SYSTEM_PROMPT;
+}
+
 const STORAGE_KEY = "yat.mock-settings";
+
+function normalizeVocabularyKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function coerceVocabularyText(entry: unknown): string | null {
+  if (typeof entry === "string") {
+    return entry;
+  }
+
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const candidate = entry as {
+    text?: unknown;
+    correct?: unknown;
+    wrong?: unknown;
+  };
+
+  if (typeof candidate.text === "string") {
+    return candidate.text;
+  }
+
+  if (typeof candidate.correct === "string" && candidate.correct.trim()) {
+    return candidate.correct;
+  }
+
+  if (typeof candidate.wrong === "string") {
+    return candidate.wrong;
+  }
+
+  return null;
+}
+
+export function normalizeVocabularyEntries(entries: unknown): VocabularyEntry[] {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: VocabularyEntry[] = [];
+
+  for (const entry of entries) {
+    const text = coerceVocabularyText(entry)?.trim();
+    if (!text) {
+      continue;
+    }
+
+    const key = normalizeVocabularyKey(text);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push({ text });
+  }
+
+  return normalized;
+}
 
 function defaultHotkeyKey(): string {
   if (typeof navigator !== "undefined" && /mac/i.test(navigator.platform)) {
@@ -35,7 +131,7 @@ function defaultHotkeyKey(): string {
   return "RCtrl";
 }
 
-export function buildDefaultAppSettings(): AppSettings {
+function buildDefaultAppSettings(): AppSettings {
   return {
     stt: {
       base_url: "",
@@ -65,7 +161,8 @@ export function buildDefaultAppSettings(): AppSettings {
       timeout_ms: 30000,
       max_retries: 2,
       sound_effects: true,
-      auto_mute: true,
+      background_audio_mode: "duck",
+      background_audio_ducking_percent: 80,
       auto_pause_media: false,
       microphone_device: null,
       close_to_tray: true,
@@ -121,7 +218,12 @@ function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): Ap
     prompt: {
       ...defaults.prompt,
       ...partial?.prompt,
-      vocabulary: partial?.prompt?.vocabulary ?? defaults.prompt.vocabulary,
+      system_prompt: normalizeSystemPrompt(
+        partial?.prompt?.system_prompt ?? defaults.prompt.system_prompt,
+      ),
+      vocabulary: normalizeVocabularyEntries(
+        partial?.prompt?.vocabulary ?? defaults.prompt.vocabulary,
+      ),
     },
     history: {
       ...defaults.history,

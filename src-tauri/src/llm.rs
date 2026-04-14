@@ -200,7 +200,7 @@ pub async fn polish(
         messages.push(ChatMessage {
             role: "system".into(),
             content: serde_json::Value::String(format!(
-                "Recent transcriptions for context (maintain consistency with these terms):\n{ctx}"
+                "Recent transcriptions for context (maintain consistency with the wording and terminology used here):\n{ctx}"
             )),
         });
     }

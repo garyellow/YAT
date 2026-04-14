@@ -43,7 +43,7 @@ export default function Toast({
     <div
       role={role}
       aria-live={live}
-      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2.5 text-xs font-medium shadow-lg ${
+      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-medium shadow-sm ${
         phase === "enter" ? "toast-enter" : "toast-exit"
       }`}
     >

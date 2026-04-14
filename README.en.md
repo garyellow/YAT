@@ -35,6 +35,8 @@ Getting started is incredibly easy. Just follow these three steps:
 ### 1. Get YAT
 Go to the [Releases page](../../releases) and download the build for your OS (Windows, macOS, or Linux). Install and launch it. You will see the YAT icon appear in the menu bar or system tray.
 
+> ℹ️ **Platform note:** On macOS, auto-paste and pause-media features typically require Accessibility permission. On Linux, background audio control during recording requires `pactl`, and pause-media requires `playerctl`.
+
 ### 2. Connect your speech provider
 YAT uses your own API keys and supports any API compatible with the OpenAI format. You can start with speech recognition only, then turn on polishing later if you want cleaner output.
 1. Click the menu bar or system tray icon and open **Settings**.
@@ -57,7 +59,7 @@ YAT is more than just a record button. It's packed with quality-of-life features
 
 - **Fully customizable hotkeys**: Not a fan of "hold-to-talk"? Change it to click-to-toggle, double-tap, or complex combos (like `Ctrl + Shift + C`).
 - **Extra reference info (advanced)**: When you really need it, YAT can optionally read your clipboard, selected text, active app, current input field, or even take a **screen capture** before polishing. This helps the AI stay closer to what you are already working on. *(For privacy, **all of these are OFF by default**, and only the items you enable are sent.)*
-- **Distraction-free recording**: Automatically pause playing media or mute system audio while you are speaking (varies by OS).
+- **Distraction-free recording**: Leave background audio alone, duck it, or mute it while you are speaking—and optionally pause playing media too (varies by OS).
 
 ## FAQ
 
@@ -75,7 +77,7 @@ A: Yes. Your API keys are stored locally on your device. Your request history is
 ### For Developers: Build from source
 
 If you'd like to build YAT yourself or contribute:
-Prerequisites: Node.js 20+, Rust 1.77+
+Prerequisites: Node.js 20.19+ (or 22.12+ and newer), Rust 1.77+
 
 ```bash
 npm install

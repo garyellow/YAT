@@ -5,6 +5,7 @@ mod history;
 mod hotkey;
 mod llm;
 mod output;
+mod permissions;
 mod pipeline;
 mod recording_env;
 mod stt;
@@ -937,6 +938,16 @@ fn get_platform_context() -> PlatformContext {
 }
 
 #[tauri::command]
+fn check_permissions() -> permissions::PermissionStatus {
+    permissions::check_all()
+}
+
+#[tauri::command]
+fn request_permission(category: String) -> permissions::PermissionState {
+    permissions::request(&category)
+}
+
+#[tauri::command]
 async fn save_settings(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
@@ -1018,6 +1029,10 @@ async fn save_settings(
 
     // Update in-memory settings
     *state.settings.lock() = settings;
+
+    // Refresh tray menu labels to reflect potential language change
+    refresh_tray_menu(&app);
+
     Ok(())
 }
 
@@ -1287,6 +1302,9 @@ fn resize_capsule(app: AppHandle, height: f64) {
 
 fn load_settings(app: &AppHandle) -> AppSettings {
     let mut settings = load_settings_from_store(app);
+    let normalized_prompt = config::normalize_system_prompt(&settings.prompt.system_prompt);
+    let prompt_migrated = settings.prompt.system_prompt != normalized_prompt;
+    settings.prompt.system_prompt = normalized_prompt;
 
     let legacy_stt_key = (!settings.stt.api_key.is_empty()).then(|| settings.stt.api_key.clone());
     let legacy_llm_key = (!settings.llm.api_key.is_empty()).then(|| settings.llm.api_key.clone());
@@ -1327,7 +1345,7 @@ fn load_settings(app: &AppHandle) -> AppSettings {
         }
     }
 
-    if should_scrub_store {
+    if should_scrub_store || prompt_migrated {
         let disk_settings = sanitize_settings_for_store(&settings);
         if let Err(e) = persist_settings_to_store(app, &disk_settings) {
             log::warn!("failed to scrub legacy API keys from settings store: {e}");
@@ -1391,9 +1409,28 @@ fn load_settings_from_store(app: &AppHandle) -> AppSettings {
     }
 }
 
+fn tray_label_toggle(visible: bool, lang: &str) -> &'static str {
+    match (visible, lang) {
+        (true, "zh-TW") => "隱藏",
+        (true, _) => "Hide",
+        (false, "zh-TW") => "顯示",
+        (false, _) => "Show",
+    }
+}
+
+fn tray_label_quit(lang: &str) -> &'static str {
+    match lang {
+        "zh-TW" => "結束",
+        _ => "Quit",
+    }
+}
+
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let show_item = MenuItemBuilder::with_id("toggle_window", "Show / 顯示").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)?;
+    let lang = app.state::<AppState>().settings.lock().general.language.clone();
+    let show_item = MenuItemBuilder::with_id("toggle_window", tray_label_toggle(false, &lang))
+        .build(app)?;
+    let quit_item =
+        MenuItemBuilder::with_id("quit", tray_label_quit(&lang)).build(app)?;
     let show_menu_on_left_click = cfg!(target_os = "linux");
 
     let menu = MenuBuilder::new(app)
@@ -1491,15 +1528,17 @@ fn refresh_tray_menu(app: &AppHandle) {
             .map(|w| w.is_visible().unwrap_or(false))
             .unwrap_or(false);
 
-        let label = if visible {
-            "Hide / 隱藏"
-        } else {
-            "Show / 顯示"
-        };
+        let lang = app
+            .try_state::<AppState>()
+            .map(|s| s.settings.lock().general.language.clone())
+            .unwrap_or_default();
 
-        if let Ok(show_item) = MenuItemBuilder::with_id("toggle_window", label).build(app) {
+        let toggle_label = tray_label_toggle(visible, &lang);
+        let quit_label = tray_label_quit(&lang);
+
+        if let Ok(show_item) = MenuItemBuilder::with_id("toggle_window", toggle_label).build(app) {
             if let Ok(quit_item) =
-                MenuItemBuilder::with_id("quit", "Quit / 結束").build(app)
+                MenuItemBuilder::with_id("quit", quit_label).build(app)
             {
                 if let Ok(menu) = MenuBuilder::new(app)
                     .item(&show_item)
@@ -1701,6 +1740,8 @@ pub fn run() {
             resume_hotkey_triggers,
             get_default_prompt,
             get_platform_context,
+            check_permissions,
+            request_permission,
             test_stt,
             test_llm,
             get_history,

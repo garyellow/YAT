@@ -53,8 +53,8 @@ pub fn list_input_devices() -> Vec<String> {
     let mut names = Vec::new();
     if let Ok(devices) = host.input_devices() {
         for device in devices {
-            if let Ok(name) = device.name() {
-                names.push(name);
+            if let Ok(desc) = device.description() {
+                names.push(desc.name().to_owned());
             }
         }
     }
@@ -77,7 +77,7 @@ impl AudioRecorder {
             // Try to find the requested device
             host.input_devices()
                 .map_err(|e| AudioError::DeviceConfig(e.to_string()))?
-                .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+                .find(|d| d.description().map(|desc| desc.name() == name).unwrap_or(false))
                 .ok_or_else(|| {
                     log::warn!("requested device '{name}' not found, using default");
                     AudioError::NoInputDevice
@@ -94,7 +94,7 @@ impl AudioRecorder {
             .default_input_config()
             .map_err(|e| AudioError::DeviceConfig(e.to_string()))?;
 
-        let sample_rate = config.sample_rate().0;
+        let sample_rate = config.sample_rate();
         let channels = config.channels();
 
         {

@@ -8,11 +8,26 @@ import {
 import { isTauriRuntime } from "../../lib/tauriRuntime";
 import { useRecordingStore } from "../../stores/recordingStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useAppStore } from "../../stores/appStore";
-import { EmptyState, Notice, Section, StatusDot } from "./SettingPrimitives";
+import { useAppStore, type PermissionState } from "../../stores/appStore";
+import { EmptyState, Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
 import type { SettingsTab } from "./tabs";
 
 type DotTone = "default" | "success" | "warning" | "danger";
+
+function permissionTone(state: PermissionState): DotTone {
+  switch (state) {
+    case "granted":
+      return "success";
+    case "denied":
+      return "danger";
+    case "not_determined":
+      return "warning";
+    case "not_applicable":
+      return "default";
+    default:
+      return "warning";
+  }
+}
 
 interface OverviewCardProps {
   children: ReactNode;
@@ -22,7 +37,7 @@ interface OverviewCardProps {
 function OverviewCard({ children, className = "" }: OverviewCardProps) {
   return (
     <div
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-4 shadow-sm ${className}`}
+      className={`section-card ${className}`}
     >
       {children}
     </div>
@@ -35,9 +50,13 @@ interface OverviewTabProps {
 
 export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   const { t } = useTranslation();
+  const [openSettingsFailed, setOpenSettingsFailed] = useState(false);
   const settings = useSettingsStore((s) => s.settings);
   const platform = useAppStore((s) => s.platform);
   const displayServer = useAppStore((s) => s.displayServer);
+  const permissions = useAppStore((s) => s.permissions);
+  const loadPermissions = useAppStore((s) => s.loadPermissions);
+  const requestPermission = useAppStore((s) => s.requestPermission);
   const recordingStatus = useRecordingStore((s) => s.status);
   const lastText = useRecordingStore((s) => s.lastText);
   const lastError = useRecordingStore((s) => s.lastError);
@@ -50,8 +69,6 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   const hasCustomPrompt =
     settings.prompt.user_instructions.trim().length > 0 ||
     settings.prompt.vocabulary.length > 0;
-
-  const [openSettingsFailed, setOpenSettingsFailed] = useState(false);
 
   const setupItems = [
     {
@@ -145,26 +162,54 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   ];
 
   const permissionItems = (() => {
+    const mic = permissions?.microphone ?? "unknown";
+    const acc = permissions?.accessibility ?? "unknown";
+    const scr = permissions?.screen_recording ?? "unknown";
+
     if (platform === "macos") {
       return [
         {
           key: "microphone",
-          tone: "warning" as const,
+          tone: permissionTone(mic),
           title: t("overview.permissions.microphoneTitle"),
-          body: t("overview.permissions.macosMicrophoneBody"),
+          body: mic === "granted"
+            ? t("overview.permissions.statusGranted")
+            : mic === "denied"
+              ? t("overview.permissions.macosMicrophoneDenied")
+              : t("overview.permissions.macosMicrophoneBody"),
           settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-          actionLabel: t("overview.permissions.openMicrophoneSettings"),
+          actionLabel: mic === "granted" ? undefined : t("overview.permissions.openMicrophoneSettings"),
+          requestCategory: mic === "not_determined" ? "microphone" : undefined,
         },
         {
           key: "accessibility",
-          tone:
-            settings.general.output_mode === "auto_paste"
-              ? ("warning" as const)
-              : ("default" as const),
+          tone: acc === "granted"
+            ? "success" as const
+            : settings.general.output_mode === "auto_paste" || settings.general.auto_pause_media
+              ? permissionTone(acc)
+              : "default" as const,
           title: t("overview.permissions.accessibilityTitle"),
-          body: t("overview.permissions.macosAccessibilityBody"),
+          body: acc === "granted"
+            ? t("overview.permissions.statusGranted")
+            : t("overview.permissions.macosAccessibilityBody"),
           settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-          actionLabel: t("overview.permissions.openAccessibilitySettings"),
+          actionLabel: acc === "granted" ? undefined : t("overview.permissions.openAccessibilitySettings"),
+          requestCategory: acc === "granted" ? undefined : "accessibility",
+        },
+        {
+          key: "screen_recording",
+          tone: scr === "granted"
+            ? "success" as const
+            : settings.prompt.context_screenshot
+              ? permissionTone(scr)
+              : "default" as const,
+          title: t("overview.permissions.screenRecordingTitle"),
+          body: scr === "granted"
+            ? t("overview.permissions.statusGranted")
+            : t("overview.permissions.macosScreenRecordingBody"),
+          settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+          actionLabel: scr === "granted" ? undefined : t("overview.permissions.openScreenRecordingSettings"),
+          requestCategory: scr === "granted" ? undefined : "screen_recording",
         },
       ];
     }
@@ -172,11 +217,15 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
       return [
         {
           key: "microphone",
-          tone: "warning" as const,
+          tone: permissionTone(mic),
           title: t("overview.permissions.microphoneTitle"),
-          body: t("overview.permissions.windowsMicrophoneBody"),
+          body: mic === "granted"
+            ? t("overview.permissions.statusGranted")
+            : mic === "denied"
+              ? t("overview.permissions.windowsMicrophoneDenied")
+              : t("overview.permissions.windowsMicrophoneBody"),
           settingsUrl: "ms-settings:privacy-microphone",
-          actionLabel: t("overview.permissions.openMicrophoneSettings"),
+          actionLabel: mic === "granted" ? undefined : t("overview.permissions.openMicrophoneSettings"),
         },
         {
           key: "auto-paste",
@@ -192,17 +241,20 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
     if (platform === "linux") {
       const items: Array<{
         key: string;
-        tone: "warning" | "danger" | "default";
+        tone: DotTone;
         title: string;
         body: string;
         settingsUrl?: string;
         actionLabel?: string;
+        requestCategory?: string;
       }> = [
         {
           key: "microphone",
-          tone: "warning",
+          tone: permissionTone(mic),
           title: t("overview.permissions.microphoneTitle"),
-          body: t("overview.permissions.linuxMicrophoneBody"),
+          body: mic === "granted"
+            ? t("overview.permissions.statusGranted")
+            : t("overview.permissions.linuxMicrophoneBody"),
         },
         {
           key: "hotkey",
@@ -217,6 +269,22 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
           tone: "danger",
           title: t("overview.permissions.waylandTitle"),
           body: t("overview.permissions.waylandBody"),
+        });
+      }
+      if (permissions?.pactl_available === false) {
+        items.push({
+          key: "pactl",
+          tone: settings.general.background_audio_mode !== "off" ? "danger" : "warning",
+          title: t("overview.permissions.pactlTitle"),
+          body: t("overview.permissions.pactlBody"),
+        });
+      }
+      if (permissions?.playerctl_available === false) {
+        items.push({
+          key: "playerctl",
+          tone: settings.general.auto_pause_media ? "danger" : "warning",
+          title: t("overview.permissions.playerctlTitle"),
+          body: t("overview.permissions.playerctlBody"),
         });
       }
       return items;
@@ -246,44 +314,48 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   };
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-[24px] border border-[var(--border)] bg-[var(--bg-subtle)]/70 p-5 shadow-sm sm:p-6">
-        <div className="max-w-2xl">
-          <h1 className="text-lg font-semibold leading-7 text-balance">{t("overview.title")}</h1>
-          <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{t("overview.desc")}</p>
-        </div>
+    <div className="space-y-6">
+      <PageIntro
+        eyebrow={t("settings.groups.workspace")}
+        title={t("overview.title")}
+        description={t("overview.desc")}
+      />
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {summaryItems.map((item) => (
-            <OverviewCard key={item.key} className="h-full">
-              <StatusDot tone={item.tone}>{item.label}</StatusDot>
-              <p className="mt-3 text-sm font-semibold text-[var(--text)]">{item.value}</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{item.detail}</p>
-            </OverviewCard>
-          ))}
-        </div>
-      </section>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {summaryItems.map((item) => (
+          <OverviewCard key={item.key} className="h-full">
+            <StatusDot tone={item.tone}>{item.label}</StatusDot>
+            <p className="mt-3 text-sm font-semibold text-[var(--text)]">{item.value}</p>
+            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">{item.detail}</p>
+          </OverviewCard>
+        ))}
+      </div>
 
       <Section title={t("overview.setup.title")} description={t("overview.setup.desc")}>
         <div className="space-y-3">
           {setupItems.map((item, index) => (
             <OverviewCard key={item.key}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-muted)]">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] ring-1 ring-[var(--border)] text-[11px] font-bold text-[var(--text-muted)] shadow-[var(--shadow-xs)]">
                     {index + 1}
                   </span>
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-center gap-3">
                     <StatusDot tone={item.ready ? "success" : "warning"}>
                       {item.ready ? t("overview.metricValues.ready") : t("overview.metricValues.pending")}
                     </StatusDot>
-                    <h3 className="mt-2 text-sm font-semibold text-[var(--text)]">{item.label}</h3>
-                    <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{item.detail}</p>
+                    <h3 className="text-[13.5px] font-semibold text-[var(--text)]">{item.label}</h3>
+                    <p className="hidden md:block text-xs leading-5 text-[var(--text-muted)] truncate md:max-w-xs">{item.detail}</p>
                   </div>
                 </div>
 
-                <button type="button" className="btn btn-secondary shrink-0" onClick={item.action}>
+                <button
+                  type="button"
+                  className="btn btn-secondary shrink-0"
+                  title={item.detail}
+                  onClick={item.action}
+                >
                   {item.actionLabel}
                 </button>
               </div>
@@ -306,21 +378,52 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                 <StatusDot tone={item.tone}>{item.title}</StatusDot>
                 <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{item.body}</p>
 
-                {item.settingsUrl && item.actionLabel && isTauriRuntime() ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary mt-4"
-                    onClick={() => {
-                      if (item.settingsUrl) {
-                        void openSystemUrl(item.settingsUrl);
-                      }
-                    }}
-                  >
-                    {item.actionLabel}
-                  </button>
+                {isTauriRuntime() &&
+                  (("requestCategory" in item && item.requestCategory) ||
+                    (item.settingsUrl && item.actionLabel)) ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {"requestCategory" in item && item.requestCategory ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        title={item.body}
+                        onClick={() => void requestPermission(item.requestCategory as string)}
+                      >
+                        {t("overview.permissions.requestPermission")}
+                      </button>
+                    ) : null}
+
+                    {item.settingsUrl && item.actionLabel ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        title={item.body}
+                        onClick={() => {
+                          if (item.settingsUrl) {
+                            void openSystemUrl(item.settingsUrl);
+                          }
+                        }}
+                      >
+                        {item.actionLabel}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </OverviewCard>
             ))}
+
+            {isTauriRuntime() ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  title={t("overview.permissions.desc")}
+                  onClick={() => void loadPermissions()}
+                >
+                  {t("overview.permissions.refreshPermissions")}
+                </button>
+              </div>
+            ) : null}
           </div>
         </Section>
 
@@ -332,6 +435,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                 <button
                   type="button"
                   className="btn btn-secondary mt-3"
+                  title={t("general.outputDesc")}
                   onClick={() => onNavigate("general")}
                 >
                   {t("overview.actions.adjustOutput")}
@@ -354,7 +458,12 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                 </div>
 
                 <div className="mt-4 flex justify-end">
-                  <button type="button" className="btn btn-secondary" onClick={() => onNavigate("history")}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    title={t("overview.recent.desc")}
+                    onClick={() => onNavigate("history")}
+                  >
                     {t("overview.actions.openHistory")}
                   </button>
                 </div>
@@ -364,7 +473,12 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                 title={t("overview.recent.emptyTitle")}
                 description={t("overview.recent.emptyDesc")}
                 action={
-                  <button type="button" className="btn btn-secondary" onClick={() => onNavigate("history")}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    title={t("overview.recent.desc")}
+                    onClick={() => onNavigate("history")}
+                  >
                     {t("overview.actions.openHistory")}
                   </button>
                 }

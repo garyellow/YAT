@@ -3,16 +3,26 @@
 //! Captures environmental context at the start of a recording:
 //! - Active window / application name
 //! - Clipboard text
-//! - Selected text (native Accessibility API on macOS, clipboard simulation elsewhere)
+//! - Selected text (native APIs first, clipboard simulation as fallback)
 //! - Focused input field full text (Windows UI Automation / macOS Accessibility)
+//! - Screenshot (monitor containing the active window)
 //!
 //! All functions are best-effort: they return `None` on failure rather than
 //! propagating errors, since missing context should never block recording.
+//!
+//! ## Selected text strategy by platform
+//! - **macOS**: AXSelectedText via Accessibility API -> Cmd+C fallback (both
+//!   handled by the `get-selected-text` crate; clipboard is restored after use).
+//! - **Windows**: `UITextPattern.GetSelection()` via UI Automation API (no
+//!   clipboard interaction) -> Ctrl+C fallback for apps that don't support it.
+//! - **Linux (X11)**: X11 PRIMARY selection buffer (selected text is placed
+//!   here automatically without requiring Ctrl+C) -> Ctrl+C fallback for
+//!   Wayland sessions or apps that don't update the PRIMARY selection.
 
 use arboard::Clipboard;
 use serde::{Deserialize, Serialize};
 
-// ── Active Window ───────────────────────────────────────────────────
+// -- Active Window -----------------------------------------------------------
 
 /// Lightweight summary of the active window captured at recording start.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +63,7 @@ pub fn get_active_window_info() -> Option<ActiveWindowInfo> {
     }
 }
 
-// ── Clipboard ───────────────────────────────────────────────────────
+// -- Clipboard ---------------------------------------------------------------
 
 /// Read the current clipboard text content (non-empty only).
 pub fn read_clipboard_text() -> Option<String> {
@@ -64,18 +74,30 @@ pub fn read_clipboard_text() -> Option<String> {
         .filter(|s| !s.trim().is_empty())
 }
 
-// ── Selected Text ───────────────────────────────────────────────────
+// -- Selected Text -----------------------------------------------------------
 
-/// Read the currently selected text using the best available method.
+/// Read the currently selected text using the best available native method.
 ///
-/// **macOS**: Prioritises the Accessibility API (`AXSelectedText`), then
-///   falls back to simulating Cmd+C if the target app doesn't support it.
-/// **Windows / Linux**: Simulates Ctrl+C via the clipboard (the only
-///   reliable cross-app method on these platforms).
-///
-/// The `get-selected-text` crate handles all platform differences and
-/// automatically mutes macOS alert sounds during simulation.
+/// Tries a clipboard-free native API first on each platform; falls back to
+/// clipboard simulation only if the native API fails or is unsupported.
+/// See the module-level documentation for per-platform details.
 pub fn read_selected_text() -> Option<String> {
+    // Windows: UITextPattern.GetSelection() (native, no clipboard)
+    #[cfg(target_os = "windows")]
+    if let Some(text) = read_selected_text_via_uia() {
+        return Some(text);
+    }
+
+    // Linux: X11 PRIMARY selection (no clipboard interaction)
+    #[cfg(target_os = "linux")]
+    if let Some(text) = read_selected_text_x11_primary() {
+        return Some(text);
+    }
+
+    // Universal fallback via get-selected-text crate:
+    // macOS: Accessibility API -> Cmd+C (clipboard restored after use)
+    // Windows: Ctrl+C simulation (clipboard briefly overwritten)
+    // Linux:  Ctrl+C simulation (clipboard briefly overwritten)
     match get_selected_text::get_selected_text() {
         Ok(text) if !text.trim().is_empty() => Some(text),
         Ok(_) => None,
@@ -86,18 +108,69 @@ pub fn read_selected_text() -> Option<String> {
     }
 }
 
-// ── Input Field Text (platform-specific) ────────────────────────────
+/// Windows: read selected text via UI Automation TextPattern (no clipboard).
+///
+/// Works for apps that expose `TextPattern` (most Win32 native controls, WPF,
+/// newer Electron, Microsoft Word, Notepad, etc.).  Returns `None` for apps
+/// that don't implement the pattern (triggers the Ctrl+C fallback).
+#[cfg(target_os = "windows")]
+fn read_selected_text_via_uia() -> Option<String> {
+    use uiautomation::UIAutomation;
+    use uiautomation::patterns::UITextPattern;
+
+    let automation = UIAutomation::new().ok()?;
+    let focused = automation.get_focused_element().ok()?;
+    let text_pattern = focused.get_pattern::<UITextPattern>().ok()?;
+    let ranges = text_pattern.get_selection().ok()?;
+
+    for range in &ranges {
+        if let Ok(text) = range.get_text(-1) {
+            let text = text.trim().to_string();
+            if !text.is_empty() {
+                return Some(text);
+            }
+        }
+    }
+    None
+}
+
+/// Linux: read selected text from the X11 PRIMARY selection buffer.
+///
+/// On X11, selected text is placed in PRIMARY automatically without requiring
+/// a Ctrl+C keystroke -- the clipboard is never touched.  Returns `None` on
+/// Wayland sessions (where PRIMARY is unavailable) or on timeout.
+#[cfg(target_os = "linux")]
+fn read_selected_text_x11_primary() -> Option<String> {
+    use std::time::Duration;
+    use x11_clipboard::Clipboard;
+
+    let clipboard = Clipboard::new().ok()?;
+    let val = clipboard
+        .load(
+            clipboard.getter.atoms.primary,
+            clipboard.getter.atoms.utf8_string,
+            clipboard.getter.atoms.property,
+            Duration::from_millis(100),
+        )
+        .ok()?;
+
+    let text = String::from_utf8(val).ok()?;
+    let text = text.trim().to_string();
+    if text.is_empty() { None } else { Some(text) }
+}
+
+// -- Input Field Text (platform-specific) ------------------------------------
 
 /// Read the full text content of the currently focused input field.
 ///
 /// This uses platform-specific Accessibility / UI Automation APIs:
-/// - **Windows**: `uiautomation` crate → `ValuePattern` (simple text
+/// - **Windows**: `uiautomation` crate -> `ValuePattern` (simple text
 ///   fields) or `TextPattern` (rich text controls).  Works in most
 ///   native controls; some apps (e.g. Firefox, Chrome) may not expose
 ///   these patterns.
 /// - **macOS**: Accessibility API via the focused element's `AXValue`
 ///   attribute. Requires Accessibility permission.
-/// - **Linux**: Not available — returns `None`.
+/// - **Linux**: Not available -- returns `None`.
 pub fn read_input_field_text() -> Option<String> {
     #[cfg(target_os = "windows")]
     {
@@ -113,7 +186,7 @@ pub fn read_input_field_text() -> Option<String> {
     }
 }
 
-// ── Windows: UI Automation ──────────────────────────────────────────
+// -- Windows: UI Automation --------------------------------------------------
 
 #[cfg(target_os = "windows")]
 fn read_input_field_text_windows() -> Option<String> {
@@ -123,7 +196,7 @@ fn read_input_field_text_windows() -> Option<String> {
     let automation = UIAutomation::new().ok()?;
     let focused = automation.get_focused_element().ok()?;
 
-    // Try ValuePattern first — works for simple text fields, combo boxes, etc.
+    // Try ValuePattern first -- works for simple text fields, combo boxes, etc.
     if let Ok(value) = focused.get_property_value(uiautomation::types::UIProperty::ValueValue) {
         let text = value.to_string();
         if !text.is_empty() && text != "null" {
@@ -146,7 +219,7 @@ fn read_input_field_text_windows() -> Option<String> {
     None
 }
 
-// ── macOS: Accessibility API ────────────────────────────────────────
+// -- macOS: Accessibility API ------------------------------------------------
 
 #[cfg(target_os = "macos")]
 const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
@@ -271,27 +344,31 @@ unsafe fn cfstring_to_string(cfstr: *mut std::ffi::c_void) -> Option<String> {
     }
 }
 
-// ── Screenshot Capture ──────────────────────────────────────────────
+// -- Screenshot Capture ------------------------------------------------------
 
-/// Capture a screenshot of the monitor containing the active window (or the
-/// primary monitor as fallback) and return it as a base64-encoded PNG string.
+/// Capture a screenshot of the monitor containing the active window and
+/// return it as a base64-encoded PNG string.
 ///
-/// Uses the `xcap` crate which supports Windows, macOS, and Linux.
-/// Like other context functions, returns `None` on any failure.
+/// Uses `Monitor::from_point()` to target the monitor where the user is
+/// currently working, falling back to the primary monitor if the active
+/// window position cannot be determined.
 pub fn capture_screenshot_base64() -> Option<String> {
     use base64::Engine as _;
     use xcap::Monitor;
 
-    // Try to find which monitor contains the cursor / active window.
-    // Fall back to the primary (first) monitor.
-    let monitors = Monitor::all().ok()?;
-    if monitors.is_empty() {
-        log::debug!("no monitors detected for screenshot capture");
-        return None;
-    }
+    // Find the monitor that contains the active window's top-left corner.
+    // Falls back to the primary monitor on any error.
+    let monitor = find_active_monitor().or_else(|| {
+        Monitor::all().ok().and_then(|mut ms| {
+            if ms.is_empty() {
+                log::debug!("no monitors detected for screenshot capture");
+                None
+            } else {
+                Some(ms.swap_remove(0))
+            }
+        })
+    })?;
 
-    // Capture from the first monitor (primary) — xcap lists the primary first.
-    let monitor = &monitors[0];
     let image = match monitor.capture_image() {
         Ok(img) => img,
         Err(e) => {
@@ -312,4 +389,16 @@ pub fn capture_screenshot_base64() -> Option<String> {
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(png_buf.into_inner());
     Some(b64)
+}
+
+/// Return the monitor that contains the currently active window.
+///
+/// Uses the active window's position (its top-left corner) to find the
+/// enclosing monitor via `Monitor::from_point()`.
+fn find_active_monitor() -> Option<xcap::Monitor> {
+    let window = active_win_pos_rs::get_active_window().ok()?;
+    // Use the window's top-left corner to identify its monitor.
+    let x = window.position.x as i32;
+    let y = window.position.y as i32;
+    xcap::Monitor::from_point(x, y).ok()
 }

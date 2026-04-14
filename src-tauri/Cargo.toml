@@ -29,23 +29,23 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 
 # Audio capture & encoding
-cpal = "0.15"
+cpal = "0.17"
 hound = "3.5"
 
 # HTTP client for STT/LLM API calls
-reqwest = { version = "0.12", features = ["multipart", "json"] }
+reqwest = { version = "0.13", features = ["multipart", "json"] }
 bytes = "1"
 
 # Clipboard & keyboard simulation
 arboard = "3"
-enigo = "0.2"
+enigo = "0.6"
 
 # Context capture: active window detection & native selected text
 active-win-pos-rs = "0.10"
 get-selected-text = "0.1"
 
 # Screen capture for visual context
-xcap = "0.3"
+xcap = "0.9"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
@@ -53,16 +53,22 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 rdev = { version = "0.5", features = ["unstable_grab"] }
 
 # Local history database
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 
 # OS credential store for API keys
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
 
-# System volume control (Windows)
+# X11 PRIMARY selection for clipboard-free selected text reading on Linux
+[target.'cfg(target_os = "linux")'.dependencies]
+x11-clipboard = "0.9"
+
+# System volume control & UI Automation (Windows only)
 [target.'cfg(windows)'.dependencies]
 # UI Automation for reading focused input field text
 uiautomation = "0.24"
-windows = { version = "0.61", features = [
+# Registry access for microphone consent store check
+winreg = "0.56"
+windows = { version = "0.62", features = [
     "Foundation",
     "Foundation_Collections",
     "Media_Control",

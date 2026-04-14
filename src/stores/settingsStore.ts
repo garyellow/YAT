@@ -3,6 +3,7 @@ import { create } from "zustand";
 import {
   cloneSettings,
   loadMockSettings,
+  normalizeVocabularyEntries,
   saveMockSettings,
 } from "../lib/defaultSettings";
 import { validateSettings } from "../lib/settingsFormatters";
@@ -41,7 +42,8 @@ export interface GeneralConfig {
   timeout_ms: number;
   max_retries: number;
   sound_effects: boolean;
-  auto_mute: boolean;
+  background_audio_mode: "off" | "duck" | "mute";
+  background_audio_ducking_percent: number;
   auto_pause_media: boolean;
   microphone_device: string | null;
   close_to_tray: boolean;
@@ -49,8 +51,7 @@ export interface GeneralConfig {
 }
 
 export interface VocabularyEntry {
-  wrong: string;
-  correct: string;
+  text: string;
 }
 
 export interface PromptConfig {
@@ -131,6 +132,10 @@ function sanitizeSettings(settings: AppSettings): AppSettings {
           ),
         ),
       },
+    },
+    prompt: {
+      ...settings.prompt,
+      vocabulary: normalizeVocabularyEntries(settings.prompt.vocabulary),
     },
   };
 }
