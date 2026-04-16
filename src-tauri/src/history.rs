@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Duration;
 use thiserror::Error;
+
+const HISTORY_BUSY_TIMEOUT_MS: u64 = 5_000;
 
 /// Parse an RFC 3339 string into `DateTime<Utc>`, logging a warning on failure.
 fn parse_datetime(raw: &str) -> DateTime<Utc> {
@@ -45,13 +48,34 @@ impl HistoryManager {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(db_path)?;
+        Self::configure_connection(&conn, true)?;
         Self::init_tables(conn)
     }
 
     #[cfg(test)]
     pub fn new_in_memory() -> Result<Self, HistoryError> {
         let conn = Connection::open_in_memory()?;
+        Self::configure_connection(&conn, false)?;
         Self::init_tables(conn)
+    }
+
+    fn configure_connection(conn: &Connection, prefer_wal: bool) -> Result<(), HistoryError> {
+        conn.busy_timeout(Duration::from_millis(HISTORY_BUSY_TIMEOUT_MS))?;
+        conn.execute_batch("PRAGMA synchronous = FULL;")?;
+
+        if prefer_wal {
+            let journal_mode: String = conn.query_row("PRAGMA journal_mode = WAL;", [], |row| {
+                row.get(0)
+            })?;
+
+            if !journal_mode.eq_ignore_ascii_case("wal") {
+                log::warn!(
+                    "history database did not enter WAL mode; continuing with journal_mode={journal_mode}"
+                );
+            }
+        }
+
+        Ok(())
     }
 
     fn init_tables(conn: Connection) -> Result<Self, HistoryError> {
@@ -67,18 +91,6 @@ impl HistoryManager {
             );
             CREATE INDEX IF NOT EXISTS idx_history_created ON history(created_at);",
         )?;
-
-        // Migration: add app_name column for databases created before this version.
-        // Ignore only the expected duplicate-column error and surface everything else.
-        match conn.execute_batch("ALTER TABLE history ADD COLUMN app_name TEXT;") {
-            Ok(()) => log::info!("history migration applied: added app_name column"),
-            Err(rusqlite::Error::SqliteFailure(_, Some(message)))
-                if message.contains("duplicate column name: app_name") =>
-            {
-                log::debug!("history migration skipped: app_name column already exists");
-            }
-            Err(error) => return Err(HistoryError::Db(error)),
-        }
 
         Ok(Self { conn })
     }
@@ -173,6 +185,11 @@ impl HistoryManager {
             "DELETE FROM history WHERE created_at < ?1",
             params![cutoff.to_rfc3339()],
         )?;
+        Ok(deleted as u64)
+    }
+
+    pub fn clear_all(&self) -> Result<u64, HistoryError> {
+        let deleted = self.conn.execute("DELETE FROM history", [])?;
         Ok(deleted as u64)
     }
 
@@ -368,6 +385,28 @@ mod tests {
 
         assert!(db_path.parent().expect("parent dir").exists());
         assert!(db_path.exists());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn new_configures_file_backed_connection_for_wal_and_busy_timeout() {
+        let root = std::env::temp_dir().join(format!("yat-history-{}", uuid::Uuid::new_v4()));
+        let db_path = root.join("history.db");
+
+        let mgr = HistoryManager::new(db_path).expect("history DB should initialize");
+
+        let journal_mode: String = mgr
+            .conn
+            .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+            .expect("should read journal mode");
+        let busy_timeout: i64 = mgr
+            .conn
+            .query_row("PRAGMA busy_timeout;", [], |row| row.get(0))
+            .expect("should read busy timeout");
+
+        assert_eq!(journal_mode.to_lowercase(), "wal");
+        assert_eq!(busy_timeout, HISTORY_BUSY_TIMEOUT_MS as i64);
 
         std::fs::remove_dir_all(root).ok();
     }

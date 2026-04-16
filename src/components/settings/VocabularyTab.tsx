@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { EmptyState, Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import type { SettingsTab } from "./tabs";
+import {
+  buildVocabularyTransferBundle,
+  pickTransferBundle,
+  prepareImportedVocabularyBundle,
+  saveTransferBundle,
+} from "../../lib/settingsTransfer";
 
-const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
+const labelCls = "text-xs font-medium text-(--text-secondary)";
+const hintCls = "text-[11px] text-(--text-muted)";
 
 function normalizeEntryKey(value: string): string {
   return value.trim().toLowerCase();
@@ -21,12 +28,15 @@ function parseVocabularyDraft(value: string): string[] {
 
 interface VocabularyTabProps {
   onNavigate?: (tab: SettingsTab) => void;
+  onToast?: (message: string, tone?: "success" | "error" | "info") => void;
 }
 
-export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
+export default function VocabularyTab({ onNavigate, onToast }: VocabularyTabProps) {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const platform = useAppStore((s) => s.platform);
 
   const [draft, setDraft] = useState("");
   const [validationMsg, setValidationMsg] = useState("");
@@ -34,6 +44,11 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
   const [editDraft, setEditDraft] = useState("");
   const [editValidationMsg, setEditValidationMsg] = useState("");
   const [confirmIndex, setConfirmIndex] = useState<number | null>(null);
+  const [transferNotice, setTransferNotice] = useState<{
+    tone: "success" | "warning" | "danger";
+    title: string;
+    lines?: string[];
+  } | null>(null);
 
   if (!settings) return null;
   const vocab = settings.prompt.vocabulary;
@@ -168,6 +183,93 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
     }
   };
 
+  const handleExportVocabulary = async () => {
+    try {
+      const savedAs = await saveTransferBundle(buildVocabularyTransferBundle(vocab, platform));
+      if (!savedAs) {
+        return;
+      }
+
+      setTransferNotice({
+        tone: "success",
+        title: t("vocabulary.transferExportedTitle"),
+        lines: [t("vocabulary.transferExportedBody")],
+      });
+      onToast?.(t("vocabulary.transferExportedToast", { file: savedAs }), "success");
+    } catch (error) {
+      console.error("Failed to export vocabulary:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setTransferNotice({
+        tone: "danger",
+        title: t("vocabulary.transferFailedTitle"),
+        lines: [message],
+      });
+      onToast?.(message, "error");
+    }
+  };
+
+  const handleImportVocabulary = async () => {
+    try {
+      const bundle = await pickTransferBundle();
+      if (!bundle) {
+        return;
+      }
+
+      const plan = prepareImportedVocabularyBundle(bundle, settings);
+      if (plan.importedCount === 0) {
+        setTransferNotice({
+          tone: "warning",
+          title: t("vocabulary.transferImportedEmptyTitle"),
+          lines: [t("vocabulary.transferImportedEmptyBody")],
+        });
+        return;
+      }
+
+      await saveSettings({
+        ...settings,
+        prompt: {
+          ...settings.prompt,
+          vocabulary: plan.vocabulary,
+        },
+      });
+
+      const lines = [
+        t("vocabulary.transferImportedSummary", {
+          imported: plan.importedCount,
+          added: plan.addedCount,
+          skipped: plan.skippedCount,
+        }),
+      ];
+
+      if (plan.sourcePlatform !== "unknown" && plan.sourcePlatform !== platform) {
+        lines.push(t("vocabulary.transferCrossPlatformBody"));
+      }
+
+      setTransferNotice({
+        tone: plan.addedCount > 0 ? "success" : "warning",
+        title: plan.addedCount > 0
+          ? t("vocabulary.transferImportedTitle")
+          : t("vocabulary.transferImportedNoChangeTitle"),
+        lines,
+      });
+      onToast?.(
+        plan.addedCount > 0
+          ? t("vocabulary.transferImportedToast", { count: plan.addedCount })
+          : t("vocabulary.transferImportedNoChangeToast"),
+        plan.addedCount > 0 ? "success" : "info",
+      );
+    } catch (error) {
+      console.error("Failed to import vocabulary:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setTransferNotice({
+        tone: "danger",
+        title: t("vocabulary.transferFailedTitle"),
+        lines: [message],
+      });
+      onToast?.(message, "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -224,7 +326,7 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             {validationMsg ? (
-              <p role="alert" aria-live="assertive" className="text-xs text-[var(--red)]">{validationMsg}</p>
+              <p role="alert" aria-live="assertive" className="text-xs text-(--red)">{validationMsg}</p>
             ) : (
               <p className={hintCls}>{t("vocabulary.multilineHint")}</p>
             )}
@@ -247,7 +349,7 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
             {vocab.map((entry, index) => (
               <div
                 key={`${entry.text}-${index}`}
-                className="group rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 transition-colors duration-100 hover:bg-[var(--bg-muted)]"
+                className="group rounded-xl border border-(--border) bg-(--bg-elevated) px-4 py-3 transition-colors duration-100 hover:bg-(--bg-muted)"
               >
                 {editingIndex === index ? (
                   <div className="space-y-3">
@@ -277,7 +379,7 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
                       />
 
                       {editValidationMsg ? (
-                        <p role="alert" aria-live="assertive" className="text-xs text-[var(--red)]">
+                        <p role="alert" aria-live="assertive" className="text-xs text-(--red)">
                           {editValidationMsg}
                         </p>
                       ) : (
@@ -297,7 +399,7 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
                 ) : (
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1 text-[13px]">
-                      <span className="block truncate font-medium text-[var(--text)]" translate="no">
+                      <span className="block truncate font-medium text-(--text)" translate="no">
                         {entry.text}
                       </span>
                     </div>
@@ -326,6 +428,51 @@ export default function VocabularyTab({ onNavigate }: VocabularyTabProps) {
             ))}
           </div>
         )}
+      </Section>
+
+      <Section title={t("vocabulary.transferTitle")} description={t("vocabulary.transferDesc")}>
+        <div className="space-y-4">
+          <Notice title={t("vocabulary.transferNoticeTitle")} tone="default">
+            <div className="space-y-2">
+              <p>{t("vocabulary.transferNoticeBody")}</p>
+              <p>{t("vocabulary.transferCrossPlatformBody")}</p>
+            </div>
+          </Notice>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <button type="button" className="option-btn text-left" onClick={() => void handleExportVocabulary()}>
+              <div className="min-w-0">
+                <span className="text-[13px] font-semibold text-(--text)">{t("vocabulary.transferExportCardTitle")}</span>
+                <p className="mt-1 text-xs leading-5 text-(--text-secondary)">{t("vocabulary.transferExportCardBody")}</p>
+                <div className="pt-3">
+                  <span className="btn btn-primary text-xs">{t("vocabulary.transferExportAction")}</span>
+                </div>
+              </div>
+            </button>
+
+            <button type="button" className="option-btn text-left" onClick={() => void handleImportVocabulary()}>
+              <div className="min-w-0">
+                <span className="text-[13px] font-semibold text-(--text)">{t("vocabulary.transferImportCardTitle")}</span>
+                <p className="mt-1 text-xs leading-5 text-(--text-secondary)">{t("vocabulary.transferImportCardBody")}</p>
+                <div className="pt-3">
+                  <span className="btn btn-secondary text-xs">{t("vocabulary.transferImportAction")}</span>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {transferNotice ? (
+            <Notice title={transferNotice.title} tone={transferNotice.tone}>
+              {transferNotice.lines?.length ? (
+                <ul className="list-disc space-y-1 pl-5">
+                  {transferNotice.lines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </Notice>
+          ) : null}
+        </div>
       </Section>
 
       <ConfirmDialog

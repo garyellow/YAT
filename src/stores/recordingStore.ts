@@ -15,6 +15,7 @@ export type RecordingStatus =
   | "error"
   | "busy"
   | "clipboardFallback"
+  | "autoPastePaused"
   | "dismissed"
   | "noSpeech";
 
@@ -22,12 +23,14 @@ interface PipelinePayload {
   status: RecordingStatus;
   text?: string;
   error?: string;
+  generation?: number;
 }
 
 interface RecordingState {
   status: RecordingStatus;
   lastText: string | null;
   lastError: string | null;
+  latestGeneration: number;
   /** Consecutive paste‐failed‐clipboard‐fallback count for this session. */
   pasteFailCount: number;
   init: () => void;
@@ -37,6 +40,7 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
   status: "idle",
   lastText: null,
   lastError: null,
+  latestGeneration: 0,
   pasteFailCount: 0,
 
   init: () => {
@@ -48,7 +52,14 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
     }
 
     listen<PipelinePayload>("pipeline-status", (event) => {
-      const { status, text, error } = event.payload;
+      const { status, text, error, generation } = event.payload;
+
+      const currentGeneration = get().latestGeneration;
+      if (typeof generation === "number" && generation < currentGeneration) {
+        return;
+      }
+      const nextGeneration =
+        typeof generation === "number" ? generation : currentGeneration;
 
       // Play sound effects if enabled
       const soundEnabled =
@@ -65,6 +76,7 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
             sounds.done();
             break;
           case "clipboardFallback":
+          case "autoPastePaused":
             sounds.done();
             break;
           case "error":
@@ -81,6 +93,7 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
       // aligned with the real pipeline stage (recording/transcribing/polishing)
       // and let the sound effect carry the feedback.
       if (status === "busy") {
+        set({ latestGeneration: nextGeneration });
         return;
       }
 
@@ -88,7 +101,7 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
       // "noSpeech" means STT returned an empty transcription.
       // Update status for capsule display but don't touch lastText/lastError.
       if (status === "dismissed" || status === "noSpeech") {
-        set({ status });
+        set({ status, latestGeneration: nextGeneration });
         return;
       }
 
@@ -96,8 +109,9 @@ export const useRecordingStore = create<RecordingState>((set, get) => ({
         status,
         lastText: text ?? null,
         lastError: error ?? null,
+        latestGeneration: nextGeneration,
         pasteFailCount:
-          status === "clipboardFallback"
+          status === "clipboardFallback" || status === "autoPastePaused"
             ? get().pasteFailCount + 1
             : status === "done"
               ? 0

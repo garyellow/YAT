@@ -6,8 +6,8 @@ import { Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
 import { isLocalEndpointUrl } from "../../lib/settingsFormatters";
 import { HintTip } from "../ui/Tooltip";
 
-const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
+const labelCls = "text-xs font-medium text-(--text-secondary)";
+const hintCls = "text-[11px] text-(--text-muted)";
 
 export default function SttTab() {
   const { t } = useTranslation();

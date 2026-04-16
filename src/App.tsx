@@ -1,9 +1,40 @@
-import { useEffect } from "react";
+import { Component, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useRecordingStore } from "./stores/recordingStore";
 import { useAppStore } from "./stores/appStore";
 import Settings from "./components/Settings";
+import i18n from "./lib/i18n";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("ErrorBoundary caught:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full items-center justify-center p-8 text-center">
+          <div className="max-w-xs space-y-2">
+            <p className="text-sm font-semibold text-(--text)">
+              {i18n.t("errorBoundary.title")}
+            </p>
+            <p className="text-xs text-(--text-muted)">
+              {i18n.t("errorBoundary.message")}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const { i18n, t } = useTranslation();
@@ -65,7 +96,7 @@ export default function App() {
   if (loading || !settings || !platformLoaded || !permissionsLoaded) {
     return (
       <div className="loading-screen" aria-live="polite">
-        <p className="text-sm text-[var(--text-muted)]">{t("status.loading")}</p>
+        <p className="text-sm text-(--text-muted)">{t("status.loading")}</p>
       </div>
     );
   }
@@ -75,7 +106,9 @@ export default function App() {
       <a href="#settings-content" className="skip-link">
         {t("settings.skipToContent")}
       </a>
-      <Settings />
+      <ErrorBoundary>
+        <Settings />
+      </ErrorBoundary>
     </>
   );
 }

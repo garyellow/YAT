@@ -356,6 +356,9 @@ pub fn capture_screenshot_base64() -> Option<String> {
     use base64::Engine as _;
     use xcap::Monitor;
 
+    const MAX_EDGE: u32 = 1280;
+    const MAX_PNG_BYTES: usize = 4 * 1024 * 1024;
+
     // Find the monitor that contains the active window's top-left corner.
     // Falls back to the primary monitor on any error.
     let monitor = find_active_monitor().or_else(|| {
@@ -377,9 +380,34 @@ pub fn capture_screenshot_base64() -> Option<String> {
         }
     };
 
+    let (width, height) = image.dimensions();
+    if width == 0 || height == 0 {
+        log::debug!("captured screenshot has invalid dimensions: {width}x{height}");
+        return None;
+    }
+
+    let (target_width, target_height) =
+        scale_dimensions_to_max_edge(width, height, MAX_EDGE);
+    if target_width != width || target_height != height {
+        log::debug!(
+            "downscaling screenshot for LLM context: {}x{} -> {}x{}",
+            width,
+            height,
+            target_width,
+            target_height
+        );
+    }
+
+    let resized = image::imageops::resize(
+        &image,
+        target_width,
+        target_height,
+        image::imageops::FilterType::Triangle,
+    );
+
     // Encode as PNG into memory
     let mut png_buf = std::io::Cursor::new(Vec::new());
-    if image
+    if image::DynamicImage::ImageRgba8(resized)
         .write_to(&mut png_buf, image::ImageFormat::Png)
         .is_err()
     {
@@ -387,8 +415,32 @@ pub fn capture_screenshot_base64() -> Option<String> {
         return None;
     }
 
+    if png_buf.get_ref().len() > MAX_PNG_BYTES {
+        log::warn!(
+            "screenshot PNG too large for context ({} bytes), skipping screenshot context",
+            png_buf.get_ref().len()
+        );
+        return None;
+    }
+
     let b64 = base64::engine::general_purpose::STANDARD.encode(png_buf.into_inner());
     Some(b64)
+}
+
+fn scale_dimensions_to_max_edge(width: u32, height: u32, max_edge: u32) -> (u32, u32) {
+    if width == 0 || height == 0 || max_edge == 0 {
+        return (width.max(1), height.max(1));
+    }
+
+    let largest_edge = width.max(height);
+    if largest_edge <= max_edge {
+        return (width, height);
+    }
+
+    let scale = max_edge as f32 / largest_edge as f32;
+    let target_width = ((width as f32 * scale).round() as u32).max(1);
+    let target_height = ((height as f32 * scale).round() as u32).max(1);
+    (target_width, target_height)
 }
 
 /// Return the monitor that contains the currently active window.
@@ -401,4 +453,24 @@ fn find_active_monitor() -> Option<xcap::Monitor> {
     let x = window.position.x as i32;
     let y = window.position.y as i32;
     xcap::Monitor::from_point(x, y).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scale_dimensions_to_max_edge;
+
+    #[test]
+    fn keeps_dimensions_when_within_limit() {
+        assert_eq!(scale_dimensions_to_max_edge(1280, 720, 1280), (1280, 720));
+    }
+
+    #[test]
+    fn scales_down_landscape_to_max_edge() {
+        assert_eq!(scale_dimensions_to_max_edge(2560, 1440, 1280), (1280, 720));
+    }
+
+    #[test]
+    fn scales_down_portrait_to_max_edge() {
+        assert_eq!(scale_dimensions_to_max_edge(1440, 2560, 1280), (720, 1280));
+    }
 }

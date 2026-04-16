@@ -264,6 +264,12 @@ export default function Settings() {
     }
   };
 
+  const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "success") => {
+    setToastTone(tone);
+    setToastMessage(message);
+    setToastVisible(true);
+  }, []);
+
   const hideToast = useCallback(() => setToastVisible(false), []);
 
   const saveIndicator = (() => {
@@ -346,7 +352,7 @@ export default function Settings() {
         case "overview":
           return <OverviewTab onNavigate={changeTab} />;
         case "general":
-          return <GeneralTab />;
+          return <GeneralTab onToast={pushToast} />;
         case "stt":
           return <SttTab />;
         case "llm":
@@ -354,7 +360,7 @@ export default function Settings() {
         case "prompt":
           return <PromptTab onNavigate={changeTab} />;
         case "vocabulary":
-          return <VocabularyTab onNavigate={changeTab} />;
+          return <VocabularyTab onNavigate={changeTab} onToast={pushToast} />;
         case "history":
           return <HistoryTab />;
         default:
@@ -377,7 +383,7 @@ export default function Settings() {
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full">
              <AppTitleImage className="h-full w-full object-cover" />
           </div>
-          <p className="text-xl font-bold tracking-[-0.02em] text-[var(--text)]">YAT</p>
+          <p className="text-xl font-bold tracking-[-0.02em] text-(--text)">YAT</p>
         </div>
 
         <nav className="flex-1 space-y-5 px-1 pt-4" aria-label={t("settings.navigationLabel")}>
@@ -409,7 +415,7 @@ export default function Settings() {
           <StatusDot tone={sttReady ? "success" : "warning"}>
             {sttReady ? t("overview.badges.ready") : t("overview.badges.setupNeeded")}
           </StatusDot>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">
+          <p className="mt-2 text-[11px] leading-5 text-(--text-muted)">
             {sttReady
               ? t("overview.summary.speechReady", { model: settings?.stt.model ?? "" })
               : t("overview.summary.speechPending")}
@@ -421,10 +427,10 @@ export default function Settings() {
         <div className="flex h-full min-h-0 flex-col">
           <header className="main-header flex items-center justify-between gap-4 px-7 py-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-(--text-muted)">
                 YAT
               </p>
-              <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+              <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-(--text)">
                 {tabTitle}
               </h2>
             </div>

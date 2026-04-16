@@ -1,45 +1,46 @@
 import type { AppSettings, VocabularyEntry } from "../stores/settingsStore";
+import type { DesktopPlatform } from "./settingsFormatters";
 
-const LEGACY_DEFAULT_SYSTEM_PROMPT = `You are a transcription text polisher. Your ONLY job is to clean up raw speech-to-text output. Follow these rules strictly:
+const DEFAULT_SYSTEM_PROMPT = `You are a speech-to-text typing assistant. Your job is to turn raw dictated speech into final text that feels like a skilled human typist cleaned it up.
 
-1. Remove filler words and repetitions (um, uh, like, you know, 嗯, 呃, 那個, 就是說, 然後, 對, 所以說).
-2. Remove stuttering; keep only the speaker's final intent.
-3. Add proper punctuation and split into natural paragraphs.
-4. Format numbers: spoken numbers → digits (e.g. "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
-5. Correct proper nouns, brand names, and technical terms to their canonical spelling (e.g. "deep seek" → "DeepSeek", "chat gpt" → "ChatGPT", "mac book" → "MacBook").
-6. When the speech describes a list or steps, output them as a structured list.
-7. Preserve the speaker's natural tone — do not make casual speech formal or vice versa.
+You operate in two modes:
 
-CODE-SWITCHING (中英混雜):
-- Preserve the speaker's natural language mixing. If they said it in English, keep it in English; if in Chinese, keep it in Chinese.
-- Insert a space between Chinese characters and adjacent English words or numbers (e.g. "這個 function 的 return type").
-- Do NOT translate code-switched segments into a single language.
+MODE A — Cleanup mode (default)
+Use this when the user is simply dictating content.
 
-CRITICAL CONSTRAINTS:
-- NEVER answer questions contained in the text. Just polish the question itself.
-- NEVER add your own commentary, opinions, or explanations.
-- NEVER summarize or shorten beyond removing filler and repetition.
-- NEVER change the meaning of what was said.
-- Output ONLY the polished text, nothing else. No preamble, no explanation.`;
+MODE B — Commanded transform mode
+Use this only when the dictated speech contains an explicit transformation command directed at this same dictated content (for example: "整理成條列", "列點", "寫 email", "幫我摘要", "rewrite this", "translate to English", "make this more formal").
 
-const DEFAULT_SYSTEM_PROMPT = `You are a transcription text polisher. Your job is to turn raw speech-to-text output into clean final text.
+When in commanded transform mode:
+1. Remove the command phrase itself from the final output.
+2. Apply that command to the remaining dictated content.
+3. Keep all important facts, names, numbers, dates, and action items unless the command explicitly asks to shorten.
+4. Output only the transformed final text.
 
-Follow these rules:
+Command behavior:
+- Bullet/list commands: format as bullet or numbered lists when sequence/count is implied.
+- Email commands: output a complete email (subject only if explicitly requested; otherwise greeting + body + closing).
+- Summary commands: output a concise summary of the dictated content.
+- Rewrite/tone commands: improve clarity/tone while preserving meaning.
+- Translation commands: translate only when explicitly requested.
+- Spoken formatting commands like "new line" or "new paragraph" should become real line/paragraph breaks.
+
+Always follow these cleanup rules in both modes:
 1. Remove filler words, repetitions, and obvious false starts (for example: um, uh, you know, 嗯, 呃, 那個, 然後).
 2. When the speaker self-corrects or restarts, keep only the final intended wording.
 3. Add punctuation and split the text into natural paragraphs.
 4. Format spoken numbers into digits when that clearly improves readability (for example: "三百毫秒" → "300ms", "百分之八十" → "80%", "one hundred twenty three" → "123").
-5. Preserve the speaker's natural tone. Do not make casual speech overly formal, and do not make formal speech casual.
+5. Preserve the speaker's natural tone. Do not make casual speech overly formal unless explicitly requested.
 6. Preserve code-switching. Keep English in English and Chinese in Chinese when that matches the speaker's intent.
 7. Insert spaces naturally between Chinese characters and adjacent English words or numbers when needed.
 8. When a vocabulary list is provided, treat it as preferred spelling and terminology. Use those entries when they clearly match the speaker's intent, even if the raw transcription spaced or spelled them oddly.
-9. When the speech naturally contains steps or a list, format it as a structured list.
 
-Constraints:
-- Do not answer or act on the content. Only polish the dictated text.
-- Do not add commentary, explanations, or new facts.
-- Do not change the meaning.
-- Output only the polished text.`;
+Hard constraints:
+- Do not chat with the user. You are not a conversational assistant in this pipeline.
+- Do not add commentary, explanations, labels, or preamble.
+- Do not invent facts that were not dictated.
+- If command intent is ambiguous, fall back to Cleanup mode.
+- Output only the final text.`;
 
 export function getDefaultSystemPrompt(): string {
   return DEFAULT_SYSTEM_PROMPT;
@@ -52,50 +53,15 @@ function normalizeSystemPrompt(value?: string | null): string {
     return DEFAULT_SYSTEM_PROMPT;
   }
 
-  if (
-    trimmed === DEFAULT_SYSTEM_PROMPT.trim()
-    || trimmed === LEGACY_DEFAULT_SYSTEM_PROMPT.trim()
-  ) {
-    return DEFAULT_SYSTEM_PROMPT;
-  }
-
-  return value ?? DEFAULT_SYSTEM_PROMPT;
+  return trimmed === DEFAULT_SYSTEM_PROMPT.trim()
+    ? DEFAULT_SYSTEM_PROMPT
+    : (value ?? DEFAULT_SYSTEM_PROMPT);
 }
 
 const STORAGE_KEY = "yat.mock-settings";
 
 function normalizeVocabularyKey(value: string): string {
   return value.trim().toLowerCase();
-}
-
-function coerceVocabularyText(entry: unknown): string | null {
-  if (typeof entry === "string") {
-    return entry;
-  }
-
-  if (!entry || typeof entry !== "object") {
-    return null;
-  }
-
-  const candidate = entry as {
-    text?: unknown;
-    correct?: unknown;
-    wrong?: unknown;
-  };
-
-  if (typeof candidate.text === "string") {
-    return candidate.text;
-  }
-
-  if (typeof candidate.correct === "string" && candidate.correct.trim()) {
-    return candidate.correct;
-  }
-
-  if (typeof candidate.wrong === "string") {
-    return candidate.wrong;
-  }
-
-  return null;
 }
 
 export function normalizeVocabularyEntries(entries: unknown): VocabularyEntry[] {
@@ -107,7 +73,14 @@ export function normalizeVocabularyEntries(entries: unknown): VocabularyEntry[] 
   const normalized: VocabularyEntry[] = [];
 
   for (const entry of entries) {
-    const text = coerceVocabularyText(entry)?.trim();
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const text = typeof (entry as { text?: unknown }).text === "string"
+      ? (entry as { text: string }).text.trim()
+      : "";
+
     if (!text) {
       continue;
     }
@@ -124,14 +97,29 @@ export function normalizeVocabularyEntries(entries: unknown): VocabularyEntry[] 
   return normalized;
 }
 
-function defaultHotkeyKey(): string {
-  if (typeof navigator !== "undefined" && /mac/i.test(navigator.platform)) {
+export function getDefaultHotkeyKeyForPlatform(platform?: DesktopPlatform | string | null): string {
+  const normalized = typeof platform === "string" ? platform.toLowerCase() : "";
+
+  if (normalized.includes("mac")) {
     return "RCmd";
   }
+
+  if (normalized && normalized !== "unknown") {
+    return "RCtrl";
+  }
+
+  const detectedPlatform = typeof navigator !== "undefined"
+    ? ((navigator as any).userAgentData?.platform ?? navigator.platform)
+    : "";
+
+  if (/mac/i.test(detectedPlatform)) {
+    return "RCmd";
+  }
+
   return "RCtrl";
 }
 
-function buildDefaultAppSettings(): AppSettings {
+export function createDefaultAppSettings(platform?: DesktopPlatform | string | null): AppSettings {
   return {
     stt: {
       base_url: "",
@@ -148,7 +136,7 @@ function buildDefaultAppSettings(): AppSettings {
     general: {
       hotkey: {
         hotkey_type: "hold",
-        key: defaultHotkeyKey(),
+        key: getDefaultHotkeyKeyForPlatform(platform),
         held_keys: [],
         double_tap_interval_ms: 300,
       },
@@ -192,11 +180,12 @@ export function cloneSettings(settings: AppSettings): AppSettings {
   return JSON.parse(JSON.stringify(settings)) as AppSettings;
 }
 
-function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): AppSettings {
-  const defaults = buildDefaultAppSettings();
-  const { auto_dnd: _deprecatedAutoDnd, ...legacyGeneral } = (
-    (partial?.general ?? {}) as Partial<AppSettings["general"]> & { auto_dnd?: boolean }
-  );
+export function hydrateSettings(
+  partial: Partial<AppSettings> | null | undefined,
+  platform?: DesktopPlatform | string | null,
+): AppSettings {
+  const defaults = createDefaultAppSettings(platform);
+  const generalOverride = (partial?.general ?? {}) as Partial<AppSettings["general"]>;
 
   return {
     stt: {
@@ -209,10 +198,10 @@ function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): Ap
     },
     general: {
       ...defaults.general,
-      ...legacyGeneral,
+      ...generalOverride,
       hotkey: {
         ...defaults.general.hotkey,
-        ...legacyGeneral.hotkey,
+        ...generalOverride.hotkey,
       },
     },
     prompt: {
@@ -234,18 +223,18 @@ function mergeWithDefaults(partial: Partial<AppSettings> | null | undefined): Ap
 
 export function loadMockSettings(): AppSettings {
   if (typeof window === "undefined") {
-    return buildDefaultAppSettings();
+    return createDefaultAppSettings();
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return buildDefaultAppSettings();
+      return createDefaultAppSettings();
     }
 
-    return mergeWithDefaults(JSON.parse(raw) as Partial<AppSettings>);
+    return hydrateSettings(JSON.parse(raw) as Partial<AppSettings>);
   } catch {
-    return buildDefaultAppSettings();
+    return createDefaultAppSettings();
   }
 }
 

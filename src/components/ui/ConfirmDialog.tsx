@@ -15,12 +15,20 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
   const { t } = useTranslation();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
   const titleId = useId();
   const messageId = useId();
   const resolvedTitle = title ?? t("actions.confirm");
 
   useEffect(() => {
-    if (open) cancelRef.current?.focus();
+    if (open) {
+      previousFocusRef.current = document.activeElement;
+      cancelRef.current?.focus();
+    } else if (previousFocusRef.current) {
+      const el = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (el instanceof HTMLElement) el.focus();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -52,23 +60,23 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center">
       <div
         className="dialog-backdrop absolute inset-0 bg-black/40"
         onClick={onCancel}
         aria-hidden="true"
       />
       <div
-        className="dialog-panel relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-md"
+        className="dialog-panel relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-(--border) bg-(--bg-elevated) p-5 shadow-md"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={messageId}
       >
-        <h2 id={titleId} className="text-sm font-semibold text-[var(--text)]">
+        <h2 id={titleId} className="text-sm font-semibold text-(--text)">
           {resolvedTitle}
         </h2>
-        <p id={messageId} className="mt-2 text-sm leading-relaxed text-[var(--text)]">
+        <p id={messageId} className="mt-2 text-sm leading-relaxed text-(--text)">
           {message}
         </p>
         <div className="mt-5 flex justify-end gap-2">

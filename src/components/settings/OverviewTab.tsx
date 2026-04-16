@@ -48,6 +48,16 @@ interface OverviewTabProps {
   onNavigate: (tab: SettingsTab) => void;
 }
 
+type PermissionItem = {
+  key: string;
+  tone: DotTone;
+  title: string;
+  body: string;
+  settingsUrl?: string;
+  actionLabel?: string;
+  requestCategory?: string;
+};
+
 export default function OverviewTab({ onNavigate }: OverviewTabProps) {
   const { t } = useTranslation();
   const [openSettingsFailed, setOpenSettingsFailed] = useState(false);
@@ -161,7 +171,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
     },
   ];
 
-  const permissionItems = (() => {
+  const permissionItems: PermissionItem[] = (() => {
     const mic = permissions?.microphone ?? "unknown";
     const acc = permissions?.accessibility ?? "unknown";
     const scr = permissions?.screen_recording ?? "unknown";
@@ -229,25 +239,14 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         },
         {
           key: "auto-paste",
-          tone:
-            settings.general.output_mode === "auto_paste"
-              ? ("warning" as const)
-              : ("default" as const),
+          tone: "warning",
           title: t("overview.permissions.autoPasteTitle"),
           body: t("overview.permissions.windowsAutoPasteBody"),
         },
       ];
     }
     if (platform === "linux") {
-      const items: Array<{
-        key: string;
-        tone: DotTone;
-        title: string;
-        body: string;
-        settingsUrl?: string;
-        actionLabel?: string;
-        requestCategory?: string;
-      }> = [
+      const items: PermissionItem[] = [
         {
           key: "microphone",
           tone: permissionTone(mic),
@@ -321,12 +320,18 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
         description={t("overview.desc")}
       />
 
+      {platform === "linux" ? (
+        <Notice title={t("general.linuxExperimentalTitle")} tone={displayServer === "wayland" ? "warning" : "default"}>
+          {t("general.linuxExperimentalBody")}
+        </Notice>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
         {summaryItems.map((item) => (
           <OverviewCard key={item.key} className="h-full">
             <StatusDot tone={item.tone}>{item.label}</StatusDot>
-            <p className="mt-3 text-sm font-semibold text-[var(--text)]">{item.value}</p>
-            <p className="mt-1 text-xs leading-6 text-[var(--text-secondary)]">{item.detail}</p>
+            <p className="mt-3 text-sm font-semibold text-(--text)">{item.value}</p>
+            <p className="mt-1 text-xs leading-6 text-(--text-secondary)">{item.detail}</p>
           </OverviewCard>
         ))}
       </div>
@@ -337,7 +342,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
             <OverviewCard key={item.key}>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] ring-1 ring-[var(--border)] text-[11px] font-bold text-[var(--text-muted)] shadow-[var(--shadow-xs)]">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-(--bg-elevated) ring-1 ring-(--border) text-[11px] font-bold text-(--text-muted) shadow-(--shadow-xs)">
                     {index + 1}
                   </span>
 
@@ -345,8 +350,8 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
                     <StatusDot tone={item.ready ? "success" : "warning"}>
                       {item.ready ? t("overview.metricValues.ready") : t("overview.metricValues.pending")}
                     </StatusDot>
-                    <h3 className="text-[13.5px] font-semibold text-[var(--text)]">{item.label}</h3>
-                    <p className="hidden md:block text-xs leading-5 text-[var(--text-muted)] truncate md:max-w-xs">{item.detail}</p>
+                    <h3 className="text-[13.5px] font-semibold text-(--text)">{item.label}</h3>
+                    <p className="hidden md:block text-xs leading-5 text-(--text-muted) truncate md:max-w-xs">{item.detail}</p>
                   </div>
                 </div>
 
@@ -376,7 +381,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
             {permissionItems.map((item) => (
               <OverviewCard key={item.key}>
                 <StatusDot tone={item.tone}>{item.title}</StatusDot>
-                <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">{item.body}</p>
+                <p className="mt-2 text-xs leading-5 text-(--text-secondary)">{item.body}</p>
 
                 {isTauriRuntime() &&
                   (("requestCategory" in item && item.requestCategory) ||
@@ -452,7 +457,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
             {lastText ? (
               <OverviewCard>
                 <div className="max-h-48 overflow-auto">
-                  <p className="whitespace-pre-wrap text-[13px] leading-6 text-[var(--text-secondary)]">
+                  <p className="whitespace-pre-wrap text-[13px] leading-6 text-(--text-secondary)">
                     {lastText}
                   </p>
                 </div>

@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-log = "2"
 
@@ -37,7 +38,7 @@ reqwest = { version = "0.13", features = ["multipart", "json"] }
 bytes = "1"
 
 # Clipboard & keyboard simulation
-arboard = "3"
+arboard = { version = "3", features = ["wayland-data-control"] }
 enigo = "0.6"
 
 # Context capture: active window detection & native selected text

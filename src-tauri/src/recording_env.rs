@@ -110,16 +110,31 @@ pub fn prepare(general: &GeneralConfig) -> RecordingEnvState {
 
 /// Restore the recording environment to its pre-recording state.
 /// Operations run in reverse order of [`prepare`].
-pub fn restore(general: &GeneralConfig, env: &RecordingEnvState) {
+pub fn restore(_general: &GeneralConfig, env: &RecordingEnvState) {
     if let Some(system_audio) = &env.system_audio {
-        if let Err(e) = restore_system_audio(system_audio) {
-            log::warn!("background-audio restore failed: {e}");
-        }
+        retry_restore_once("background-audio", || restore_system_audio(system_audio));
     }
 
-    if general.auto_pause_media {
-        if let Err(e) = resume_media(&env.paused_sessions) {
-            log::warn!("auto-pause-media resume failed: {e}");
+    // Resume only if we actually paused anything at recording start.
+    // Do not gate this on *current* settings, because the user might have
+    // changed `auto_pause_media` mid-recording.
+    if !env.paused_sessions.is_empty() {
+        retry_restore_once("auto-pause-media", || resume_media(&env.paused_sessions));
+    }
+}
+
+fn retry_restore_once<F>(label: &str, mut operation: F)
+where
+    F: FnMut() -> Result<(), String>,
+{
+    match operation() {
+        Ok(()) => {}
+        Err(first_error) => {
+            log::warn!("{label} restore failed (first attempt): {first_error}");
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            if let Err(second_error) = operation() {
+                log::warn!("{label} restore failed (retry): {second_error}");
+            }
         }
     }
 }
@@ -662,6 +677,11 @@ fn run_osascript(script: &str) -> Result<String, String> {
         .args(["-e", script])
         .output()
         .map_err(|e| format!("osascript: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("osascript exited with {}: {stderr}", output.status));
+    }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }

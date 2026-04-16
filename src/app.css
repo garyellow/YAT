@@ -4,50 +4,50 @@
 
 :root {
   color-scheme: light;
-  --bg: #f4f5f8;
+  --bg: #f8fafc;
   --bg-elevated: #ffffff;
-  --bg-subtle: #eef1f4;
-  --bg-muted: #f8f9fb;
-  --border: #d6dbe4;
-  --border-strong: #7f889a;
-  --text: #171a21;
-  --text-secondary: #475164;
-  --text-muted: #5f6879;
-  --accent: #564dc4;
+  --bg-subtle: #f1f5f9;
+  --bg-muted: #e2e8f0;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent: #6366f1;
   --accent-fg: #ffffff;
-  --accent-subtle: rgba(86, 77, 196, 0.1);
-  --accent-soft: rgba(86, 77, 196, 0.05);
-  --focus-ring: #3558d4;
-  --red: #c9384d;
-  --green: #217448;
-  --amber: #a96b11;
-  --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.05);
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
-  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.12);
+  --accent-subtle: rgba(99, 102, 241, 0.1);
+  --accent-soft: rgba(99, 102, 241, 0.05);
+  --focus-ring: rgba(99, 102, 241, 0.3);
+  --red: #ef4444;
+  --green: #10b981;
+  --amber: #f59e0b;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #111317;
-  --bg-elevated: #171a20;
-  --bg-subtle: #1d2129;
-  --bg-muted: #151922;
-  --border: #303744;
-  --border-strong: #667084;
-  --text: #f3f5f8;
-  --text-secondary: #d1d7e0;
-  --text-muted: #aeb7c4;
-  --accent: #b6a7ff;
-  --accent-fg: #151922;
-  --accent-subtle: rgba(182, 167, 255, 0.14);
-  --accent-soft: rgba(182, 167, 255, 0.08);
-  --focus-ring: #d3c9ff;
-  --red: #f06b7b;
-  --green: #4ac47d;
-  --amber: #f1b64f;
-  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.28);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.28);
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-subtle: #1e293b;
+  --bg-muted: #334155;
+  --border: #334155;
+  --border-strong: #475569;
+  --text: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent: #818cf8;
+  --accent-fg: #ffffff;
+  --accent-subtle: rgba(129, 140, 248, 0.15);
+  --accent-soft: rgba(129, 140, 248, 0.08);
+  --focus-ring: rgba(129, 140, 248, 0.3);
+  --red: #f87171;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 /* ─── Reset & Base ─── */
@@ -78,6 +78,16 @@ body[data-capsule="true"] {
   user-select: none;
 }
 
+/* In browser preview mode, anchor the capsule at the bottom of the viewport
+   to match the Tauri native window positioning. */
+body[data-capsule="true"] #root {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 120px;
+}
+
 button,
 input,
 select,
@@ -104,46 +114,54 @@ button {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  gap: 4px;
+  gap: 6px;
   pointer-events: none;
 }
 
 .capsule-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 16px;
   border-radius: 9999px;
-  background: rgba(15, 18, 25, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px) saturate(1.2);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-  color: #fff;
-  font-size: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 24px 38px 3px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: #f8fafc;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .capsule-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+  transition: background-color 0.3s ease;
 }
 
 .capsule-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 .capsule-timer {
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.72;
+  opacity: 0.8;
+  font-weight: 500;
 }
 
 .capsule-timer--warn {
@@ -152,50 +170,58 @@ button {
 }
 
 .capsule-mic {
-  width: 38px;
-  height: 4px;
+  width: 48px;
+  height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
+  margin-left: 4px;
 }
 
 .capsule-mic-fill {
   height: 100%;
   border-radius: 999px;
-  background: #ffffff;
-  transition: width 100ms linear;
+  background: linear-gradient(90deg, var(--accent), #a78bfa);
+  transition: width 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .capsule-esc {
-  font-family: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  padding: 3px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.52);
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 6px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .capsule-detail {
-  max-width: 300px;
+  max-width: 320px;
   margin: 0;
-  padding: 6px 11px;
-  border-radius: 8px;
-  background: rgba(15, 18, 25, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px) saturate(1.2);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 11px;
-  line-height: 1.45;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  line-height: 1.5;
   text-align: center;
   word-break: break-word;
   pointer-events: none;
+  font-weight: 500;
+  transition: opacity 0.3s ease;
 }
 
 .capsule-detail--error {
-  color: rgba(252, 165, 165, 0.96);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(30, 15, 15, 0.8);
 }
 
 /* ─── Shell Layout ─── */
@@ -644,6 +670,12 @@ button {
   padding-right: 2.25rem;
 }
 
+.retention-hours-input:focus-visible {
+  outline: 2px solid var(--accent-fg);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 /* ─── Panels, Lists & Rows ─── */
 
 .settings-list {
@@ -840,7 +872,7 @@ button {
 .option-btn[data-selected="true"] {
   border-color: var(--accent);
   background: var(--bg-elevated);
-  box-shadow: inset 0 0 0 1px rgba(86, 77, 196, 0.14);
+  box-shadow: inset 0 0 0 1px var(--accent-subtle);
 }
 
 /* ─── Tooltip ─── */

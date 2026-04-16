@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface ToastProps {
   message: string;
@@ -16,6 +16,8 @@ export default function Toast({
   tone = "success",
 }: ToastProps) {
   const [phase, setPhase] = useState<"enter" | "exit" | "hidden">("hidden");
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -23,7 +25,7 @@ export default function Toast({
       setPhase("enter");
       const timer = setTimeout(() => {
         setPhase("exit");
-        fadeTimer = setTimeout(onDone, 200);
+        fadeTimer = setTimeout(() => onDoneRef.current(), 200);
       }, duration);
       return () => {
         clearTimeout(timer);
@@ -32,7 +34,7 @@ export default function Toast({
     } else {
       setPhase("hidden");
     }
-  }, [visible, duration, onDone]);
+  }, [visible, duration]);
 
   if (phase === "hidden") return null;
 
@@ -43,7 +45,7 @@ export default function Toast({
     <div
       role={role}
       aria-live={live}
-      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5 text-xs font-medium shadow-sm ${
+      className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-(--border) bg-(--bg-elevated) px-4 py-2.5 text-xs font-medium shadow-sm ${
         phase === "enter" ? "toast-enter" : "toast-exit"
       }`}
     >

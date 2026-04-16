@@ -94,6 +94,7 @@ const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
 const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 1;
 const CAPSULE_HIDE_DELAY_NO_SPEECH_SECS: u64 = 2;
+const CAPSULE_HIDE_DELAY_NOTIFICATION_SECS: u64 = 5;
 const MIN_RECORDING_DURATION_MS: u64 = 500;
 const POST_RECORDING_BUFFER_MS: u64 = 300;
 const AUTO_CLIPBOARD_FALLBACK_THRESHOLD: u32 = 3;
@@ -212,8 +213,8 @@ fn schedule_capsule_hide(
     expected_generation: u64,
     delay: Duration,
 ) {
-    std::thread::spawn(move || {
-        std::thread::sleep(delay);
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(delay).await;
         if capsule_generation.load(Ordering::SeqCst) == expected_generation {
             hide_capsule(&app);
         }
@@ -224,6 +225,13 @@ fn sync_hotkey_triggers_enabled(state: &AppState) {
     let enabled = !state.main_window_focused.load(Ordering::SeqCst)
         && !state.hotkey_capture_active.load(Ordering::SeqCst);
     state.hotkey_triggers_enabled.store(enabled, Ordering::SeqCst);
+}
+
+fn set_main_window_focus_state(app: &AppHandle, focused: bool) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.main_window_focused.store(focused, Ordering::SeqCst);
+        sync_hotkey_triggers_enabled(&state);
+    }
 }
 
 fn capture_context_snapshot(
@@ -460,17 +468,45 @@ fn warn_if_err<T, E: std::fmt::Display>(result: Result<T, E>, action: &str) -> O
     }
 }
 
-fn emit_status(app: &AppHandle, status: &str, text: Option<&str>, error: Option<&str>) {
+fn current_recording_generation(state: &AppState) -> u64 {
+    state.recording_generation.load(Ordering::SeqCst)
+}
+
+fn current_recording_generation_from_app(app: &AppHandle) -> u64 {
+    app.try_state::<AppState>()
+        .map(|state| current_recording_generation(&state))
+        .unwrap_or(0)
+}
+
+fn emit_status(
+    app: &AppHandle,
+    generation: u64,
+    status: &str,
+    text: Option<&str>,
+    error: Option<&str>,
+) {
     if let Err(emit_error) = app.emit(
         "pipeline-status",
         pipeline::PipelineStatus {
             status: status.into(),
             text: text.map(String::from),
             error: error.map(String::from),
+            generation,
         },
     ) {
         log::warn!("failed to emit pipeline-status: {emit_error}");
     }
+}
+
+fn should_stop_recording_after_post_buffer(
+    had_recording_at_entry: bool,
+    entry_generation: u64,
+    current_generation: u64,
+    is_recording_now: bool,
+) -> bool {
+    had_recording_at_entry
+        && is_recording_now
+        && current_generation == entry_generation
 }
 
 #[tauri::command]
@@ -485,26 +521,44 @@ async fn toggle_recording(
 
     // Post-recording buffer: keep the mic open briefly to capture trailing
     // syllables before actually stopping.
-    let needs_buffer = state.recorder.lock().is_recording();
-    if needs_buffer {
+    let (had_recording_at_entry, entry_generation) = {
+        let recorder = state.recorder.lock();
+        (recorder.is_recording(), current_recording_generation(&state))
+    };
+
+    if had_recording_at_entry {
         tokio::time::sleep(std::time::Duration::from_millis(POST_RECORDING_BUFFER_MS)).await;
     }
 
-    let stop_data = {
+    let stop_attempt = {
         let mut recorder = state.recorder.lock();
-        if recorder.is_recording() {
-            Some((
-                recorder.stop().map_err(|e| e.to_string())?,
-                state.recording_generation.load(Ordering::SeqCst),
-            ))
+        let operation_generation = current_recording_generation(&state);
+        if should_stop_recording_after_post_buffer(
+            had_recording_at_entry,
+            entry_generation,
+            operation_generation,
+            recorder.is_recording(),
+        ) {
+            Some((recorder.stop().map_err(|e| e.to_string()), operation_generation))
         } else {
             None
         }
     };
 
-    if let Some((audio_data, operation_generation)) = stop_data {
+    // If we entered as a stop attempt but recording was cancelled/stopped by
+    // another concurrent path during the post-buffer wait (ESC, auto-stop,
+    // duplicate trigger), do not fall through into start logic.
+    if had_recording_at_entry && stop_attempt.is_none() {
+        log::debug!(
+            "skip stale stop request: generation changed or recording already stopped (entry_generation={}, current_generation={})",
+            entry_generation,
+            current_recording_generation(&state)
+        );
+        return Ok(String::new());
+    }
+
+    if let Some((audio_data_result, operation_generation)) = stop_attempt {
         // ── STOP PATH ──────────────────────────────────────────────
-        let _busy = BusyGuard::new(&state.pipeline_busy);
         let settings = state.settings.lock().clone();
 
         // Restore recording environment (mute, media)
@@ -518,6 +572,28 @@ async fn toggle_recording(
                 "failed to reset tray tooltip",
             );
         }
+
+        let audio_data = match audio_data_result {
+            Ok(data) => data,
+            Err(error_msg) => {
+                // No pipeline will consume context anymore.
+                abort_context_capture_task(&state);
+
+                emit_status(&app, operation_generation, "error", None, Some(&error_msg));
+                let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
+                show_capsule(&app, "error");
+                schedule_capsule_hide(
+                    app.clone(),
+                    Arc::clone(&state.capsule_generation),
+                    cap_gen,
+                    Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+                );
+
+                return Err(error_msg);
+            }
+        };
+
+        let _busy = BusyGuard::new(&state.pipeline_busy);
 
         // Skip pipeline for very short recordings (< 1s) — accidental taps, noise
         let too_short = if audio_data.len() >= 44 {
@@ -549,7 +625,7 @@ async fn toggle_recording(
         if too_short {
             abort_context_capture_task(&state);
             let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
-            emit_status(&app, "dismissed", None, None);
+            emit_status(&app, operation_generation, "dismissed", None, None);
             schedule_capsule_hide(
                 app.clone(),
                 Arc::clone(&state.capsule_generation),
@@ -686,9 +762,12 @@ async fn toggle_recording(
                     return Err(error);
                 }
 
-                // Use a shorter hide delay for no-speech results
+                // Use a shorter hide delay for no-speech results, and a longer
+                // delay for notification statuses so the user can read the detail.
                 let hide_delay = if pr.raw_text.is_empty() {
                     CAPSULE_HIDE_DELAY_NO_SPEECH_SECS
+                } else if pr.notified {
+                    CAPSULE_HIDE_DELAY_NOTIFICATION_SECS
                 } else {
                     CAPSULE_HIDE_DELAY_SUCCESS_SECS
                 };
@@ -724,7 +803,7 @@ async fn toggle_recording(
                 if let Err(db_err) = state.history.lock().insert(&entry) {
                     log::error!("failed to save history entry: {db_err}");
                 }
-                emit_status(&app, "error", None, Some(&e.to_string()));
+                emit_status(&app, operation_generation, "error", None, Some(&e.to_string()));
 
                 schedule_capsule_hide(
                     app.clone(),
@@ -741,7 +820,13 @@ async fn toggle_recording(
 
         // Reject if the pipeline is still processing a previous recording.
         if state.pipeline_busy.load(Ordering::SeqCst) {
-            emit_status(&app, "busy", None, None);
+            emit_status(
+                &app,
+                current_recording_generation(&state),
+                "busy",
+                None,
+                None,
+            );
             return Ok("busy".into());
         }
 
@@ -786,7 +871,11 @@ async fn toggle_recording(
         // recording generation.
         replace_context_capture_task(&state, generation, context_enabled, prompt_cfg);
 
-        emit_status(&app, "recording", None, None);
+        // Invalidate any pending hide timers from previous operations so a
+        // newly shown recording capsule cannot be hidden by stale timers.
+        state.capsule_generation.fetch_add(1, Ordering::SeqCst);
+
+        emit_status(&app, generation, "recording", None, None);
         show_capsule(&app, "recording");
 
         // Update tray indicator
@@ -799,31 +888,37 @@ async fn toggle_recording(
 
         // Auto-stop timer — only fires if the recording generation still
         // matches, preventing a stale timer from stopping a later recording.
+        //
+        // Uses a tokio sleep to avoid blocking an OS thread for up to 180s,
+        // then dispatches to a short-lived thread because toggle_recording()
+        // returns a non-Send future (tauri::State lifetime constraint).
         let app_clone = app.clone();
         let gen_ref = Arc::clone(&state.recording_generation);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(max_secs));
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(max_secs)).await;
             if gen_ref.load(Ordering::SeqCst) != generation {
                 log::debug!("auto-stop skipped: recording generation changed");
                 return;
             }
-            let state = app_clone.state::<AppState>();
-            if state.recorder.lock().is_recording() {
+            if app_clone.state::<AppState>().recorder.lock().is_recording() {
                 log::info!("auto-stopping after {max_secs}s");
-                tauri::async_runtime::block_on(async {
-                    match toggle_recording(app_clone.state::<AppState>(), app_clone.clone()).await {
-                        Ok(_) => log::info!("auto-stopped recording"),
-                        Err(e) => log::error!("auto-stop error: {e}"),
-                    }
+                let app = app_clone.clone();
+                std::thread::spawn(move || {
+                    tauri::async_runtime::block_on(async {
+                        match toggle_recording(app.state::<AppState>(), app.clone()).await {
+                            Ok(_) => log::info!("auto-stopped recording"),
+                            Err(e) => log::error!("auto-stop error: {e}"),
+                        }
+                    });
                 });
             }
         });
 
         // Mic level emitter
         let app_mic = app.clone();
-        std::thread::spawn(move || {
+        tauri::async_runtime::spawn(async move {
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 let state = app_mic.state::<AppState>();
                 if !state.recorder.lock().is_recording() {
                     break;
@@ -886,7 +981,13 @@ async fn cancel_recording(
         );
     }
 
-    emit_status(&app, "idle", None, None);
+    emit_status(
+        &app,
+        current_recording_generation(&state),
+        "idle",
+        None,
+        None,
+    );
     hide_capsule(&app);
     Ok(())
 }
@@ -948,6 +1049,22 @@ fn request_permission(category: String) -> permissions::PermissionState {
 }
 
 #[tauri::command]
+fn read_transfer_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path)
+        .map_err(|error| format!("Failed to read transfer file '{path}': {error}"))
+}
+
+#[tauri::command]
+fn write_transfer_file(path: String, contents: String) -> Result<(), String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    ensure_parent_dir_for_file(&path_buf)
+        .map_err(|error| format!("Failed to prepare export path '{path}': {error}"))?;
+
+    std::fs::write(&path_buf, contents)
+        .map_err(|error| format!("Failed to write transfer file '{path}': {error}"))
+}
+
+#[tauri::command]
 async fn save_settings(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
@@ -996,10 +1113,22 @@ async fn save_settings(
         autostart_result.map_err(|e| e.to_string())?;
     }
 
+    let previous_settings = state.settings.lock().clone();
+    let stt_key_changed = previous_settings.stt.api_key != settings.stt.api_key;
+    let llm_key_changed = previous_settings.llm.api_key != settings.llm.api_key;
+
     let persist_result = (|| -> Result<(), String> {
         // Store API keys in OS credential store and strip from disk JSON
-        keyring_set("stt_api_key", &settings.stt.api_key)?;
-        keyring_set("llm_api_key", &settings.llm.api_key)?;
+        if stt_key_changed {
+            keyring_set("stt_api_key", &settings.stt.api_key)?;
+        }
+        if llm_key_changed {
+            keyring_set("llm_api_key", &settings.llm.api_key)?;
+        }
+
+        if !stt_key_changed && !llm_key_changed {
+            log::debug!("save_settings: API keys unchanged; skipping keyring update");
+        }
 
         let disk_settings = sanitize_settings_for_store(&settings);
         persist_settings_to_store(&app, &disk_settings)
@@ -1016,6 +1145,26 @@ async fn save_settings(
             if let Err(rollback_error) = rollback_result {
                 log::error!(
                     "failed to roll back autostart state after settings save failure: {rollback_error}"
+                );
+            }
+        }
+
+        if stt_key_changed {
+            if let Err(rollback_error) =
+                keyring_set("stt_api_key", &previous_settings.stt.api_key)
+            {
+                log::error!(
+                    "failed to roll back STT API key after settings save failure: {rollback_error}"
+                );
+            }
+        }
+
+        if llm_key_changed {
+            if let Err(rollback_error) =
+                keyring_set("llm_api_key", &previous_settings.llm.api_key)
+            {
+                log::error!(
+                    "failed to roll back LLM API key after settings save failure: {rollback_error}"
                 );
             }
         }
@@ -1104,8 +1253,30 @@ async fn retry_history(
         return Err("LLM is disabled".into());
     }
 
+    // Reject if a recording or pipeline is already active. This prevents
+    // conflicting capsule states and avoids overwriting an in-flight operation.
+    {
+        let recorder = state.recorder.lock();
+        if recorder.is_recording() || state.pipeline_busy.load(Ordering::SeqCst) {
+            return Err("busy".into());
+        }
+    }
+
+    // Hold pipeline_busy so that an ESC press during the LLM call is
+    // recognised as cancellable: cancel_recording will hide the capsule and
+    // emit idle, suppressing any stale result we might emit afterwards.
+    let _busy = BusyGuard::new(&state.pipeline_busy);
+    let operation_generation = current_recording_generation(&state);
+
     let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
     show_capsule(&app, "polishing");
+    emit_status(
+        &app,
+        operation_generation,
+        "polishing",
+        Some(&entry.raw_text),
+        None,
+    );
 
     let recent_ctx = state
         .history
@@ -1132,7 +1303,18 @@ async fn retry_history(
     .await
     .map_err(|e| {
         let message = e.to_string();
-        emit_status(&app, "error", None, Some(&message));
+        // Suppress error presentation if cancelled while the request was in flight.
+        if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+            log::info!("suppressed retry_history error after cancellation: {message}");
+            return String::new();
+        }
+        emit_status(
+            &app,
+            operation_generation,
+            "error",
+            None,
+            Some(&message),
+        );
         schedule_capsule_hide(
             app.clone(),
             Arc::clone(&state.capsule_generation),
@@ -1141,6 +1323,12 @@ async fn retry_history(
         );
         message
     })?;
+
+    // Suppress the result if ESC cancelled this operation while the LLM was running.
+    if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+        log::info!("suppressed retry_history result after cancellation");
+        return Ok(String::new());
+    }
 
     // Write result back to history
     let updated = HistoryEntry {
@@ -1153,7 +1341,13 @@ async fn retry_history(
         .insert(&updated)
         .map_err(|e| e.to_string())?;
 
-    emit_status(&app, "done", Some(&result), None);
+    emit_status(
+        &app,
+        operation_generation,
+        "done",
+        Some(&result),
+        None,
+    );
     schedule_capsule_hide(
         app.clone(),
         Arc::clone(&state.capsule_generation),
@@ -1179,11 +1373,20 @@ fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn clear_all_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
+    state
+        .history
+        .lock()
+        .clear_all()
+        .map_err(|e| e.to_string())
+}
+
 // ── Capsule Window Helpers ──────────────────────────────────────────
 
 fn show_capsule(app: &AppHandle, status: &str) {
     let height = match status {
-        "error" | "clipboardFallback" | "dismissed" | "noSpeech" => CAPSULE_HEIGHT_DETAIL,
+        "error" | "clipboardFallback" | "autoPastePaused" | "dismissed" | "noSpeech" => CAPSULE_HEIGHT_DETAIL,
         _ => CAPSULE_HEIGHT,
     };
 
@@ -1206,9 +1409,13 @@ fn show_capsule(app: &AppHandle, status: &str) {
             let mon_x = mon_pos.x as f64 / scale;
             let mon_y = mon_pos.y as f64 / scale;
             let mon_w = mon_size.width as f64 / scale;
-            // Center horizontally on that monitor, 16 lp below the top edge
+            let mon_h = mon_size.height as f64 / scale;
+
+            // To mimic floating dictation UIs like Typeless, place it near the bottom-center.
             let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
-            let y = mon_y + 16.0;
+            let padding_bottom = 120.0;
+            let y = mon_y + mon_h - height - padding_bottom;
+
             warn_if_err(
                 window.set_position(Position::Logical(LogicalPosition::new(x, y))),
                 "failed to position capsule window",
@@ -1253,9 +1460,6 @@ fn show_capsule(app: &AppHandle, status: &str) {
             Err(e) => log::error!("failed to create capsule: {e}"),
         }
     }
-    if let Err(error) = app.emit("capsule-status", status) {
-        log::warn!("failed to emit capsule-status: {error}");
-    }
 }
 
 fn hide_capsule(app: &AppHandle) {
@@ -1274,8 +1478,7 @@ fn resize_capsule(app: AppHandle, height: f64) {
             capsule.set_size(Size::Logical(LogicalSize::new(CAPSULE_WIDTH, h))),
             "failed to resize capsule window from frontend",
         );
-        // Re-centre on the active monitor (top position stays the same
-        // regardless of height since we anchor to the top edge)
+        // Re-centre on the active monitor while keeping bottom anchor behavior.
         let monitor = app
             .cursor_position()
             .ok()
@@ -1288,8 +1491,13 @@ fn resize_capsule(app: AppHandle, height: f64) {
             let mon_x = mon_pos.x as f64 / scale;
             let mon_y = mon_pos.y as f64 / scale;
             let mon_w = mon_size.width as f64 / scale;
+            let mon_h = mon_size.height as f64 / scale;
+
+            // Re-centre on the active monitor (anchor to bottom edge)
             let x = mon_x + (mon_w - CAPSULE_WIDTH) / 2.0;
-            let y = mon_y + 16.0;
+            let padding_bottom = 120.0;
+            let y = mon_y + mon_h - h - padding_bottom;
+
             warn_if_err(
                 capsule.set_position(Position::Logical(LogicalPosition::new(x, y))),
                 "failed to reposition capsule window from frontend",
@@ -1303,66 +1511,23 @@ fn resize_capsule(app: AppHandle, height: f64) {
 fn load_settings(app: &AppHandle) -> AppSettings {
     let mut settings = load_settings_from_store(app);
     let normalized_prompt = config::normalize_system_prompt(&settings.prompt.system_prompt);
-    let prompt_migrated = settings.prompt.system_prompt != normalized_prompt;
+    let prompt_normalized = settings.prompt.system_prompt != normalized_prompt;
     settings.prompt.system_prompt = normalized_prompt;
 
-    let legacy_stt_key = (!settings.stt.api_key.is_empty()).then(|| settings.stt.api_key.clone());
-    let legacy_llm_key = (!settings.llm.api_key.is_empty()).then(|| settings.llm.api_key.clone());
+    // Inject API keys from OS credential store (current format only).
+    let stt_key = keyring_get("stt_api_key");
+    let llm_key = keyring_get("llm_api_key");
 
-    // Inject API keys from OS credential store
-    let mut stt_key = keyring_get("stt_api_key");
-    let mut llm_key = keyring_get("llm_api_key");
-
-    let mut should_scrub_store = false;
-
-    // Migration: if keys are still in the JSON file, move them to keyring
-    if let Some(legacy_key) = legacy_stt_key.as_deref() {
-        if stt_key.is_empty() {
-            match keyring_set("stt_api_key", legacy_key) {
-                Ok(()) => {
-                    stt_key = legacy_key.to_string();
-                    should_scrub_store = true;
-                    log::info!("migrated STT API key to OS credential store");
-                }
-                Err(e) => log::warn!("failed to migrate STT API key to OS credential store: {e}"),
-            }
-        } else {
-            should_scrub_store = true;
-        }
-    }
-    if let Some(legacy_key) = legacy_llm_key.as_deref() {
-        if llm_key.is_empty() {
-            match keyring_set("llm_api_key", legacy_key) {
-                Ok(()) => {
-                    llm_key = legacy_key.to_string();
-                    should_scrub_store = true;
-                    log::info!("migrated LLM API key to OS credential store");
-                }
-                Err(e) => log::warn!("failed to migrate LLM API key to OS credential store: {e}"),
-            }
-        } else {
-            should_scrub_store = true;
-        }
-    }
-
-    if should_scrub_store || prompt_migrated {
+    // Always ensure disk settings remain sanitized after loading.
+    if prompt_normalized || !settings.stt.api_key.is_empty() || !settings.llm.api_key.is_empty() {
         let disk_settings = sanitize_settings_for_store(&settings);
         if let Err(e) = persist_settings_to_store(app, &disk_settings) {
-            log::warn!("failed to scrub legacy API keys from settings store: {e}");
+            log::warn!("failed to sanitize settings store after loading: {e}");
         }
     }
 
-    // Prefer keyring values; fall back to stored ones (pre-migration)
-    if !stt_key.is_empty() {
-        settings.stt.api_key = stt_key;
-    } else if let Some(legacy_key) = legacy_stt_key {
-        settings.stt.api_key = legacy_key;
-    }
-    if !llm_key.is_empty() {
-        settings.llm.api_key = llm_key;
-    } else if let Some(legacy_key) = legacy_llm_key {
-        settings.llm.api_key = legacy_key;
-    }
+    settings.stt.api_key = stt_key;
+    settings.llm.api_key = llm_key;
 
     settings
 }
@@ -1510,12 +1675,14 @@ fn toggle_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         if win.is_visible().unwrap_or(false) {
             warn_if_err(win.hide(), "failed to hide main window");
+            set_main_window_focus_state(app, false);
             sync_macos_activation_policy(app, false);
         } else {
             sync_macos_activation_policy(app, true);
             warn_if_err(win.unminimize(), "failed to unminimize main window");
             warn_if_err(win.show(), "failed to show main window");
             warn_if_err(win.set_focus(), "failed to focus main window");
+            set_main_window_focus_state(app, true);
         }
         refresh_tray_menu(app);
     }
@@ -1560,6 +1727,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_log::Builder::default().build())
         .setup(|app| {
@@ -1613,9 +1781,7 @@ pub fn run() {
                 main_window.on_window_event(move |event| {
                     match event {
                         WindowEvent::Focused(focused) => {
-                            let state = handle_for_events.state::<AppState>();
-                            state.main_window_focused.store(*focused, Ordering::SeqCst);
-                            sync_hotkey_triggers_enabled(&state);
+                            set_main_window_focus_state(&handle_for_events, *focused);
                         }
                         WindowEvent::CloseRequested { api, .. } => {
                             let state = handle_for_events.state::<AppState>();
@@ -1628,6 +1794,7 @@ pub fn run() {
                                         "failed to hide main window on close-to-tray",
                                     );
                                 }
+                                set_main_window_focus_state(&handle_for_events, false);
                                 sync_macos_activation_policy(&handle_for_events, false);
                                 refresh_tray_menu(&handle_for_events);
 
@@ -1664,7 +1831,13 @@ pub fn run() {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("toggle recording error: {e}");
-                                emit_status(&app_handle, "error", None, Some(&e));
+                                emit_status(
+                                    &app_handle,
+                                    current_recording_generation_from_app(&app_handle),
+                                    "error",
+                                    None,
+                                    Some(&e),
+                                );
                                 let cap_gen = app_handle
                                     .state::<AppState>()
                                     .capsule_generation
@@ -1713,18 +1886,23 @@ pub fn run() {
                     );
                     warn_if_err(win.show(), "failed to show main window during startup");
                     warn_if_err(win.set_focus(), "failed to focus main window during startup");
+                    set_main_window_focus_state(&handle, true);
                 }
             } else {
                 sync_macos_activation_policy(&handle, false);
+                set_main_window_focus_state(&handle, false);
             }
             refresh_tray_menu(&handle);
 
-            // Clean up old history on startup
+            // Clean up old history periodically (every hour) and on startup
             let handle2 = handle.clone();
             tauri::async_runtime::spawn(async move {
-                let state = handle2.state::<AppState>();
-                if let Err(error) = clear_old_history(state) {
-                    log::warn!("failed to clear old history on startup: {error}");
+                loop {
+                    let state = handle2.state::<AppState>();
+                    if let Err(error) = clear_old_history(state) {
+                        log::warn!("failed to clear old history: {error}");
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 }
             });
 
@@ -1742,12 +1920,15 @@ pub fn run() {
             get_platform_context,
             check_permissions,
             request_permission,
+            read_transfer_file,
+            write_transfer_file,
             test_stt,
             test_llm,
             get_history,
             delete_history,
             retry_history,
             clear_old_history,
+            clear_all_history,
             list_audio_devices,
             resize_capsule,
         ])
@@ -1825,5 +2006,17 @@ mod tests {
         assert!(sanitized.llm.api_key.is_empty());
         assert_eq!(sanitized.stt.base_url, "https://example.invalid/v1");
         assert!(sanitized.llm.enabled);
+    }
+
+    #[test]
+    fn stop_after_post_buffer_requires_same_generation() {
+        assert!(should_stop_recording_after_post_buffer(true, 7, 7, true));
+        assert!(!should_stop_recording_after_post_buffer(true, 7, 8, true));
+    }
+
+    #[test]
+    fn stop_after_post_buffer_requires_recording_at_entry_and_now() {
+        assert!(!should_stop_recording_after_post_buffer(false, 3, 3, true));
+        assert!(!should_stop_recording_after_post_buffer(true, 3, 3, false));
     }
 }

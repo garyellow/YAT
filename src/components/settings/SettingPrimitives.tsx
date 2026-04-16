@@ -160,7 +160,7 @@ export function StatusDot({
   tone?: Tone;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-(--text-secondary)">
       <span className="dot" data-tone={tone} />
       {children}
     </span>
@@ -278,20 +278,20 @@ export function OptionCard({
         <span
           className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-150 ${
             selected
-              ? "border-[var(--accent)] bg-[var(--accent)]"
-              : "border-[var(--border-strong)] bg-[var(--bg-elevated)]"
+              ? "border-(--accent) bg-(--accent)"
+              : "border-(--border-strong) bg-(--bg-elevated)"
           }`}
         >
           {selected ? (
-            <span className="block h-1.5 w-1.5 rounded-full bg-[var(--accent-fg)]" />
+            <span className="block h-1.5 w-1.5 rounded-full bg-(--accent-fg)" />
           ) : null}
         </span>
 
         <div className="min-w-0">
-          <span className="text-[13px] font-semibold text-[var(--text)] text-pretty">
+          <span className="text-[13px] font-semibold text-(--text) text-pretty">
             {title}
           </span>
-          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)] text-pretty">
+          <p className="mt-1 text-xs leading-5 text-(--text-secondary) text-pretty">
             {description}
           </p>
           {children ? <div className="pt-2">{children}</div> : null}
@@ -311,9 +311,9 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg)] px-5 py-7 text-center">
-      <p className="text-[13px] font-semibold text-[var(--text-secondary)]">{title}</p>
-      <p className="mt-1.5 text-xs leading-5 text-[var(--text-muted)] text-pretty">
+    <div className="rounded-xl border border-dashed border-(--border) bg-(--bg) px-5 py-7 text-center">
+      <p className="text-[13px] font-semibold text-(--text-secondary)">{title}</p>
+      <p className="mt-1.5 text-xs leading-5 text-(--text-muted) text-pretty">
         {description}
       </p>
       {action ? <div className="mt-4">{action}</div> : null}

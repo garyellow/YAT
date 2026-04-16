@@ -97,10 +97,34 @@ interface SettingsState {
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+function mergeSettings(current: AppSettings, partial: Partial<AppSettings>): AppSettings {
+  return {
+    ...current,
+    ...partial,
+    stt: partial.stt ? { ...current.stt, ...partial.stt } : current.stt,
+    llm: partial.llm ? { ...current.llm, ...partial.llm } : current.llm,
+    general: partial.general
+      ? {
+          ...current.general,
+          ...partial.general,
+          hotkey: partial.general.hotkey
+            ? { ...current.general.hotkey, ...partial.general.hotkey }
+            : current.general.hotkey,
+        }
+      : current.general,
+    prompt: partial.prompt
+      ? {
+          ...current.prompt,
+          ...partial.prompt,
+          vocabulary: partial.prompt.vocabulary ?? current.prompt.vocabulary,
+        }
+      : current.prompt,
+    history: partial.history ? { ...current.history, ...partial.history } : current.history,
+  };
+}
+
 function sanitizeSettings(settings: AppSettings): AppSettings {
-  const { auto_dnd: _deprecatedAutoDnd, ...general } = (
-    settings.general as AppSettings["general"] & { auto_dnd?: boolean }
-  );
+  const general = settings.general;
 
   return {
     ...cloneSettings(settings),
@@ -234,7 +258,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   updateSettings: (partial) => {
     const current = get().settings;
     if (current) {
-      const merged = { ...current, ...partial };
+      const merged = mergeSettings(current, partial);
       const nextRevision = get().revision + 1;
       const validationError = validateSettings(sanitizeSettings(merged));
 

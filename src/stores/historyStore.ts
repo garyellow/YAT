@@ -22,6 +22,7 @@ interface HistoryState {
   deleteEntry: (id: string) => Promise<void>;
   retryEntry: (id: string) => Promise<void>;
   clearOld: () => Promise<void>;
+  clearAll: () => Promise<void>;
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -100,6 +101,21 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       await get().loadHistory();
     } catch (e) {
       console.error("Failed to clear old history:", e);
+    }
+  },
+
+  clearAll: async () => {
+    set({ retryError: null });
+
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    try {
+      await invoke("clear_all_history");
+      await get().loadHistory();
+    } catch (e) {
+      console.error("Failed to clear all history:", e);
     }
   },
 }));

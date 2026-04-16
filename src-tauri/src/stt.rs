@@ -20,6 +20,50 @@ struct SttResponse {
     text: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ApiErrorEnvelope {
+    error: Option<ApiErrorBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiErrorBody {
+    message: Option<String>,
+}
+
+const MAX_ERROR_BODY_LEN: usize = 400;
+
+fn truncate_for_ui(input: &str, max_len: usize) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut chars = trimmed.chars();
+    let preview: String = chars.by_ref().take(max_len).collect();
+    if chars.next().is_some() {
+        format!("{preview}…")
+    } else {
+        preview
+    }
+}
+
+fn summarize_api_error_body(raw_body: &str) -> String {
+    if raw_body.trim().is_empty() {
+        return "(empty response body)".to_string();
+    }
+
+    if let Ok(parsed) = serde_json::from_str::<ApiErrorEnvelope>(raw_body) {
+        if let Some(message) = parsed.error.and_then(|err| err.message) {
+            let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !normalized.is_empty() {
+                return truncate_for_ui(&normalized, MAX_ERROR_BODY_LEN);
+            }
+        }
+    }
+
+    truncate_for_ui(raw_body, MAX_ERROR_BODY_LEN)
+}
+
 /// Send audio bytes (WAV) to an OpenAI-compatible `/audio/transcriptions` endpoint.
 pub async fn transcribe(
     config: &SttConfig,
@@ -95,7 +139,11 @@ pub async fn transcribe(
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 if status >= 400 {
-                    let body = resp.text().await.unwrap_or_default();
+                    let body = resp
+                        .text()
+                        .await
+                        .map(|raw| summarize_api_error_body(&raw))
+                        .unwrap_or_else(|_| "(failed to read error body)".to_string());
                     last_error = SttError::ApiError { status, body };
                     // Don't retry on client errors (4xx)
                     if status < 500 {
@@ -104,10 +152,17 @@ pub async fn transcribe(
                     continue;
                 }
 
-                let stt_resp: SttResponse = resp
-                    .json()
+                let raw_response = resp
+                    .text()
                     .await
                     .map_err(|e| SttError::Parse(e.to_string()))?;
+
+                let stt_resp: SttResponse = serde_json::from_str(&raw_response).map_err(|e| {
+                    let body_preview = truncate_for_ui(&raw_response, MAX_ERROR_BODY_LEN);
+                    SttError::Parse(format!(
+                        "{e}; response body preview: {body_preview}"
+                    ))
+                })?;
 
                 return Ok(stt_resp.text);
             }

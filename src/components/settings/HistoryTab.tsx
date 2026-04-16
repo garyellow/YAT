@@ -6,8 +6,8 @@ import type { AppSettings } from "../../stores/settingsStore";
 import { EmptyState, Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
 import ConfirmDialog from "../ui/ConfirmDialog";
 
-const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
+const labelCls = "text-xs font-medium text-(--text-secondary)";
+const hintCls = "text-[11px] text-(--text-muted)";
 
 export default function HistoryTab() {
   const { t, i18n } = useTranslation();
@@ -22,13 +22,14 @@ export default function HistoryTab() {
   const deleteEntry = useHistoryStore((s) => s.deleteEntry);
   const retryEntry = useHistoryStore((s) => s.retryEntry);
   const clearOld = useHistoryStore((s) => s.clearOld);
+  const clearAll = useHistoryStore((s) => s.clearAll);
   const retryingId = useHistoryStore((s) => s.retryingId);
   const retryError = useHistoryStore((s) => s.retryError);
 
   const [query, setQuery] = useState(searchQuery);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ type: "clearOld" } | { type: "delete"; id: string } | { type: "reduceRetention"; newHours: number } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "clearAll" } | { type: "delete"; id: string } | { type: "reduceRetention"; newHours: number } | null>(null);
   const [customMode, setCustomMode] = useState(false);
   const [draftHours, setDraftHours] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -112,7 +113,7 @@ export default function HistoryTab() {
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
-    if (confirmAction.type === "clearOld") { void clearOld(); }
+    if (confirmAction.type === "clearAll") { void clearAll(); }
     else if (confirmAction.type === "reduceRetention") {
       updateHistory({ retention_hours: confirmAction.newHours });
       setDraftHours(String(confirmAction.newHours));
@@ -124,15 +125,15 @@ export default function HistoryTab() {
   };
 
   const confirmMessage =
-    confirmAction?.type === "clearOld"
-      ? t("history.confirmClearOld")
+    confirmAction?.type === "clearAll"
+      ? t("history.confirmClearAll")
       : confirmAction?.type === "reduceRetention"
         ? t("history.retentionReduceBody")
         : confirmAction?.type === "delete"
           ? t("history.confirmDelete")
           : "";
-  const confirmTitle = confirmAction?.type === "clearOld"
-    ? t("history.clearOld")
+  const confirmTitle = confirmAction?.type === "clearAll"
+    ? t("history.clearAll")
     : confirmAction?.type === "reduceRetention"
       ? t("history.retentionReduceTitle")
       : confirmAction?.type === "delete"
@@ -155,9 +156,9 @@ export default function HistoryTab() {
             type="button"
             className="btn btn-danger text-xs"
             title={t("history.controlsDesc")}
-            onClick={() => setConfirmAction({ type: "clearOld" })}
+            onClick={() => setConfirmAction({ type: "clearAll" })}
           >
-            {t("history.clearOld")}
+            {t("history.clearAll")}
           </button>
         }
       >
@@ -191,12 +192,14 @@ export default function HistoryTab() {
                     onChange={(e) => setDraftHours(e.target.value)}
                     onBlur={commitDraft}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                    className="bg-transparent text-center text-xs font-medium text-inherit outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="retention-hours-input bg-transparent text-center text-xs font-medium text-inherit outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    aria-label={t("history.retention")}
                     style={{ width: `${Math.max(2, (draftHours || "0").length + 1)}ch` }}
                     min={1}
                     max={8760}
                     step={1}
                     inputMode="numeric"
+                    data-testid="retention-hours-input"
                   />
                   <span className="text-xs font-medium">{t("history.hours")}</span>
                 </span>
@@ -265,7 +268,7 @@ export default function HistoryTab() {
           </div>
         ) : null}
         {loading ? (
-          <p className="py-4 text-xs text-[var(--text-muted)]">{t("status.loading")}</p>
+          <p className="py-4 text-xs text-(--text-muted)">{t("status.loading")}</p>
         ) : entries.length === 0 ? (
           <EmptyState
             title={t("history.noHistory")}
@@ -276,7 +279,7 @@ export default function HistoryTab() {
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="group rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 transition-colors duration-100 hover:bg-[var(--bg-muted)]"
+                className="group rounded-xl border border-(--border) bg-(--bg-elevated) p-4 transition-colors duration-100 hover:bg-(--bg-muted)"
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
@@ -288,18 +291,18 @@ export default function HistoryTab() {
                             ? t("status.error")
                             : t("status.loading")}
                       </StatusDot>
-                      <span className="text-[11px] text-[var(--text-muted)]">
+                      <span className="text-[11px] text-(--text-muted)">
                         {dtf.format(new Date(entry.created_at))}
                       </span>
                       {entry.duration_seconds > 0 ? (
-                        <span className="text-[11px] text-[var(--text-muted)]">{entry.duration_seconds.toFixed(1)}s</span>
+                        <span className="text-[11px] text-(--text-muted)">{entry.duration_seconds.toFixed(1)}s</span>
                       ) : null}
                     </div>
-                    <p className="pre-wrap text-[13px] leading-6 text-[var(--text-secondary)]">
+                    <p className="pre-wrap text-[13px] leading-6 text-(--text-secondary)">
                       {entry.polished_text || entry.raw_text || "-"}
                     </p>
                     {entry.polished_text && entry.raw_text && entry.raw_text !== entry.polished_text ? (
-                      <p className="pre-wrap mt-2 text-xs leading-6 text-[var(--text-muted)] line-through">
+                      <p className="pre-wrap mt-2 text-xs leading-6 text-(--text-muted) line-through">
                         {entry.raw_text}
                       </p>
                     ) : null}

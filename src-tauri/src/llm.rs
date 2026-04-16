@@ -4,6 +4,47 @@ use thiserror::Error;
 
 use crate::config::LlmConfig;
 
+const MAX_ERROR_BODY_LEN: usize = 400;
+
+#[derive(Debug, Deserialize)]
+struct ApiErrorEnvelope {
+    error: Option<ApiErrorBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiErrorBody {
+    message: Option<String>,
+}
+
+fn truncate_for_ui(input: &str, max_len: usize) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let mut chars = trimmed.chars();
+    let preview: String = chars.by_ref().take(max_len).collect();
+    if chars.next().is_some() {
+        format!("{preview}…")
+    } else {
+        preview
+    }
+}
+
+fn summarize_api_error_body(raw_body: &str) -> String {
+    if raw_body.trim().is_empty() {
+        return "(empty response body)".to_string();
+    }
+    if let Ok(parsed) = serde_json::from_str::<ApiErrorEnvelope>(raw_body) {
+        if let Some(message) = parsed.error.and_then(|err| err.message) {
+            let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !normalized.is_empty() {
+                return truncate_for_ui(&normalized, MAX_ERROR_BODY_LEN);
+            }
+        }
+    }
+    truncate_for_ui(raw_body, MAX_ERROR_BODY_LEN)
+}
+
 #[derive(Error, Debug)]
 pub enum LlmError {
     #[error("LLM request failed: {0}")]
@@ -62,7 +103,7 @@ fn build_user_content(raw_text: &str, screenshot_base64: Option<&str>) -> serde_
 fn error_looks_like_vision_unsupported(error: &LlmError) -> bool {
     match error {
         LlmError::ApiError {
-            status: 400 | 404 | 415 | 422 | 501,
+            status: 400 | 404 | 413 | 415 | 422 | 501,
             body,
         } => {
             let body = body.to_lowercase();
@@ -78,6 +119,16 @@ fn error_looks_like_vision_unsupported(error: &LlmError) -> bool {
                 "unsupported message type",
                 "invalid image",
                 "content type",
+                "must be a string",
+                "must be a valid string",
+                "payload too large",
+                "request too large",
+                "request entity too large",
+                "content too large",
+                "maximum image size",
+                "max image size",
+                "image too large",
+                "context length",
             ]
             .iter()
             .any(|needle| body.contains(needle))
@@ -129,7 +180,11 @@ async fn send_chat_request(
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 if status >= 400 {
-                    let body = resp.text().await.unwrap_or_default();
+                    let body = resp
+                        .text()
+                        .await
+                        .map(|raw| summarize_api_error_body(&raw))
+                        .unwrap_or_else(|_| "(failed to read error body)".to_string());
                     last_error = LlmError::ApiError { status, body };
                     if status < 500 {
                         return Err(last_error);
@@ -256,4 +311,29 @@ pub async fn polish(
 /// Quick connectivity check.
 pub async fn test_connection(config: &LlmConfig) -> Result<String, LlmError> {
     polish(config, "Reply with: OK", "test", &[], None, 30000, 0).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vision_error_detector_matches_payload_too_large() {
+        let error = LlmError::ApiError {
+            status: 413,
+            body: "Payload too large: image exceeds maximum size".into(),
+        };
+
+        assert!(error_looks_like_vision_unsupported(&error));
+    }
+
+    #[test]
+    fn vision_error_detector_ignores_unrelated_server_errors() {
+        let error = LlmError::ApiError {
+            status: 500,
+            body: "internal server error".into(),
+        };
+
+        assert!(!error_looks_like_vision_unsupported(&error));
+    }
 }

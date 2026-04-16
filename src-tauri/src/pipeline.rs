@@ -23,13 +23,21 @@ pub struct PipelineStatus {
     pub status: String,
     pub text: Option<String>,
     pub error: Option<String>,
+    pub generation: u64,
 }
 
-fn emit_status(app: &AppHandle, status: &str, text: Option<&str>, error: Option<&str>) {
+fn emit_status(
+    app: &AppHandle,
+    generation: u64,
+    status: &str,
+    text: Option<&str>,
+    error: Option<&str>,
+) {
     let payload = PipelineStatus {
         status: status.into(),
         text: text.map(String::from),
         error: error.map(String::from),
+        generation,
     };
     if let Err(e) = app.emit("pipeline-status", payload) {
         log::error!("failed to emit pipeline status: {e}");
@@ -88,6 +96,10 @@ pub struct PipelineResult {
     pub duration_seconds: f64,
     pub suppressed: bool,
     pub delivery_error: Option<String>,
+    /// True when the pipeline emitted a notification-style status
+    /// (e.g. clipboardFallback, autoPastePaused) that should stay
+    /// visible longer than the default success delay.
+    pub notified: bool,
 }
 
 /// Run the full pipeline: STT → LLM polish → output.
@@ -111,7 +123,7 @@ pub async fn run(
     let start = std::time::Instant::now();
 
     // Step 1: Speech-to-text
-    emit_status(app, "transcribing", None, None);
+    emit_status(app, operation_generation, "transcribing", None, None);
     let raw_text = stt::transcribe(
         &settings.stt,
         audio_data,
@@ -128,23 +140,25 @@ pub async fn run(
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: true,
             delivery_error: None,
+            notified: false,
         });
     }
 
     if raw_text.trim().is_empty() {
-        emit_status(app, "noSpeech", None, None);
+        emit_status(app, operation_generation, "noSpeech", None, None);
         return Ok(PipelineResult {
             raw_text: String::new(),
             polished_text: None,
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: false,
             delivery_error: None,
+            notified: false,
         });
     }
 
     // Step 2: LLM polish (optional)
     let polished = if settings.llm.enabled {
-        emit_status(app, "polishing", Some(&raw_text), None);
+        emit_status(app, operation_generation, "polishing", Some(&raw_text), None);
 
         let mut system_prompt = build_system_prompt(
             &settings.prompt.system_prompt,
@@ -224,6 +238,7 @@ pub async fn run(
             duration_seconds: start.elapsed().as_secs_f64(),
             suppressed: true,
             delivery_error: None,
+            notified: false,
         });
     }
 
@@ -251,13 +266,20 @@ pub async fn run(
             Err(e) => {
                 log::error!("output error: {e}");
                 // Clipboard itself failed — nothing was delivered.
-                emit_status(app, "error", Some(final_text), Some(&e.to_string()));
+                emit_status(
+                    app,
+                    operation_generation,
+                    "error",
+                    Some(final_text),
+                    Some(&e.to_string()),
+                );
                 return Ok(PipelineResult {
                     raw_text,
                     polished_text: polished,
                     duration_seconds: start.elapsed().as_secs_f64(),
                     suppressed: false,
                     delivery_error: Some(e.to_string()),
+                    notified: false,
                 });
             }
         }
@@ -265,23 +287,52 @@ pub async fn run(
         output::OutputOutcome::CopiedToClipboard
     };
 
+    if was_cancelled(&cancel_generation, operation_generation) {
+        log::info!("pipeline cancelled after output delivery; suppressing status presentation");
+        return Ok(PipelineResult {
+            raw_text,
+            polished_text: polished,
+            duration_seconds: start.elapsed().as_secs_f64(),
+            suppressed: true,
+            delivery_error: None,
+            notified: false,
+        });
+    }
+
+    let notified = matches!(outcome, output::OutputOutcome::PasteFailedCopiedToClipboard)
+        || (forced_clipboard_fallback
+            && matches!(outcome, output::OutputOutcome::CopiedToClipboard));
+
     match outcome {
         output::OutputOutcome::PasteFailedCopiedToClipboard => {
             paste_fail_count.fetch_add(1, Ordering::Relaxed);
-            emit_status(app, "clipboardFallback", Some(final_text), None);
+            emit_status(
+                app,
+                operation_generation,
+                "clipboardFallback",
+                Some(final_text),
+                None,
+            );
         }
         output::OutputOutcome::Pasted => {
             paste_fail_count.store(0, Ordering::Relaxed);
-            emit_status(app, "done", Some(final_text), None);
+            emit_status(app, operation_generation, "done", Some(final_text), None);
         }
         output::OutputOutcome::CopiedToClipboard if forced_clipboard_fallback => {
             // The streak has already been acted upon for this operation; reset it
-            // so future attempts can try auto-paste again.
+            // so future attempts can try auto-paste again, but surface the
+            // temporary mode switch clearly to the user.
             paste_fail_count.store(0, Ordering::Relaxed);
-            emit_status(app, "done", Some(final_text), None);
+            emit_status(
+                app,
+                operation_generation,
+                "autoPastePaused",
+                Some(final_text),
+                None,
+            );
         }
         _ => {
-            emit_status(app, "done", Some(final_text), None);
+            emit_status(app, operation_generation, "done", Some(final_text), None);
         }
     }
 
@@ -291,6 +342,7 @@ pub async fn run(
         duration_seconds: start.elapsed().as_secs_f64(),
         suppressed: false,
         delivery_error: None,
+        notified,
     })
 }
 

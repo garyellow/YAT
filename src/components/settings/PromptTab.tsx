@@ -11,13 +11,14 @@ import Toggle from "../ui/Toggle";
 import { HintTip } from "../ui/Tooltip";
 import type { SettingsTab } from "./tabs";
 
-const labelCls = "text-xs font-medium text-[var(--text-secondary)]";
-const hintCls = "text-[11px] text-[var(--text-muted)]";
+const labelCls = "text-xs font-medium text-(--text-secondary)";
+const hintCls = "text-[11px] text-(--text-muted)";
 
 function getFallbackPlatform(): "macos" | "windows" | "linux" {
   if (typeof navigator !== "undefined") {
-    if (/mac/i.test(navigator.platform)) return "macos";
-    if (/linux/i.test(navigator.platform)) return "linux";
+    const platform = (navigator as any).userAgentData?.platform ?? navigator.platform;
+    if (/mac/i.test(platform)) return "macos";
+    if (/linux/i.test(platform)) return "linux";
   }
   return "windows";
 }
@@ -47,6 +48,12 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
   const enabledContextCount = [
     prompt.context_clipboard,
     prompt.context_selection,
+    prompt.context_active_app,
+    prompt.context_input_field,
+    prompt.context_screenshot,
+  ].filter(Boolean).length;
+
+  const advancedContextCount = [
     prompt.context_active_app,
     prompt.context_input_field,
     prompt.context_screenshot,
@@ -208,7 +215,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                   title={t("prompt.contextSourcesTooltip")}
                   onClick={() => setShowAdvancedContext(!showAdvancedContext)}
                 >
-                  <span className="disclosure-btn-value">{enabledContextCount}</span>
+                  <span className="disclosure-btn-value">{advancedContextCount}</span>
                   <span
                     className="disclosure-btn-chevron"
                     style={{ transform: showAdvancedContext ? "rotate(90deg)" : "rotate(0deg)" }}
@@ -287,14 +294,14 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
         title={t("prompt.previewTitle")}
         description={t("prompt.previewDesc")}
         aside={
-          <span className="text-xs text-[var(--text-muted)]">
+          <span className="text-xs text-(--text-muted)">
             {t("prompt.charCount", { count: previewText.length })}
           </span>
         }
       >
         <div className="space-y-3">
-          <div className="rounded-lg bg-[var(--bg-subtle)] p-3">
-            <pre className="pre-wrap max-h-72 overflow-auto whitespace-pre-wrap text-xs text-[var(--text-secondary)]">
+          <div className="rounded-lg bg-(--bg-subtle) p-3">
+            <pre className="pre-wrap max-h-72 overflow-auto whitespace-pre-wrap text-xs text-(--text-secondary)">
               {previewText}
             </pre>
           </div>
@@ -302,6 +309,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
             {onNavigate ? (
               <>
                 <button
+                  type="button"
                   className="btn btn-secondary text-xs"
                   title={t("vocabulary.pageDesc")}
                   onClick={() => onNavigate("vocabulary")}
@@ -309,6 +317,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
                   {t("prompt.openVocabulary")}
                 </button>
                 <button
+                  type="button"
                   className="btn btn-secondary text-xs"
                   title={t("llm.modeDesc")}
                   onClick={() => onNavigate("llm")}

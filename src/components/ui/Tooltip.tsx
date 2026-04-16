@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 const TOOLTIP_VIEWPORT_PADDING = 12;
 
@@ -73,9 +74,10 @@ export function HintTip({
   side?: "top" | "bottom";
   ariaLabel?: string;
 }) {
+  const { t } = useTranslation();
   const computedLabel = typeof text === "string"
     ? text
-    : ariaLabel ?? "More information";
+    : ariaLabel ?? t("accessibility.moreInformation");
 
   return (
     <Tooltip content={text} side={side}>

@@ -33,9 +33,9 @@ Whether you're a writer, a developer, or just someone answering endless messages
 Getting started is incredibly easy. Just follow these three steps:
 
 ### 1. Get YAT
-Go to the [Releases page](../../releases) and download the build for your OS (Windows, macOS, or Linux). Install and launch it. You will see the YAT icon appear in the menu bar or system tray.
+Go to the [Releases page](../../releases) and download the build for your OS (Windows and macOS are the main targets; Linux remains Experimental). Install and launch it. You will see the YAT icon appear in the menu bar or system tray.
 
-> ℹ️ **Platform note:** On macOS, auto-paste and pause-media features typically require Accessibility permission. On Linux, background audio control during recording requires `pactl`, and pause-media requires `playerctl`.
+> ℹ️ **Platform note:** YAT is currently optimized for Windows and macOS first. On macOS, auto-paste and pause-media features typically require Accessibility permission. Linux remains Experimental; background audio control during recording requires `pactl`, pause-media requires `playerctl`, and Wayland may limit some behaviors.
 
 ### 2. Connect your speech provider
 YAT uses your own API keys and supports any API compatible with the OpenAI format. You can start with speech recognition only, then turn on polishing later if you want cleaner output.
@@ -60,6 +60,7 @@ YAT is more than just a record button. It's packed with quality-of-life features
 - **Fully customizable hotkeys**: Not a fan of "hold-to-talk"? Change it to click-to-toggle, double-tap, or complex combos (like `Ctrl + Shift + C`).
 - **Extra reference info (advanced)**: When you really need it, YAT can optionally read your clipboard, selected text, active app, current input field, or even take a **screen capture** before polishing. This helps the AI stay closer to what you are already working on. *(For privacy, **all of these are OFF by default**, and only the items you enable are sent.)*
 - **Distraction-free recording**: Leave background audio alone, duck it, or mute it while you are speaking—and optionally pause playing media too (varies by OS).
+- **Portable backup & migration**: You can now export settings or vocabulary as JSON for backup, machine replacement, or moving your preferred setup between macOS and Windows. For safety, API keys are never included in the exported file.
 
 ## FAQ
 
@@ -81,6 +82,7 @@ Prerequisites: Node.js 20.19+ (or 22.12+ and newer), Rust 1.77+
 
 ```bash
 npm install
+npm run validate
 npm run tauri dev
 npm run tauri build
 ```
