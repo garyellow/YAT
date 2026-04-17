@@ -63,10 +63,12 @@ export default function VocabularyTab({ onNavigate, onToast }: VocabularyTabProp
 
     const existing = new Set(vocab.map((entry) => normalizeEntryKey(entry.text)));
     const seen = new Set<string>();
+    const duplicates: string[] = [];
     const newEntries = parsedEntries
       .filter((entry) => {
         const key = normalizeEntryKey(entry);
         if (existing.has(key) || seen.has(key)) {
+          if (!seen.has(key) && existing.has(key)) duplicates.push(entry);
           return false;
         }
         seen.add(key);
@@ -75,11 +77,15 @@ export default function VocabularyTab({ onNavigate, onToast }: VocabularyTabProp
       .map((text) => ({ text }));
 
     if (newEntries.length === 0) {
-      setValidationMsg(t("vocabulary.validationDuplicate"));
+      setValidationMsg(t("vocabulary.validationDuplicateList", { entries: duplicates.join(", ") }));
       return;
     }
 
-    setValidationMsg("");
+    if (duplicates.length > 0) {
+      setValidationMsg(t("vocabulary.validationPartialDuplicate", { entries: duplicates.join(", ") }));
+    } else {
+      setValidationMsg("");
+    }
     updateSettings({
       prompt: {
         ...settings.prompt,

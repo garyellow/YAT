@@ -228,6 +228,7 @@ pub fn normalize_system_prompt(value: &str) -> String {
 pub struct HistoryConfig {
     pub retention_hours: u32,
     pub context_window_minutes: u32,
+    pub audio_retention_hours: u32,
 }
 
 impl Default for HistoryConfig {
@@ -235,6 +236,7 @@ impl Default for HistoryConfig {
         Self {
             retention_hours: 720,        // 30 days
             context_window_minutes: 10,  // last 10 min for context
+            audio_retention_hours: 24,   // keep audio files for 24 hours
         }
     }
 }

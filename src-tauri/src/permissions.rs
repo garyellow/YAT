@@ -12,9 +12,6 @@
 
 use serde::Serialize;
 
-#[cfg(target_os = "macos")]
-use std::ffi::c_void;
-
 /// Fine-grained permission state mirroring the native OS concepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -108,156 +105,43 @@ fn request_microphone() -> PermissionState {
 
 /// FFI: `[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]`
 ///
-/// We go through the Objective-C runtime directly so we don't need to
-/// pull in a heavy `objc2` / `cocoa` dependency — the same pattern
-/// already used in `context.rs` for Accessibility FFI.
+/// Uses `objc2` for type-safe Objective-C message sending and
+/// `objc2-foundation::NSString` for proper string lifecycle management.
 #[cfg(target_os = "macos")]
 unsafe fn av_authorization_status_for_audio() -> isize {
-    extern "C" {
-        fn objc_getClass(name: *const u8) -> *const c_void;
-        fn sel_registerName(name: *const u8) -> *const c_void;
-    }
+    use objc2::msg_send;
+    use objc2::runtime::AnyClass;
+    use objc2_foundation::NSString;
 
-    let cls = objc_getClass(b"AVCaptureDevice\0".as_ptr());
-    if cls.is_null() {
+    let Some(cls) = AnyClass::get("AVCaptureDevice") else {
         return -1;
-    }
+    };
 
-    let sel = sel_registerName(b"authorizationStatusForMediaType:\0".as_ptr());
-
-    // AVMediaTypeAudio is an NSString constant.  We can obtain it from
-    // the AVFoundation framework, but a simpler approach is to create
-    // an NSString with the known value "soun" (the FourCC for audio).
-    let ns_string_cls = objc_getClass(b"NSString\0".as_ptr());
-    if ns_string_cls.is_null() {
-        return -1;
-    }
-    let alloc_sel = sel_registerName(b"alloc\0".as_ptr());
-    let init_sel = sel_registerName(b"initWithUTF8String:\0".as_ptr());
-    let release_sel = sel_registerName(b"release\0".as_ptr());
-
-    let raw = objc_msg_send_ptr_noargs(ns_string_cls, alloc_sel);
-    if raw.is_null() {
-        return -1;
-    }
-    let media_type = objc_msg_send_ptr_cstring_arg(raw, init_sel, b"soun\0".as_ptr());
-    if media_type.is_null() {
-        let _ = objc_msg_send_ptr_noargs(raw, release_sel);
-        return -1;
-    }
-
-    let status = objc_msg_send_isize_ptr_arg(cls, sel, media_type);
-
-    let _ = objc_msg_send_ptr_noargs(media_type, release_sel);
-
-    status
+    let media_type = NSString::from_str("soun");
+    unsafe { msg_send![cls, authorizationStatusForMediaType: &*media_type] }
 }
 
 /// FFI: `[AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL){}]`
 ///
-/// We intentionally keep this as a minimal, best-effort trigger to avoid
-/// adding heavy Objective-C wrapper dependencies for one call-site.
-///
-/// If the platform/runtime rejects a null completion handler, this call
-/// effectively degrades to a no-op and the user can still grant access via
-/// System Settings (the UI always offers that path).
+/// Uses `objc2` + `block2` for type-safe message sending with a proper
+/// no-op completion handler block instead of passing nil.
 #[cfg(target_os = "macos")]
 unsafe fn av_request_access_for_audio() {
-    extern "C" {
-        fn objc_getClass(name: *const u8) -> *const c_void;
-        fn sel_registerName(name: *const u8) -> *const c_void;
-    }
+    use block2::StackBlock;
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, Bool};
+    use objc2_foundation::NSString;
 
-    let cls = objc_getClass(b"AVCaptureDevice\0".as_ptr());
-    if cls.is_null() {
+    let Some(cls) = AnyClass::get("AVCaptureDevice") else {
         return;
-    }
+    };
 
-    // Build the media type NSString ("soun")
-    let ns_string_cls = objc_getClass(b"NSString\0".as_ptr());
-    if ns_string_cls.is_null() {
-        return;
-    }
-    let alloc_sel = sel_registerName(b"alloc\0".as_ptr());
-    let init_sel = sel_registerName(b"initWithUTF8String:\0".as_ptr());
-    let release_sel = sel_registerName(b"release\0".as_ptr());
+    let media_type = NSString::from_str("soun");
+    let handler = StackBlock::new(|_granted: Bool| {});
 
-    let raw = objc_msg_send_ptr_noargs(ns_string_cls, alloc_sel);
-    if raw.is_null() {
-        return;
-    }
-    let media_type = objc_msg_send_ptr_cstring_arg(raw, init_sel, b"soun\0".as_ptr());
-    if media_type.is_null() {
-        let _ = objc_msg_send_ptr_noargs(raw, release_sel);
-        return;
-    }
-
-    // Build a no-op block for the completion handler.
-    // The simplest way: pass nil — macOS 10.14+ tolerates a nil handler
-    // and will still show the prompt.
-    let sel = sel_registerName(b"requestAccessForMediaType:completionHandler:\0".as_ptr());
-    let nil: *const c_void = std::ptr::null();
-    let _ = objc_msg_send_ptr_two_ptr_args(cls, sel, media_type, nil);
-
-    let _ = objc_msg_send_ptr_noargs(media_type, release_sel);
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn objc_msg_send_ptr_noargs(receiver: *const c_void, sel: *const c_void) -> *const c_void {
-    type MsgSend = unsafe extern "C" fn(*const c_void, *const c_void) -> *const c_void;
-    extern "C" {
-        fn objc_msgSend();
-    }
-
-    let func: MsgSend = std::mem::transmute(objc_msgSend as *const ());
-    func(receiver, sel)
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn objc_msg_send_ptr_cstring_arg(
-    receiver: *const c_void,
-    sel: *const c_void,
-    arg: *const u8,
-) -> *const c_void {
-    type MsgSend = unsafe extern "C" fn(*const c_void, *const c_void, *const u8) -> *const c_void;
-    extern "C" {
-        fn objc_msgSend();
-    }
-
-    let func: MsgSend = std::mem::transmute(objc_msgSend as *const ());
-    func(receiver, sel, arg)
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn objc_msg_send_isize_ptr_arg(
-    receiver: *const c_void,
-    sel: *const c_void,
-    arg: *const c_void,
-) -> isize {
-    type MsgSend = unsafe extern "C" fn(*const c_void, *const c_void, *const c_void) -> isize;
-    extern "C" {
-        fn objc_msgSend();
-    }
-
-    let func: MsgSend = std::mem::transmute(objc_msgSend as *const ());
-    func(receiver, sel, arg)
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn objc_msg_send_ptr_two_ptr_args(
-    receiver: *const c_void,
-    sel: *const c_void,
-    arg1: *const c_void,
-    arg2: *const c_void,
-) -> *const c_void {
-    type MsgSend =
-        unsafe extern "C" fn(*const c_void, *const c_void, *const c_void, *const c_void) -> *const c_void;
-    extern "C" {
-        fn objc_msgSend();
-    }
-
-    let func: MsgSend = std::mem::transmute(objc_msgSend as *const ());
-    func(receiver, sel, arg1, arg2)
+    let _: () = unsafe {
+        msg_send![cls, requestAccessForMediaType: &*media_type, completionHandler: &*handler]
+    };
 }
 
 // ── Windows ─────────────────────────────────────────────────────────

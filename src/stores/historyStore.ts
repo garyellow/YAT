@@ -9,18 +9,25 @@ export interface HistoryEntry {
   created_at: string;
   duration_seconds: number;
   status: string;
+  app_name?: string | null;
+  window_title?: string | null;
+  audio_path?: string | null;
 }
+
+type RetryType = "polish" | "retranscribe" | null;
 
 interface HistoryState {
   entries: HistoryEntry[];
   loading: boolean;
   searchQuery: string;
   retryingId: string | null;
+  retryingType: RetryType;
   retryError: string | null;
   setSearchQuery: (q: string) => void;
   loadHistory: () => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   retryEntry: (id: string) => Promise<void>;
+  retryFromAudio: (id: string) => Promise<void>;
   clearOld: () => Promise<void>;
   clearAll: () => Promise<void>;
 }
@@ -30,6 +37,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   loading: false,
   searchQuery: "",
   retryingId: null,
+  retryingType: null,
   retryError: null,
 
   setSearchQuery: (q: string) => set({ searchQuery: q }),
@@ -71,21 +79,40 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   },
 
   retryEntry: async (id: string) => {
-    set({ retryingId: id, retryError: null });
+    set({ retryingId: id, retryingType: "polish", retryError: null });
 
     if (!isTauriRuntime()) {
-      set({ retryingId: null });
+      set({ retryingId: null, retryingType: null });
       return;
     }
 
     try {
       await invoke("retry_history", { id });
-      set({ retryingId: null });
+      set({ retryingId: null, retryingType: null });
       await get().loadHistory();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error("Failed to retry history entry:", message);
-      set({ retryingId: null, retryError: message });
+      set({ retryingId: null, retryingType: null, retryError: message });
+    }
+  },
+
+  retryFromAudio: async (id: string) => {
+    set({ retryingId: id, retryingType: "retranscribe", retryError: null });
+
+    if (!isTauriRuntime()) {
+      set({ retryingId: null, retryingType: null });
+      return;
+    }
+
+    try {
+      await invoke("retry_history_from_audio", { id });
+      set({ retryingId: null, retryingType: null });
+      await get().loadHistory();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("Failed to retry from audio:", message);
+      set({ retryingId: null, retryingType: null, retryError: message });
     }
   },
 

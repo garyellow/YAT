@@ -21,9 +21,11 @@ export default function HistoryTab() {
   const loadHistory = useHistoryStore((s) => s.loadHistory);
   const deleteEntry = useHistoryStore((s) => s.deleteEntry);
   const retryEntry = useHistoryStore((s) => s.retryEntry);
+  const retryFromAudio = useHistoryStore((s) => s.retryFromAudio);
   const clearOld = useHistoryStore((s) => s.clearOld);
   const clearAll = useHistoryStore((s) => s.clearAll);
   const retryingId = useHistoryStore((s) => s.retryingId);
+  const retryingType = useHistoryStore((s) => s.retryingType);
   const retryError = useHistoryStore((s) => s.retryError);
 
   const [query, setQuery] = useState(searchQuery);
@@ -155,7 +157,7 @@ export default function HistoryTab() {
           <button
             type="button"
             className="btn btn-danger text-xs"
-            title={t("history.controlsDesc")}
+            title={t("history.confirmClearAll")}
             onClick={() => setConfirmAction({ type: "clearAll" })}
           >
             {t("history.clearAll")}
@@ -217,6 +219,29 @@ export default function HistoryTab() {
               )}
             </div>
             <p className={hintCls}>{t("history.metrics.retentionHint")}</p>
+          </div>
+
+          <div className="form-block">
+            <label className={labelCls}>{t("history.audioRetention")}</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { label: t("history.audioRetentionOff"), hours: 0 },
+                { label: t("history.audioRetention24h"), hours: 24 },
+                { label: t("history.audioRetention72h"), hours: 72 },
+              ] as const).map((preset) => (
+                <button
+                  key={preset.hours}
+                  type="button"
+                  className={`btn btn-compact ${
+                    history.audio_retention_hours === preset.hours ? "btn-primary" : "btn-ghost"
+                  }`}
+                  onClick={() => updateHistory({ audio_retention_hours: preset.hours })}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className={hintCls}>{t("history.audioRetentionHint")}</p>
           </div>
 
           <div className="form-block">
@@ -289,13 +314,18 @@ export default function HistoryTab() {
                           ? t("status.done")
                           : entry.status === "error"
                             ? t("status.error")
-                            : t("status.loading")}
+                            : t("status.done")}
                       </StatusDot>
                       <span className="text-[11px] text-(--text-muted)">
                         {dtf.format(new Date(entry.created_at))}
                       </span>
                       {entry.duration_seconds > 0 ? (
                         <span className="text-[11px] text-(--text-muted)">{entry.duration_seconds.toFixed(1)}s</span>
+                      ) : null}
+                      {entry.app_name ? (
+                        <span className="text-[11px] text-(--text-muted) truncate max-w-50" title={entry.window_title || entry.app_name}>
+                          {entry.window_title || entry.app_name}
+                        </span>
                       ) : null}
                     </div>
                     <p className="pre-wrap text-[13px] leading-6 text-(--text-secondary)">
@@ -327,7 +357,18 @@ export default function HistoryTab() {
                         title={t("actions.retry")}
                         onClick={() => void retryEntry(entry.id)}
                       >
-                        {retryingId === entry.id ? t("status.polishing") : t("actions.retry")}
+                        {retryingId === entry.id && retryingType === "polish" ? t("status.polishing") : t("actions.retry")}
+                      </button>
+                    ) : null}
+                    {entry.audio_path ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        disabled={retryingId === entry.id}
+                        title={t("actions.retranscribe")}
+                        onClick={() => void retryFromAudio(entry.id)}
+                      >
+                        {retryingId === entry.id && retryingType === "retranscribe" ? t("status.transcribing") : t("actions.retranscribe")}
                       </button>
                     ) : null}
                     <button

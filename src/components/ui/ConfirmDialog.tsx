@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -20,16 +20,29 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
   const messageId = useId();
   const resolvedTitle = title ?? t("actions.confirm");
 
+  // Delay unmount to allow exit animation to play
+  const [mounted, setMounted] = useState(false);
+  const exiting = mounted && !open;
+
   useEffect(() => {
     if (open) {
+      setMounted(true);
+    } else if (mounted) {
+      const id = setTimeout(() => setMounted(false), 150);
+      return () => clearTimeout(id);
+    }
+  }, [open, mounted]);
+
+  useEffect(() => {
+    if (open && mounted) {
       previousFocusRef.current = document.activeElement;
       cancelRef.current?.focus();
-    } else if (previousFocusRef.current) {
+    } else if (!open && previousFocusRef.current) {
       const el = previousFocusRef.current;
       previousFocusRef.current = null;
       if (el instanceof HTMLElement) el.focus();
     }
-  }, [open]);
+  }, [open, mounted]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,17 +70,17 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
     return () => window.removeEventListener("keydown", handler);
   }, [open, onCancel]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-9999 flex items-center justify-center">
       <div
-        className="dialog-backdrop absolute inset-0 bg-black/40"
+        className={`absolute inset-0 bg-black/40 ${exiting ? "dialog-backdrop-exit" : "dialog-backdrop"}`}
         onClick={onCancel}
         aria-hidden="true"
       />
       <div
-        className="dialog-panel relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-(--border) bg-(--bg-elevated) p-5 shadow-md"
+        className={`relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-(--border) bg-(--bg-elevated) p-5 shadow-md ${exiting ? "dialog-panel-exit" : "dialog-panel"}`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -143,7 +143,7 @@ export default function SttTab() {
                   {showKey ? t("stt.hideKeyShort") : t("stt.showKeyShort")}
                 </button>
               </div>
-              <p className={hintCls}>{apiKeyHint}</p>
+              {apiKeyDetail === null ? <p className={hintCls}>{apiKeyHint}</p> : null}
             </div>
 
             <div className="form-block">

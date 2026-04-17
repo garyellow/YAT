@@ -12,7 +12,7 @@ mod stt;
 
 use parking_lot::Mutex;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -74,6 +74,8 @@ pub struct AppState {
     pub paste_fail_count: AtomicU32,
     /// Background context capture task for the current recording generation.
     context_capture_task: Mutex<Option<(u64, tauri::async_runtime::JoinHandle<CapturedContext>)>>,
+    /// Directory where audio WAV files are retained.
+    pub audio_dir: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -305,6 +307,12 @@ fn replace_context_capture_task(
 fn abort_context_capture_task(state: &AppState) {
     if let Some((_generation, handle)) = state.context_capture_task.lock().take() {
         handle.abort();
+    }
+}
+
+fn remove_audio_files(paths: impl IntoIterator<Item = String>) {
+    for path in paths {
+        let _ = std::fs::remove_file(&path);
     }
 }
 
@@ -674,20 +682,18 @@ async fn toggle_recording(
         };
 
         // Per-app / recent context only matters when the LLM pass is enabled.
+        // No fallback to global history — if no matching context is found for
+        // the current window, the conversation is treated as fresh.
         let recent_ctx = if context_enabled {
-            let history = state.history.lock();
-            let minutes = settings.history.context_window_minutes;
             if let Some(ref info) = app_info {
-                let per_app = history
-                    .recent_context_for_app(minutes, &info.app_name)
-                    .unwrap_or_default();
-                if per_app.is_empty() {
-                    history.recent_context(minutes).unwrap_or_default()
-                } else {
-                    per_app
-                }
+                let history = state.history.lock();
+                let minutes = settings.history.context_window_minutes;
+                let title = if info.title.is_empty() { None } else { Some(info.title.as_str()) };
+                history
+                    .recent_context_for_app(minutes, &info.app_name, title)
+                    .unwrap_or_default()
             } else {
-                history.recent_context(minutes).unwrap_or_default()
+                Vec::new()
             }
         } else {
             Vec::new()
@@ -695,6 +701,13 @@ async fn toggle_recording(
 
         let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
         show_capsule(&app, "transcribing");
+
+        // Clone audio data for retention before pipeline consumes it.
+        let audio_data_for_retention = if settings.history.audio_retention_hours > 0 {
+            Some(audio_data.clone())
+        } else {
+            None
+        };
 
         // All locks released — safe to await.
         // BusyGuard clears the flag even if pipeline::run panics.
@@ -736,16 +749,42 @@ async fn toggle_recording(
                     None
                 };
 
+                let history_window_title = if context_enabled && settings.prompt.context_active_app {
+                    app_info.as_ref().map(|i| i.title.clone()).filter(|t| !t.is_empty())
+                } else {
+                    None
+                };
+
                 // Skip history for empty transcriptions (e.g. silence)
                 if !pr.raw_text.is_empty() {
+                    let entry_id = uuid::Uuid::new_v4().to_string();
+
+                    // Save audio file for retention (best-effort)
+                    let audio_path = if let Some(audio_data_for_retention) =
+                        audio_data_for_retention.as_ref()
+                    {
+                        let wav_path = state.audio_dir.join(format!("{entry_id}.wav"));
+                        match std::fs::write(&wav_path, audio_data_for_retention) {
+                            Ok(()) => Some(wav_path.to_string_lossy().into_owned()),
+                            Err(e) => {
+                                log::warn!("failed to save audio file: {e}");
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
                     let entry = HistoryEntry {
-                        id: uuid::Uuid::new_v4().to_string(),
+                        id: entry_id,
                         raw_text: pr.raw_text.clone(),
                         polished_text: pr.polished_text.clone(),
                         created_at: chrono::Utc::now(),
                         duration_seconds: pr.duration_seconds,
                         status: entry_status.into(),
                         app_name: history_app_name.clone(),
+                        window_title: history_window_title,
+                        audio_path,
                     };
                     if let Err(e) = state.history.lock().insert(&entry) {
                         log::error!("failed to save history entry: {e}");
@@ -799,6 +838,8 @@ async fn toggle_recording(
                     } else {
                         None
                     },
+                    window_title: None,
+                    audio_path: None,
                 };
                 if let Err(db_err) = state.history.lock().insert(&entry) {
                     log::error!("failed to save history entry: {db_err}");
@@ -1226,11 +1267,15 @@ fn get_history(
 
 #[tauri::command]
 fn delete_history(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
-    state
+    let audio_path = state
         .history
         .lock()
         .delete(&id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if let Some(path) = audio_path {
+        let _ = std::fs::remove_file(&path);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1278,11 +1323,17 @@ async fn retry_history(
         None,
     );
 
-    let recent_ctx = state
-        .history
-        .lock()
-        .recent_context(settings.history.context_window_minutes)
-        .unwrap_or_default();
+    // Use the entry's own app/window scope for context, not global history.
+    let recent_ctx = if let Some(ref name) = entry.app_name {
+        let title = entry.window_title.as_deref();
+        state
+            .history
+            .lock()
+            .recent_context_for_app(settings.history.context_window_minutes, name, title)
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
     let system_prompt = pipeline::build_system_prompt(
         &settings.prompt.system_prompt,
@@ -1359,6 +1410,140 @@ async fn retry_history(
 }
 
 #[tauri::command]
+async fn retry_history_from_audio(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    id: String,
+) -> Result<String, String> {
+    // Look up the entry and read its audio file
+    let entry = state
+        .history
+        .lock()
+        .get_by_id(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or("entry not found")?;
+
+    let audio_file = entry.audio_path.as_deref().ok_or("no audio file available")?;
+    let audio_data = std::fs::read(audio_file).map_err(|e| format!("failed to read audio: {e}"))?;
+
+    let settings = state.settings.lock().clone();
+
+    // Reject if a recording or pipeline is already active.
+    {
+        let recorder = state.recorder.lock();
+        if recorder.is_recording() || state.pipeline_busy.load(Ordering::SeqCst) {
+            return Err("busy".into());
+        }
+    }
+
+    let _busy = BusyGuard::new(&state.pipeline_busy);
+    let operation_generation = current_recording_generation(&state);
+
+    let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    show_capsule(&app, "transcribing");
+    emit_status(&app, operation_generation, "transcribing", None, None);
+
+    // Step 1: Re-transcribe
+    let raw_text = stt::transcribe(
+        &settings.stt,
+        audio_data,
+        settings.general.timeout_ms,
+        settings.general.max_retries,
+    )
+    .await
+    .map_err(|e| {
+        let message = e.to_string();
+        if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+            return String::new();
+        }
+        emit_status(&app, operation_generation, "error", None, Some(&message));
+        schedule_capsule_hide(
+            app.clone(),
+            Arc::clone(&state.capsule_generation),
+            cap_gen,
+            Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+        );
+        message
+    })?;
+
+    if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+        return Ok(String::new());
+    }
+
+    // Step 2: LLM polish (if enabled)
+    let polished = if settings.llm.enabled && !raw_text.trim().is_empty() {
+        emit_status(&app, operation_generation, "polishing", Some(&raw_text), None);
+
+        // Use the entry's own app/window scope for context, not global history.
+        let recent_ctx = if let Some(ref name) = entry.app_name {
+            let title = entry.window_title.as_deref();
+            state
+                .history
+                .lock()
+                .recent_context_for_app(settings.history.context_window_minutes, name, title)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let system_prompt = pipeline::build_system_prompt(
+            &settings.prompt.system_prompt,
+            &settings.prompt.user_instructions,
+            &settings.prompt.vocabulary,
+        );
+
+        match llm::polish(
+            &settings.llm,
+            &system_prompt,
+            &raw_text,
+            &recent_ctx,
+            None,
+            settings.general.timeout_ms,
+            settings.general.max_retries,
+        )
+        .await
+        {
+            Ok(text) if !text.trim().is_empty() => Some(text),
+            Ok(_) => None,
+            Err(e) => {
+                log::warn!("LLM polish failed during retry-from-audio: {e}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+        return Ok(String::new());
+    }
+
+    let final_text = polished.as_deref().unwrap_or(&raw_text);
+
+    // Write result back to history
+    let updated = HistoryEntry {
+        raw_text: raw_text.clone(),
+        polished_text: polished.clone(),
+        ..entry
+    };
+    state
+        .history
+        .lock()
+        .insert(&updated)
+        .map_err(|e| e.to_string())?;
+
+    emit_status(&app, operation_generation, "done", Some(final_text), None);
+    schedule_capsule_hide(
+        app.clone(),
+        Arc::clone(&state.capsule_generation),
+        cap_gen,
+        Duration::from_secs(CAPSULE_HIDE_DELAY_SUCCESS_SECS),
+    );
+
+    Ok(final_text.to_string())
+}
+
+#[tauri::command]
 fn list_audio_devices() -> Vec<String> {
     audio::list_input_devices()
 }
@@ -1366,20 +1551,24 @@ fn list_audio_devices() -> Vec<String> {
 #[tauri::command]
 fn clear_old_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
     let hours = state.settings.lock().history.retention_hours;
-    state
+    let (deleted, audio_paths) = state
         .history
         .lock()
-        .clear_old(hours)
-        .map_err(|e| e.to_string())
+        .clear_old_with_audio_paths(hours)
+        .map_err(|e| e.to_string())?;
+    remove_audio_files(audio_paths);
+    Ok(deleted)
 }
 
 #[tauri::command]
 fn clear_all_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
-    state
+    let (deleted, audio_paths) = state
         .history
         .lock()
-        .clear_all()
-        .map_err(|e| e.to_string())
+        .clear_all_with_audio_paths()
+        .map_err(|e| e.to_string())?;
+    remove_audio_files(audio_paths);
+    Ok(deleted)
 }
 
 // ── Capsule Window Helpers ──────────────────────────────────────────
@@ -1745,8 +1934,12 @@ pub fn run() {
             let history_db_path =
                 prepare_history_db_path(&handle).expect("failed to resolve history database path");
             log::info!("history database path: {}", history_db_path.display());
-            let history = HistoryManager::new(history_db_path)
+            let history = HistoryManager::new(history_db_path.clone())
                 .expect("failed to initialize history database");
+
+            // Audio retention directory sits next to the history DB
+            let audio_dir = history_db_path.parent().unwrap().join("audio");
+            std::fs::create_dir_all(&audio_dir).expect("failed to create audio directory");
 
             let launched_by_autostart = std::env::args().any(|a| a == "--autostart");
             let start_hidden = launched_by_autostart && settings.general.start_minimized;
@@ -1772,6 +1965,7 @@ pub fn run() {
                 close_to_tray_hinted: AtomicBool::new(false),
                 paste_fail_count: AtomicU32::new(0),
                 context_capture_task: Mutex::new(None),
+                audio_dir,
             };
             app.manage(state);
             sync_hotkey_triggers_enabled(&handle.state::<AppState>());
@@ -1894,14 +2088,24 @@ pub fn run() {
             }
             refresh_tray_menu(&handle);
 
-            // Clean up old history periodically (every hour) and on startup
+            // Clean up old history and expired audio files periodically (every hour) and on startup
             let handle2 = handle.clone();
             tauri::async_runtime::spawn(async move {
                 loop {
                     let state = handle2.state::<AppState>();
+
+                    // Expire audio files that exceeded audio_retention_hours
+                    let audio_hours = state.settings.lock().history.audio_retention_hours;
+                    match state.history.lock().expire_audio_paths(audio_hours) {
+                        Ok(paths) => remove_audio_files(paths),
+                        Err(e) => log::warn!("failed to expire audio files: {e}"),
+                    }
+
+                    // Remove history entries older than retention_hours
                     if let Err(error) = clear_old_history(state) {
                         log::warn!("failed to clear old history: {error}");
                     }
+
                     tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 }
             });
@@ -1927,6 +2131,7 @@ pub fn run() {
             get_history,
             delete_history,
             retry_history,
+            retry_history_from_audio,
             clear_old_history,
             clear_all_history,
             list_audio_devices,

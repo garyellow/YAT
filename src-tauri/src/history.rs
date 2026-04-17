@@ -36,6 +36,12 @@ pub struct HistoryEntry {
     /// Application that was active when recording started (for per-app context).
     #[serde(default)]
     pub app_name: Option<String>,
+    /// Window title at recording start (e.g. "Tab Title - Google Chrome").
+    #[serde(default)]
+    pub window_title: Option<String>,
+    /// Path to the saved audio WAV file, if retained.
+    #[serde(default)]
+    pub audio_path: Option<String>,
 }
 
 pub struct HistoryManager {
@@ -87,18 +93,32 @@ impl HistoryManager {
                 created_at      TEXT NOT NULL,
                 duration_seconds REAL NOT NULL DEFAULT 0,
                 status          TEXT NOT NULL DEFAULT 'success',
-                app_name        TEXT
+                app_name        TEXT,
+                window_title    TEXT,
+                audio_path      TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_history_created ON history(created_at);",
         )?;
+
+        // Migrate existing databases: add new columns if they don't exist yet.
+        for col in ["window_title", "audio_path"] {
+            let add_sql = format!("ALTER TABLE history ADD COLUMN {col} TEXT");
+            // Ignore "duplicate column" errors — they mean migration already ran.
+            if let Err(e) = conn.execute_batch(&add_sql) {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(HistoryError::Db(e));
+                }
+            }
+        }
 
         Ok(Self { conn })
     }
 
     pub fn insert(&self, entry: &HistoryEntry) -> Result<(), HistoryError> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO history (id, raw_text, polished_text, created_at, duration_seconds, status, app_name)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR REPLACE INTO history (id, raw_text, polished_text, created_at, duration_seconds, status, app_name, window_title, audio_path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 entry.id,
                 entry.raw_text,
@@ -107,6 +127,8 @@ impl HistoryManager {
                 entry.duration_seconds,
                 entry.status,
                 entry.app_name,
+                entry.window_title,
+                entry.audio_path,
             ],
         )?;
         Ok(())
@@ -125,7 +147,7 @@ impl HistoryManager {
                 let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
                 let pattern = format!("%{escaped}%");
                 let mut stmt = self.conn.prepare(
-                    "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
+                    "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name, window_title, audio_path
                      FROM history
                      WHERE raw_text LIKE ?1 ESCAPE '\\' OR polished_text LIKE ?1 ESCAPE '\\'
                      ORDER BY created_at DESC
@@ -140,6 +162,8 @@ impl HistoryManager {
                         duration_seconds: row.get(4)?,
                         status: row.get(5)?,
                         app_name: row.get(6)?,
+                        window_title: row.get(7)?,
+                        audio_path: row.get(8)?,
                     })
                 })?;
                 for row in rows {
@@ -150,7 +174,7 @@ impl HistoryManager {
         }
 
         let mut stmt = self.conn.prepare(
-            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
+            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name, window_title, audio_path
              FROM history
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -164,6 +188,8 @@ impl HistoryManager {
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
                 app_name: row.get(6)?,
+                window_title: row.get(7)?,
+                audio_path: row.get(8)?,
             })
         })?;
         for row in rows {
@@ -173,10 +199,21 @@ impl HistoryManager {
         Ok(entries)
     }
 
-    pub fn delete(&self, id: &str) -> Result<(), HistoryError> {
+    /// Delete entry and return its audio_path (if any) so the caller can
+    /// remove the file from disk.
+    pub fn delete(&self, id: &str) -> Result<Option<String>, HistoryError> {
+        let audio_path: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT audio_path FROM history WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
         self.conn
             .execute("DELETE FROM history WHERE id = ?1", params![id])?;
-        Ok(())
+        Ok(audio_path)
     }
 
     pub fn clear_old(&self, retention_hours: u32) -> Result<u64, HistoryError> {
@@ -188,60 +225,127 @@ impl HistoryManager {
         Ok(deleted as u64)
     }
 
+    /// Delete entries older than the configured retention window and return
+    /// any associated audio file paths so the caller can remove them from disk.
+    pub fn clear_old_with_audio_paths(
+        &self,
+        retention_hours: u32,
+    ) -> Result<(u64, Vec<String>), HistoryError> {
+        let cutoff = Utc::now() - chrono::Duration::hours(retention_hours as i64);
+        let cutoff_str = cutoff.to_rfc3339();
+
+        let mut stmt = self.conn.prepare(
+            "SELECT audio_path FROM history WHERE audio_path IS NOT NULL AND created_at < ?1",
+        )?;
+        let paths = stmt
+            .query_map(params![&cutoff_str], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let deleted = self.conn.execute(
+            "DELETE FROM history WHERE created_at < ?1",
+            params![cutoff_str],
+        )?;
+
+        Ok((deleted as u64, paths))
+    }
+
+    /// Collect audio_path values for entries whose audio has expired, then NULL
+    /// them out in the database.  The caller is responsible for deleting the
+    /// actual files.
+    pub fn expire_audio_paths(&self, audio_retention_hours: u32) -> Result<Vec<String>, HistoryError> {
+        let cutoff = Utc::now() - chrono::Duration::hours(audio_retention_hours as i64);
+        let cutoff_str = cutoff.to_rfc3339();
+
+        let mut stmt = self.conn.prepare(
+            "SELECT audio_path FROM history WHERE audio_path IS NOT NULL AND created_at < ?1",
+        )?;
+        let paths = stmt
+            .query_map(params![cutoff_str], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !paths.is_empty() {
+            self.conn.execute(
+                "UPDATE history SET audio_path = NULL WHERE audio_path IS NOT NULL AND created_at < ?1",
+                params![cutoff_str],
+            )?;
+        }
+
+        Ok(paths)
+    }
+
     pub fn clear_all(&self) -> Result<u64, HistoryError> {
         let deleted = self.conn.execute("DELETE FROM history", [])?;
         Ok(deleted as u64)
     }
 
-    /// Get polished (or raw) text from recent entries for LLM context.
-    pub fn recent_context(&self, minutes: u32) -> Result<Vec<String>, HistoryError> {
-        let cutoff = Utc::now() - chrono::Duration::minutes(minutes as i64);
-        let mut stmt = self.conn.prepare(
-            "SELECT COALESCE(polished_text, raw_text)
-             FROM history
-             WHERE created_at >= ?1 AND status = 'success'
-             ORDER BY created_at DESC
-             LIMIT 5",
-        )?;
-        let rows = stmt.query_map(params![cutoff.to_rfc3339()], |row| row.get::<_, String>(0))?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(row?);
-        }
-        Ok(results)
+    /// Delete all entries and return any associated audio file paths so the
+    /// caller can remove them from disk.
+    pub fn clear_all_with_audio_paths(&self) -> Result<(u64, Vec<String>), HistoryError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT audio_path FROM history WHERE audio_path IS NOT NULL")?;
+        let paths = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let deleted = self.conn.execute("DELETE FROM history", [])?;
+        Ok((deleted as u64, paths))
     }
 
-    /// Get recent context filtered to a specific application.
+    /// Get recent context filtered to a specific application and optional
+    /// window title. When `window_title` is provided, only entries matching
+    /// both `app_name` AND `window_title` are returned. When it is `None`,
+    /// entries matching `app_name` (regardless of title) are returned.
     ///
-    /// When the user is dictating inside an app, this provides the LLM with
-    /// only the recent transcriptions from that same app, giving more
-    /// relevant context than the unfiltered `recent_context()`.
+    /// No fallback: if nothing matches, an empty `Vec` is returned — the
+    /// caller should treat this as a fresh conversation with no prior context.
     pub fn recent_context_for_app(
         &self,
         minutes: u32,
         app_name: &str,
+        window_title: Option<&str>,
     ) -> Result<Vec<String>, HistoryError> {
         let cutoff = Utc::now() - chrono::Duration::minutes(minutes as i64);
-        let mut stmt = self.conn.prepare(
-            "SELECT COALESCE(polished_text, raw_text)
-             FROM history
-             WHERE created_at >= ?1 AND status = 'success' AND app_name = ?2
-             ORDER BY created_at DESC
-             LIMIT 5",
-        )?;
-        let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name], |row| {
-            row.get::<_, String>(0)
-        })?;
-        let mut results = Vec::new();
-        for row in rows {
-            results.push(row?);
+
+        if let Some(title) = window_title {
+            let mut stmt = self.conn.prepare(
+                "SELECT COALESCE(polished_text, raw_text)
+                 FROM history
+                 WHERE created_at >= ?1 AND status = 'success'
+                   AND app_name = ?2 AND window_title = ?3
+                 ORDER BY created_at DESC
+                 LIMIT 5",
+            )?;
+            let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name, title], |row| {
+                row.get::<_, String>(0)
+            })?;
+            let mut results = Vec::new();
+            for row in rows {
+                results.push(row?);
+            }
+            Ok(results)
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT COALESCE(polished_text, raw_text)
+                 FROM history
+                 WHERE created_at >= ?1 AND status = 'success' AND app_name = ?2
+                 ORDER BY created_at DESC
+                 LIMIT 5",
+            )?;
+            let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name], |row| {
+                row.get::<_, String>(0)
+            })?;
+            let mut results = Vec::new();
+            for row in rows {
+                results.push(row?);
+            }
+            Ok(results)
         }
-        Ok(results)
     }
 
     pub fn get_by_id(&self, id: &str) -> Result<Option<HistoryEntry>, HistoryError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name
+            "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name, window_title, audio_path
              FROM history WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], |row| {
@@ -253,6 +357,8 @@ impl HistoryManager {
                 duration_seconds: row.get(4)?,
                 status: row.get(5)?,
                 app_name: row.get(6)?,
+                window_title: row.get(7)?,
+                audio_path: row.get(8)?,
             })
         })?;
         match rows.next() {
@@ -277,6 +383,8 @@ mod tests {
             duration_seconds: 1.5,
             status: status.into(),
             app_name: None,
+            window_title: None,
+            audio_path: None,
         }
     }
 
@@ -350,13 +458,63 @@ mod tests {
     }
 
     #[test]
+    fn clear_old_with_audio_paths_returns_deleted_audio() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+
+        let mut old = make_entry("old-audio", "old entry", None, "success");
+        old.created_at = Utc::now() - Duration::hours(50);
+        old.audio_path = Some("/tmp/old.wav".into());
+        mgr.insert(&old).unwrap();
+
+        let mut recent = make_entry("new-audio", "new entry", None, "success");
+        recent.audio_path = Some("/tmp/new.wav".into());
+        mgr.insert(&recent).unwrap();
+
+        let (deleted, paths) = mgr.clear_old_with_audio_paths(48).unwrap();
+        assert_eq!(deleted, 1);
+        assert_eq!(paths, vec!["/tmp/old.wav"]);
+        assert!(mgr.get_by_id("old-audio").unwrap().is_none());
+        assert!(mgr.get_by_id("new-audio").unwrap().is_some());
+    }
+
+    #[test]
+    fn clear_all_with_audio_paths_returns_all_audio() {
+        let mgr = HistoryManager::new_in_memory().unwrap();
+
+        let mut first = make_entry("a1", "first", None, "success");
+        first.audio_path = Some("/tmp/first.wav".into());
+        mgr.insert(&first).unwrap();
+
+        let second = make_entry("a2", "second", None, "success");
+        mgr.insert(&second).unwrap();
+
+        let mut third = make_entry("a3", "third", None, "success");
+        third.audio_path = Some("/tmp/third.wav".into());
+        mgr.insert(&third).unwrap();
+
+        let (deleted, paths) = mgr.clear_all_with_audio_paths().unwrap();
+        assert_eq!(deleted, 3);
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&"/tmp/first.wav".to_string()));
+        assert!(paths.contains(&"/tmp/third.wav".to_string()));
+        assert!(mgr.get_by_id("a1").unwrap().is_none());
+        assert!(mgr.get_by_id("a2").unwrap().is_none());
+        assert!(mgr.get_by_id("a3").unwrap().is_none());
+    }
+
+    #[test]
     fn recent_context_only_success() {
         let mgr = HistoryManager::new_in_memory().unwrap();
 
-        mgr.insert(&make_entry("c1", "good text", Some("Good text."), "success")).unwrap();
-        mgr.insert(&make_entry("c2", "", Some("[Error] something"), "error")).unwrap();
+        let mut good = make_entry("c1", "good text", Some("Good text."), "success");
+        good.app_name = Some("TestApp".into());
+        mgr.insert(&good).unwrap();
 
-        let ctx = mgr.recent_context(60).unwrap();
+        let mut bad = make_entry("c2", "", Some("[Error] something"), "error");
+        bad.app_name = Some("TestApp".into());
+        mgr.insert(&bad).unwrap();
+
+        let ctx = mgr.recent_context_for_app(60, "TestApp", None).unwrap();
         assert_eq!(ctx.len(), 1);
         assert_eq!(ctx[0], "Good text.");
     }

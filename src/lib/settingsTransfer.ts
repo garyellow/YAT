@@ -337,6 +337,11 @@ function parseHistoryConfig(value: unknown): HistoryConfig {
       "Transfer file contains an invalid history context window.",
       { min: 0 },
     ),
+    audio_retention_hours: expectInteger(
+      history.audio_retention_hours ?? 24,
+      "Transfer file contains an invalid audio retention value.",
+      { min: 0 },
+    ),
   };
 }
 

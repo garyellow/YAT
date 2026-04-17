@@ -81,21 +81,21 @@ function DisclosureButton({
 function SystemActionCard({
   title,
   status,
-  tone,
+  tone = "default",
   body,
   hint,
   actions,
 }: {
   title: string;
-  status: string;
-  tone: "default" | "success" | "warning" | "danger";
+  status?: string;
+  tone?: "default" | "success" | "warning" | "danger";
   body: string;
   hint?: string | null;
   actions?: ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-(--border) bg-(--bg-elevated) px-4 py-4 shadow-(--shadow-xs)">
-      <StatusDot tone={tone}>{status}</StatusDot>
+      {status != null ? <StatusDot tone={tone}>{status}</StatusDot> : null}
       <h3 className="mt-3 text-[13.5px] font-semibold text-(--text)">{title}</h3>
       <p className="mt-1 text-xs leading-6 text-(--text-secondary)">{body}</p>
       {hint ? (
@@ -1215,8 +1215,6 @@ export default function GeneralTab({ onToast }: GeneralTabProps) {
           <div className="grid gap-3 xl:grid-cols-2">
             <SystemActionCard
               title={t("general.transferExportCardTitle")}
-              status={t("general.systemStatusReady")}
-              tone="success"
               body={t("general.transferExportCardBody")}
               actions={
                 <button
@@ -1230,8 +1228,6 @@ export default function GeneralTab({ onToast }: GeneralTabProps) {
             />
             <SystemActionCard
               title={t("general.transferImportCardTitle")}
-              status={t("general.systemStatusReady")}
-              tone="default"
               body={t("general.transferImportCardBody")}
               actions={
                 <button

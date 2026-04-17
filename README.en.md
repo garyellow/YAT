@@ -78,11 +78,19 @@ A: Yes. Your API keys are stored locally on your device. Your request history is
 ### For Developers: Build from source
 
 If you'd like to build YAT yourself or contribute:
-Prerequisites: Node.js 20.19+ (or 22.12+ and newer), Rust 1.77+
+
+**Required toolchain**
+- Node.js 20.19+ (or 22.12+)
+- Rust 1.77+ (install the stable toolchain via `rustup`)
+
+**Platform system prerequisites**
+- **Windows**: Microsoft Edge **WebView2 Runtime** (bundled on Win11; may need manual install on Win10) and **Microsoft C++ Build Tools** (MSVC + Windows SDK).
+- **macOS**: **Xcode Command Line Tools** (`xcode-select --install`). To produce Apple Silicon builds, also run `rustup target add aarch64-apple-darwin`.
+- **Linux** (Experimental): `libwebkit2gtk-4.1-dev` `libappindicator3-dev` `librsvg2-dev` `patchelf` `libasound2-dev` `libxdo-dev`; at runtime also `playerctl` (auto-pause media) and `pactl` (lower volume while recording).
 
 ```bash
 npm install
-npm run validate
+npm run validate     # tsc + vite build + cargo check + cargo test
 npm run tauri dev
 npm run tauri build
 ```

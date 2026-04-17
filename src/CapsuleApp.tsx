@@ -338,7 +338,7 @@ export default function CapsuleApp() {
 
         {status === "recording" && (
           <kbd className="capsule-esc" aria-label={t("capsule.escHint")}>
-            Esc
+            {t("capsule.escKey")}
           </kbd>
         )}
       </div>

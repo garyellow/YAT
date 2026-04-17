@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAppStore } from "../../stores/appStore";
-import { getDefaultSystemPrompt } from "../../lib/defaultSettings";
 import { buildPromptPreview } from "../../lib/settingsFormatters";
 import { isTauriRuntime } from "../../lib/tauriRuntime";
 import { Notice, PageIntro, Section, SettingList, SettingRow } from "./SettingPrimitives";
@@ -67,7 +66,7 @@ export default function PromptTab({ onNavigate }: PromptTabProps) {
 
   const resetSystemPrompt = async () => {
     if (!isTauriRuntime()) {
-      update({ system_prompt: getDefaultSystemPrompt() });
+      update({ system_prompt: "" });
       return;
     }
 

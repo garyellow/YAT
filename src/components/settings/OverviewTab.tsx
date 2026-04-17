@@ -195,7 +195,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
           key: "accessibility",
           tone: acc === "granted"
             ? "success" as const
-            : settings.general.output_mode === "auto_paste" || settings.general.auto_pause_media
+            : settings.general.output_mode === "auto_paste" || settings.general.auto_pause_media || settings.prompt.context_input_field || settings.prompt.context_selection
               ? permissionTone(acc)
               : "default" as const,
           title: t("overview.permissions.accessibilityTitle"),
@@ -210,7 +210,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
           key: "screen_recording",
           tone: scr === "granted"
             ? "success" as const
-            : settings.prompt.context_screenshot
+            : settings.prompt.context_screenshot || settings.prompt.context_active_app
               ? permissionTone(scr)
               : "default" as const,
           title: t("overview.permissions.screenRecordingTitle"),

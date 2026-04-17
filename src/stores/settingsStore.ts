@@ -68,6 +68,7 @@ export interface PromptConfig {
 export interface HistoryConfig {
   retention_hours: number;
   context_window_minutes: number;
+  audio_retention_hours: number;
 }
 
 export interface AppSettings {
@@ -88,9 +89,8 @@ interface SettingsState {
   saveStatus: SaveStatus;
   lastSaveError: string | null;
   validationError: HotkeyValidationCode | null;
-  revision: number;
   loadSettings: () => Promise<void>;
-  saveSettings: (settings: AppSettings, revision?: number) => Promise<void>;
+  saveSettings: (settings: AppSettings) => Promise<void>;
   updateSettings: (partial: Partial<AppSettings>) => void;
   flushSettings: () => Promise<void>;
 }
@@ -172,7 +172,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveStatus: "idle",
   lastSaveError: null,
   validationError: null,
-  revision: 0,
 
   loadSettings: async () => {
     set({ loading: true });
@@ -189,7 +188,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         saveStatus: "idle",
         lastSaveError: null,
         validationError: validateSettings(settings),
-        revision: 0,
       });
     } catch (error) {
       set({ loading: false });
@@ -197,7 +195,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
-  saveSettings: async (settings: AppSettings, revision = get().revision) => {
+  saveSettings: async (settings: AppSettings) => {
     const sanitized = sanitizeSettings(settings);
     const validationError = validateSettings(sanitized);
 
@@ -221,20 +219,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (get().revision === revision) {
-        set({
-          saveStatus: "error",
-          lastSaveError: message,
-          saved: false,
-          dirty: true,
-        });
-      }
+      set({
+        saveStatus: "error",
+        lastSaveError: message,
+        saved: false,
+        dirty: true,
+      });
       throw new Error(message);
     }
 
-    const current = get();
-    if (current.revision !== revision) {
-      set({ saveStatus: current.validationError ? "idle" : "pending" });
+    // If user made more changes while saving, stay in pending state.
+    if (get().dirty) {
+      set({ saveStatus: "pending" });
       return;
     }
 
@@ -259,7 +255,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const current = get().settings;
     if (current) {
       const merged = mergeSettings(current, partial);
-      const nextRevision = get().revision + 1;
       const validationError = validateSettings(sanitizeSettings(merged));
 
       set({
@@ -269,7 +264,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         saveStatus: "pending",
         lastSaveError: null,
         validationError,
-        revision: nextRevision,
       });
 
       if (autoSaveTimer) clearTimeout(autoSaveTimer);
@@ -281,7 +275,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         autoSaveTimer = null;
         const snapshot = get();
         if (snapshot.settings) {
-          void get().saveSettings(snapshot.settings, snapshot.revision).catch(() => {});
+          void get().saveSettings(snapshot.settings).catch(() => {});
         }
       }, 800);
     }
@@ -293,13 +287,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       autoSaveTimer = null;
     }
 
-    const { dirty, settings, validationError, revision } = get();
+    const { dirty, settings, validationError } = get();
     if (validationError) {
       throw new Error(validationError);
     }
 
     if (dirty && settings) {
-      await get().saveSettings(settings, revision);
+      await get().saveSettings(settings);
     }
   },
 }));

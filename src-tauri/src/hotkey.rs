@@ -514,6 +514,12 @@ where
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         let callback = move |event: Event| {
+            // While a paste simulation is in progress, ignore events so the
+            // simulated Ctrl+V is not interpreted as a new hotkey press.
+            if crate::output::is_paste_active() {
+                return;
+            }
+
             let settings = settings.lock().clone();
             let mut st = state.lock();
             let trigger_enabled = triggers_enabled.load(Ordering::SeqCst);

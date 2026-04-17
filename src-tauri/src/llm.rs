@@ -1,4 +1,4 @@
-use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -269,7 +269,7 @@ pub async fn polish(
                 .map_err(|_| LlmError::Request("invalid authorization header value".into()))?,
         );
     }
-    headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(timeout_ms))

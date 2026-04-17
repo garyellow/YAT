@@ -63,6 +63,12 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "linux-
 [target.'cfg(target_os = "linux")'.dependencies]
 x11-clipboard = "0.9"
 
+# Typed Objective-C message passing (macOS only)
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString"] }
+block2 = "0.6"
+
 # System volume control & UI Automation (Windows only)
 [target.'cfg(windows)'.dependencies]
 # UI Automation for reading focused input field text
