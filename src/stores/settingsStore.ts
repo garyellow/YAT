@@ -84,7 +84,6 @@ export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 interface SettingsState {
   settings: AppSettings | null;
   loading: boolean;
-  saved: boolean;
   dirty: boolean;
   saveStatus: SaveStatus;
   lastSaveError: string | null;
@@ -167,7 +166,6 @@ function sanitizeSettings(settings: AppSettings): AppSettings {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   loading: false,
-  saved: false,
   dirty: false,
   saveStatus: "idle",
   lastSaveError: null,
@@ -184,7 +182,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         settings,
         loading: false,
         dirty: false,
-        saved: false,
         saveStatus: "idle",
         lastSaveError: null,
         validationError: validateSettings(settings),
@@ -204,7 +201,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         validationError,
         lastSaveError: null,
         saveStatus: "idle",
-        saved: false,
       });
       throw new Error(validationError);
     }
@@ -222,7 +218,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({
         saveStatus: "error",
         lastSaveError: message,
-        saved: false,
         dirty: true,
       });
       throw new Error(message);
@@ -236,7 +231,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
     set({
       settings: sanitized,
-      saved: true,
       dirty: false,
       saveStatus: "saved",
       lastSaveError: null,
@@ -246,7 +240,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     setTimeout(() => {
       const state = get();
       if (!state.dirty && state.saveStatus === "saved") {
-        set({ saved: false, saveStatus: "idle" });
+        set({ saveStatus: "idle" });
       }
     }, 2000);
   },
@@ -259,7 +253,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
       set({
         settings: merged,
-        saved: false,
         dirty: true,
         saveStatus: "pending",
         lastSaveError: null,

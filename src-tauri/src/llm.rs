@@ -2,48 +2,8 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::api_utils::summarize_api_error_body;
 use crate::config::LlmConfig;
-
-const MAX_ERROR_BODY_LEN: usize = 400;
-
-#[derive(Debug, Deserialize)]
-struct ApiErrorEnvelope {
-    error: Option<ApiErrorBody>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiErrorBody {
-    message: Option<String>,
-}
-
-fn truncate_for_ui(input: &str, max_len: usize) -> String {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    let mut chars = trimmed.chars();
-    let preview: String = chars.by_ref().take(max_len).collect();
-    if chars.next().is_some() {
-        format!("{preview}…")
-    } else {
-        preview
-    }
-}
-
-fn summarize_api_error_body(raw_body: &str) -> String {
-    if raw_body.trim().is_empty() {
-        return "(empty response body)".to_string();
-    }
-    if let Ok(parsed) = serde_json::from_str::<ApiErrorEnvelope>(raw_body) {
-        if let Some(message) = parsed.error.and_then(|err| err.message) {
-            let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
-            if !normalized.is_empty() {
-                return truncate_for_ui(&normalized, MAX_ERROR_BODY_LEN);
-            }
-        }
-    }
-    truncate_for_ui(raw_body, MAX_ERROR_BODY_LEN)
-}
 
 #[derive(Error, Debug)]
 pub enum LlmError {
@@ -239,10 +199,7 @@ pub async fn polish(
         ));
     }
 
-    let url = format!(
-        "{}/chat/completions",
-        base_url.trim_end_matches('/')
-    );
+    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     let mut messages = vec![ChatMessage {
         role: "system".into(),
@@ -288,7 +245,9 @@ pub async fn polish(
     )
     .await
     {
-        Err(error) if screenshot_base64.is_some() && error_looks_like_vision_unsupported(&error) => {
+        Err(error)
+            if screenshot_base64.is_some() && error_looks_like_vision_unsupported(&error) =>
+        {
             log::warn!(
                 "LLM provider/model rejected screenshot input; retrying with text-only polishing"
             );

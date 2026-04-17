@@ -70,9 +70,8 @@ impl HistoryManager {
         conn.execute_batch("PRAGMA synchronous = FULL;")?;
 
         if prefer_wal {
-            let journal_mode: String = conn.query_row("PRAGMA journal_mode = WAL;", [], |row| {
-                row.get(0)
-            })?;
+            let journal_mode: String =
+                conn.query_row("PRAGMA journal_mode = WAL;", [], |row| row.get(0))?;
 
             if !journal_mode.eq_ignore_ascii_case("wal") {
                 log::warn!(
@@ -144,7 +143,10 @@ impl HistoryManager {
         if let Some(q) = query {
             if !q.is_empty() {
                 // Escape SQL LIKE special characters
-                let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+                let escaped = q
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_");
                 let pattern = format!("%{escaped}%");
                 let mut stmt = self.conn.prepare(
                     "SELECT id, raw_text, polished_text, created_at, duration_seconds, status, app_name, window_title, audio_path
@@ -216,22 +218,13 @@ impl HistoryManager {
         Ok(audio_path)
     }
 
-    pub fn clear_old(&self, retention_hours: u32) -> Result<u64, HistoryError> {
-        let cutoff = Utc::now() - chrono::Duration::hours(retention_hours as i64);
-        let deleted = self.conn.execute(
-            "DELETE FROM history WHERE created_at < ?1",
-            params![cutoff.to_rfc3339()],
-        )?;
-        Ok(deleted as u64)
-    }
-
     /// Delete entries older than the configured retention window and return
     /// any associated audio file paths so the caller can remove them from disk.
     pub fn clear_old_with_audio_paths(
         &self,
         retention_hours: u32,
     ) -> Result<(u64, Vec<String>), HistoryError> {
-        let cutoff = Utc::now() - chrono::Duration::hours(retention_hours as i64);
+        let cutoff = Utc::now() - chrono::TimeDelta::hours(retention_hours as i64);
         let cutoff_str = cutoff.to_rfc3339();
 
         let mut stmt = self.conn.prepare(
@@ -252,8 +245,11 @@ impl HistoryManager {
     /// Collect audio_path values for entries whose audio has expired, then NULL
     /// them out in the database.  The caller is responsible for deleting the
     /// actual files.
-    pub fn expire_audio_paths(&self, audio_retention_hours: u32) -> Result<Vec<String>, HistoryError> {
-        let cutoff = Utc::now() - chrono::Duration::hours(audio_retention_hours as i64);
+    pub fn expire_audio_paths(
+        &self,
+        audio_retention_hours: u32,
+    ) -> Result<Vec<String>, HistoryError> {
+        let cutoff = Utc::now() - chrono::TimeDelta::hours(audio_retention_hours as i64);
         let cutoff_str = cutoff.to_rfc3339();
 
         let mut stmt = self.conn.prepare(
@@ -271,11 +267,6 @@ impl HistoryManager {
         }
 
         Ok(paths)
-    }
-
-    pub fn clear_all(&self) -> Result<u64, HistoryError> {
-        let deleted = self.conn.execute("DELETE FROM history", [])?;
-        Ok(deleted as u64)
     }
 
     /// Delete all entries and return any associated audio file paths so the
@@ -305,7 +296,7 @@ impl HistoryManager {
         app_name: &str,
         window_title: Option<&str>,
     ) -> Result<Vec<String>, HistoryError> {
-        let cutoff = Utc::now() - chrono::Duration::minutes(minutes as i64);
+        let cutoff = Utc::now() - chrono::TimeDelta::minutes(minutes as i64);
 
         if let Some(title) = window_title {
             let mut stmt = self.conn.prepare(
@@ -313,7 +304,7 @@ impl HistoryManager {
                  FROM history
                  WHERE created_at >= ?1 AND status = 'success'
                    AND app_name = ?2 AND window_title = ?3
-                 ORDER BY created_at DESC
+                 ORDER BY created_at ASC
                  LIMIT 5",
             )?;
             let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name, title], |row| {
@@ -329,7 +320,7 @@ impl HistoryManager {
                 "SELECT COALESCE(polished_text, raw_text)
                  FROM history
                  WHERE created_at >= ?1 AND status = 'success' AND app_name = ?2
-                 ORDER BY created_at DESC
+                 ORDER BY created_at ASC
                  LIMIT 5",
             )?;
             let rows = stmt.query_map(params![cutoff.to_rfc3339(), app_name], |row| {
@@ -372,7 +363,7 @@ impl HistoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
+    use chrono::TimeDelta;
 
     fn make_entry(id: &str, raw: &str, polished: Option<&str>, status: &str) -> HistoryEntry {
         HistoryEntry {
@@ -409,8 +400,10 @@ mod tests {
     #[test]
     fn search_returns_matching() {
         let mgr = HistoryManager::new_in_memory().unwrap();
-        mgr.insert(&make_entry("s1", "apple pie", None, "success")).unwrap();
-        mgr.insert(&make_entry("s2", "banana split", None, "success")).unwrap();
+        mgr.insert(&make_entry("s1", "apple pie", None, "success"))
+            .unwrap();
+        mgr.insert(&make_entry("s2", "banana split", None, "success"))
+            .unwrap();
 
         let results = mgr.search(Some("apple"), 100).unwrap();
         assert_eq!(results.len(), 1);
@@ -424,8 +417,10 @@ mod tests {
     #[test]
     fn search_escapes_sql_wildcards() {
         let mgr = HistoryManager::new_in_memory().unwrap();
-        mgr.insert(&make_entry("w1", "100% done", None, "success")).unwrap();
-        mgr.insert(&make_entry("w2", "nothing here", None, "success")).unwrap();
+        mgr.insert(&make_entry("w1", "100% done", None, "success"))
+            .unwrap();
+        mgr.insert(&make_entry("w2", "nothing here", None, "success"))
+            .unwrap();
 
         let results = mgr.search(Some("100%"), 100).unwrap();
         assert_eq!(results.len(), 1);
@@ -435,7 +430,8 @@ mod tests {
     #[test]
     fn delete_removes_entry() {
         let mgr = HistoryManager::new_in_memory().unwrap();
-        mgr.insert(&make_entry("d1", "to delete", None, "success")).unwrap();
+        mgr.insert(&make_entry("d1", "to delete", None, "success"))
+            .unwrap();
         mgr.delete("d1").unwrap();
         assert!(mgr.get_by_id("d1").unwrap().is_none());
     }
@@ -445,13 +441,13 @@ mod tests {
         let mgr = HistoryManager::new_in_memory().unwrap();
 
         let mut old = make_entry("old1", "old entry", None, "success");
-        old.created_at = Utc::now() - Duration::hours(50);
+        old.created_at = Utc::now() - TimeDelta::hours(50);
         mgr.insert(&old).unwrap();
 
         let recent = make_entry("new1", "new entry", None, "success");
         mgr.insert(&recent).unwrap();
 
-        let deleted = mgr.clear_old(48).unwrap();
+        let (deleted, _paths) = mgr.clear_old_with_audio_paths(48).unwrap();
         assert_eq!(deleted, 1);
         assert!(mgr.get_by_id("old1").unwrap().is_none());
         assert!(mgr.get_by_id("new1").unwrap().is_some());
@@ -462,7 +458,7 @@ mod tests {
         let mgr = HistoryManager::new_in_memory().unwrap();
 
         let mut old = make_entry("old-audio", "old entry", None, "success");
-        old.created_at = Utc::now() - Duration::hours(50);
+        old.created_at = Utc::now() - TimeDelta::hours(50);
         old.audio_path = Some("/tmp/old.wav".into());
         mgr.insert(&old).unwrap();
 
@@ -522,7 +518,8 @@ mod tests {
     #[test]
     fn insert_or_replace_updates_existing() {
         let mgr = HistoryManager::new_in_memory().unwrap();
-        mgr.insert(&make_entry("r1", "original", None, "success")).unwrap();
+        mgr.insert(&make_entry("r1", "original", None, "success"))
+            .unwrap();
 
         let mut updated = make_entry("r1", "original", Some("Polished."), "success");
         updated.duration_seconds = 2.0;

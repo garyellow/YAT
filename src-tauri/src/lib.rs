@@ -1,3 +1,4 @@
+mod api_utils;
 mod audio;
 mod config;
 mod context;
@@ -94,7 +95,7 @@ const CAPSULE_HEIGHT_DETAIL: f64 = 62.0;
 const CAPSULE_MAX_HEIGHT: f64 = 160.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
-const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 1;
+const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_NO_SPEECH_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_NOTIFICATION_SECS: u64 = 5;
 const MIN_RECORDING_DURATION_MS: u64 = 500;
@@ -121,7 +122,9 @@ fn keyring_set(account: &str, secret: &str) -> Result<(), String> {
 
             Ok(())
         }
-        Err(e) => Err(format!("failed to access credential entry '{account}': {e}")),
+        Err(e) => Err(format!(
+            "failed to access credential entry '{account}': {e}"
+        )),
     }
 }
 
@@ -143,7 +146,10 @@ fn ensure_parent_dir_for_file(path: &Path) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn ensure_store_parent_dir(app: &AppHandle, store_name: &str) -> Result<std::path::PathBuf, String> {
+fn ensure_store_parent_dir(
+    app: &AppHandle,
+    store_name: &str,
+) -> Result<std::path::PathBuf, String> {
     let store_path = resolve_store_path(app, store_name).map_err(|e| e.to_string())?;
     ensure_parent_dir_for_file(&store_path).map_err(|e| {
         format!(
@@ -194,18 +200,18 @@ fn prepare_history_db_path(app: &AppHandle) -> Result<std::path::PathBuf, String
 
     #[cfg(target_os = "windows")]
     {
-    let local_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve local app data directory: {e}"))?;
-    std::fs::create_dir_all(&local_dir).map_err(|e| {
-        format!(
-            "Failed to prepare history directory '{}': {e}",
-            local_dir.display()
-        )
-    })?;
+        let local_dir = app
+            .path()
+            .app_local_data_dir()
+            .map_err(|e| format!("Failed to resolve local app data directory: {e}"))?;
+        std::fs::create_dir_all(&local_dir).map_err(|e| {
+            format!(
+                "Failed to prepare history directory '{}': {e}",
+                local_dir.display()
+            )
+        })?;
 
-    Ok(local_dir.join(HISTORY_DB_FILE))
+        Ok(local_dir.join(HISTORY_DB_FILE))
     }
 }
 
@@ -226,7 +232,9 @@ fn schedule_capsule_hide(
 fn sync_hotkey_triggers_enabled(state: &AppState) {
     let enabled = !state.main_window_focused.load(Ordering::SeqCst)
         && !state.hotkey_capture_active.load(Ordering::SeqCst);
-    state.hotkey_triggers_enabled.store(enabled, Ordering::SeqCst);
+    state
+        .hotkey_triggers_enabled
+        .store(enabled, Ordering::SeqCst);
 }
 
 fn set_main_window_focus_state(app: &AppHandle, focused: bool) {
@@ -320,7 +328,9 @@ async fn await_context_capture(state: &AppState, generation: u64) -> CapturedCon
     let handle = {
         let mut task = state.context_capture_task.lock();
         match task.take() {
-            Some((expected_generation, handle)) if expected_generation == generation => Some(handle),
+            Some((expected_generation, handle)) if expected_generation == generation => {
+                Some(handle)
+            }
             Some((_stale_generation, handle)) => {
                 handle.abort();
                 None
@@ -368,15 +378,6 @@ impl Drop for BusyGuard {
     }
 }
 
-fn hotkey_type_from_config(hk_config: &config::HotkeyConfig) -> hotkey::HotkeyType {
-    match hk_config.hotkey_type {
-        config::HotkeyType::Single => hotkey::HotkeyType::Single,
-        config::HotkeyType::DoubleTap => hotkey::HotkeyType::DoubleTap,
-        config::HotkeyType::Combo => hotkey::HotkeyType::Combo,
-        config::HotkeyType::Hold => hotkey::HotkeyType::Hold,
-    }
-}
-
 fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySettings, String> {
     let key_name = hk_config.key.trim();
     if key_name.is_empty() {
@@ -400,7 +401,10 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
         return Err("Double-tap interval must be between 100ms and 1000ms".into());
     }
 
-    let (held_keys, held_key_matchers) = if matches!(hk_config.hotkey_type, config::HotkeyType::Combo) {
+    let (held_keys, held_key_matchers) = if matches!(
+        hk_config.hotkey_type,
+        config::HotkeyType::Combo
+    ) {
         if hk_config.held_keys.is_empty() {
             return Err("Combo hotkey requires at least two keys".into());
         }
@@ -414,7 +418,9 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
         {
-            if held_key_name.eq_ignore_ascii_case("Escape") || held_key_name.eq_ignore_ascii_case("Esc") {
+            if held_key_name.eq_ignore_ascii_case("Escape")
+                || held_key_name.eq_ignore_ascii_case("Esc")
+            {
                 return Err("Escape is reserved for cancelling recordings".into());
             }
 
@@ -446,7 +452,7 @@ fn build_hotkey_settings(hk_config: &config::HotkeyConfig) -> Result<HotkeySetti
     };
 
     Ok(HotkeySettings {
-        hotkey_type: hotkey_type_from_config(hk_config),
+        hotkey_type: hk_config.hotkey_type.clone(),
         key,
         key_matcher,
         held_keys,
@@ -486,35 +492,13 @@ fn current_recording_generation_from_app(app: &AppHandle) -> u64 {
         .unwrap_or(0)
 }
 
-fn emit_status(
-    app: &AppHandle,
-    generation: u64,
-    status: &str,
-    text: Option<&str>,
-    error: Option<&str>,
-) {
-    if let Err(emit_error) = app.emit(
-        "pipeline-status",
-        pipeline::PipelineStatus {
-            status: status.into(),
-            text: text.map(String::from),
-            error: error.map(String::from),
-            generation,
-        },
-    ) {
-        log::warn!("failed to emit pipeline-status: {emit_error}");
-    }
-}
-
 fn should_stop_recording_after_post_buffer(
     had_recording_at_entry: bool,
     entry_generation: u64,
     current_generation: u64,
     is_recording_now: bool,
 ) -> bool {
-    had_recording_at_entry
-        && is_recording_now
-        && current_generation == entry_generation
+    had_recording_at_entry && is_recording_now && current_generation == entry_generation
 }
 
 #[tauri::command]
@@ -531,7 +515,10 @@ async fn toggle_recording(
     // syllables before actually stopping.
     let (had_recording_at_entry, entry_generation) = {
         let recorder = state.recorder.lock();
-        (recorder.is_recording(), current_recording_generation(&state))
+        (
+            recorder.is_recording(),
+            current_recording_generation(&state),
+        )
     };
 
     if had_recording_at_entry {
@@ -547,7 +534,10 @@ async fn toggle_recording(
             operation_generation,
             recorder.is_recording(),
         ) {
-            Some((recorder.stop().map_err(|e| e.to_string()), operation_generation))
+            Some((
+                recorder.stop().map_err(|e| e.to_string()),
+                operation_generation,
+            ))
         } else {
             None
         }
@@ -571,7 +561,7 @@ async fn toggle_recording(
 
         // Restore recording environment (mute, media)
         let env_snapshot = state.recording_env_state.lock().clone();
-        recording_env::restore(&settings.general, &env_snapshot);
+        recording_env::restore(&env_snapshot);
 
         // Update tray indicator
         if let Some(tray) = app.tray_by_id("yat-tray") {
@@ -587,7 +577,7 @@ async fn toggle_recording(
                 // No pipeline will consume context anymore.
                 abort_context_capture_task(&state);
 
-                emit_status(&app, operation_generation, "error", None, Some(&error_msg));
+                pipeline::emit_status(&app, operation_generation, "error", None, Some(&error_msg));
                 let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
                 show_capsule(&app, "error");
                 schedule_capsule_hide(
@@ -611,8 +601,7 @@ async fn toggle_recording(
                 audio_data[26],
                 audio_data[27],
             ]);
-            let block_align =
-                u16::from_le_bytes([audio_data[32], audio_data[33]]) as u32;
+            let block_align = u16::from_le_bytes([audio_data[32], audio_data[33]]) as u32;
             let data_bytes = (audio_data.len() - 44) as u32;
             let duration_ms = if sample_rate > 0 && block_align > 0 {
                 (data_bytes as u64 * 1000) / (sample_rate as u64 * block_align as u64)
@@ -633,7 +622,7 @@ async fn toggle_recording(
         if too_short {
             abort_context_capture_task(&state);
             let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
-            emit_status(&app, operation_generation, "dismissed", None, None);
+            pipeline::emit_status(&app, operation_generation, "dismissed", None, None);
             schedule_capsule_hide(
                 app.clone(),
                 Arc::clone(&state.capsule_generation),
@@ -688,7 +677,11 @@ async fn toggle_recording(
             if let Some(ref info) = app_info {
                 let history = state.history.lock();
                 let minutes = settings.history.context_window_minutes;
-                let title = if info.title.is_empty() { None } else { Some(info.title.as_str()) };
+                let title = if info.title.is_empty() {
+                    None
+                } else {
+                    Some(info.title.as_str())
+                };
                 history
                     .recent_context_for_app(minutes, &info.app_name, title)
                     .unwrap_or_default()
@@ -736,7 +729,10 @@ async fn toggle_recording(
                     return Ok(String::new());
                 }
 
-                let final_text = pr.polished_text.clone().unwrap_or_else(|| pr.raw_text.clone());
+                let final_text = pr
+                    .polished_text
+                    .clone()
+                    .unwrap_or_else(|| pr.raw_text.clone());
                 let entry_status = if pr.delivery_error.is_some() {
                     "error"
                 } else {
@@ -749,8 +745,12 @@ async fn toggle_recording(
                     None
                 };
 
-                let history_window_title = if context_enabled && settings.prompt.context_active_app {
-                    app_info.as_ref().map(|i| i.title.clone()).filter(|t| !t.is_empty())
+                let history_window_title = if context_enabled && settings.prompt.context_active_app
+                {
+                    app_info
+                        .as_ref()
+                        .map(|i| i.title.clone())
+                        .filter(|t| !t.is_empty())
                 } else {
                     None
                 };
@@ -760,20 +760,19 @@ async fn toggle_recording(
                     let entry_id = uuid::Uuid::new_v4().to_string();
 
                     // Save audio file for retention (best-effort)
-                    let audio_path = if let Some(audio_data_for_retention) =
-                        audio_data_for_retention.as_ref()
-                    {
-                        let wav_path = state.audio_dir.join(format!("{entry_id}.wav"));
-                        match std::fs::write(&wav_path, audio_data_for_retention) {
-                            Ok(()) => Some(wav_path.to_string_lossy().into_owned()),
-                            Err(e) => {
-                                log::warn!("failed to save audio file: {e}");
-                                None
+                    let audio_path =
+                        if let Some(audio_data_for_retention) = audio_data_for_retention.as_ref() {
+                            let wav_path = state.audio_dir.join(format!("{entry_id}.wav"));
+                            match std::fs::write(&wav_path, audio_data_for_retention) {
+                                Ok(()) => Some(wav_path.to_string_lossy().into_owned()),
+                                Err(e) => {
+                                    log::warn!("failed to save audio file: {e}");
+                                    None
+                                }
                             }
-                        }
-                    } else {
-                        None
-                    };
+                        } else {
+                            None
+                        };
 
                     let entry = HistoryEntry {
                         id: entry_id,
@@ -844,7 +843,13 @@ async fn toggle_recording(
                 if let Err(db_err) = state.history.lock().insert(&entry) {
                     log::error!("failed to save history entry: {db_err}");
                 }
-                emit_status(&app, operation_generation, "error", None, Some(&e.to_string()));
+                pipeline::emit_status(
+                    &app,
+                    operation_generation,
+                    "error",
+                    None,
+                    Some(&e.to_string()),
+                );
 
                 schedule_capsule_hide(
                     app.clone(),
@@ -861,7 +866,7 @@ async fn toggle_recording(
 
         // Reject if the pipeline is still processing a previous recording.
         if state.pipeline_busy.load(Ordering::SeqCst) {
-            emit_status(
+            pipeline::emit_status(
                 &app,
                 current_recording_generation(&state),
                 "busy",
@@ -901,7 +906,7 @@ async fn toggle_recording(
                 .map_err(|e| {
                     // Restore recording environment if start failed
                     let env_snapshot = state.recording_env_state.lock().clone();
-                    recording_env::restore(&general, &env_snapshot);
+                    recording_env::restore(&env_snapshot);
                     e.to_string()
                 })?;
             generation
@@ -916,7 +921,7 @@ async fn toggle_recording(
         // newly shown recording capsule cannot be hidden by stale timers.
         state.capsule_generation.fetch_add(1, Ordering::SeqCst);
 
-        emit_status(&app, generation, "recording", None, None);
+        pipeline::emit_status(&app, generation, "recording", None, None);
         show_capsule(&app, "recording");
 
         // Update tray indicator
@@ -976,10 +981,7 @@ async fn toggle_recording(
 }
 
 #[tauri::command]
-async fn cancel_recording(
-    state: tauri::State<'_, AppState>,
-    app: AppHandle,
-) -> Result<(), String> {
+async fn cancel_recording(state: tauri::State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     let mut restore_audio = false;
     let cancelled = {
         let mut recorder = state.recorder.lock();
@@ -1009,9 +1011,8 @@ async fn cancel_recording(
 
     // Restore recording environment (mute, media) if recording was active
     if restore_audio {
-        let settings = state.settings.lock().clone();
         let env_snapshot = state.recording_env_state.lock().clone();
-        recording_env::restore(&settings.general, &env_snapshot);
+        recording_env::restore(&env_snapshot);
     }
 
     // Reset tray indicator
@@ -1022,7 +1023,7 @@ async fn cancel_recording(
         );
     }
 
-    emit_status(
+    pipeline::emit_status(
         &app,
         current_recording_generation(&state),
         "idle",
@@ -1063,16 +1064,13 @@ fn get_platform_context() -> PlatformContext {
     PlatformContext {
         os: std::env::consts::OS,
         display_server: if cfg!(target_os = "linux") {
-            Some(
-                std::env::var("XDG_SESSION_TYPE")
-                    .unwrap_or_else(|_| {
-                        if std::env::var("WAYLAND_DISPLAY").is_ok() {
-                            "wayland".into()
-                        } else {
-                            "unknown".into()
-                        }
-                    })
-            )
+            Some(std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| {
+                if std::env::var("WAYLAND_DISPLAY").is_ok() {
+                    "wayland".into()
+                } else {
+                    "unknown".into()
+                }
+            }))
         } else {
             None
         },
@@ -1136,7 +1134,10 @@ async fn save_settings(
         .map(str::to_string)
         .collect();
 
-    if !matches!(settings.general.hotkey.hotkey_type, config::HotkeyType::Combo) {
+    if !matches!(
+        settings.general.hotkey.hotkey_type,
+        config::HotkeyType::Combo
+    ) {
         settings.general.hotkey.held_keys.clear();
     }
 
@@ -1191,8 +1192,7 @@ async fn save_settings(
         }
 
         if stt_key_changed {
-            if let Err(rollback_error) =
-                keyring_set("stt_api_key", &previous_settings.stt.api_key)
+            if let Err(rollback_error) = keyring_set("stt_api_key", &previous_settings.stt.api_key)
             {
                 log::error!(
                     "failed to roll back STT API key after settings save failure: {rollback_error}"
@@ -1201,8 +1201,7 @@ async fn save_settings(
         }
 
         if llm_key_changed {
-            if let Err(rollback_error) =
-                keyring_set("llm_api_key", &previous_settings.llm.api_key)
+            if let Err(rollback_error) = keyring_set("llm_api_key", &previous_settings.llm.api_key)
             {
                 log::error!(
                     "failed to roll back LLM API key after settings save failure: {rollback_error}"
@@ -1315,7 +1314,7 @@ async fn retry_history(
 
     let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
     show_capsule(&app, "polishing");
-    emit_status(
+    pipeline::emit_status(
         &app,
         operation_generation,
         "polishing",
@@ -1342,7 +1341,7 @@ async fn retry_history(
     );
 
     // All locks released — safe to await
-    let result = llm::polish(
+    let result = match llm::polish(
         &settings.llm,
         &system_prompt,
         &entry.raw_text,
@@ -1352,28 +1351,25 @@ async fn retry_history(
         settings.general.max_retries,
     )
     .await
-    .map_err(|e| {
-        let message = e.to_string();
-        // Suppress error presentation if cancelled while the request was in flight.
-        if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
-            log::info!("suppressed retry_history error after cancellation: {message}");
-            return String::new();
+    {
+        Ok(result) => result,
+        Err(e) => {
+            let message = e.to_string();
+            // Suppress error presentation if cancelled while the request was in flight.
+            if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+                log::info!("suppressed retry_history error after cancellation: {message}");
+                return Ok(String::new());
+            }
+            pipeline::emit_status(&app, operation_generation, "error", None, Some(&message));
+            schedule_capsule_hide(
+                app.clone(),
+                Arc::clone(&state.capsule_generation),
+                cap_gen,
+                Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+            );
+            return Err(message);
         }
-        emit_status(
-            &app,
-            operation_generation,
-            "error",
-            None,
-            Some(&message),
-        );
-        schedule_capsule_hide(
-            app.clone(),
-            Arc::clone(&state.capsule_generation),
-            cap_gen,
-            Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
-        );
-        message
-    })?;
+    };
 
     // Suppress the result if ESC cancelled this operation while the LLM was running.
     if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
@@ -1392,13 +1388,7 @@ async fn retry_history(
         .insert(&updated)
         .map_err(|e| e.to_string())?;
 
-    emit_status(
-        &app,
-        operation_generation,
-        "done",
-        Some(&result),
-        None,
-    );
+    pipeline::emit_status(&app, operation_generation, "done", Some(&result), None);
     schedule_capsule_hide(
         app.clone(),
         Arc::clone(&state.capsule_generation),
@@ -1423,7 +1413,10 @@ async fn retry_history_from_audio(
         .map_err(|e| e.to_string())?
         .ok_or("entry not found")?;
 
-    let audio_file = entry.audio_path.as_deref().ok_or("no audio file available")?;
+    let audio_file = entry
+        .audio_path
+        .as_deref()
+        .ok_or("no audio file available")?;
     let audio_data = std::fs::read(audio_file).map_err(|e| format!("failed to read audio: {e}"))?;
 
     let settings = state.settings.lock().clone();
@@ -1441,30 +1434,36 @@ async fn retry_history_from_audio(
 
     let cap_gen = state.capsule_generation.fetch_add(1, Ordering::SeqCst) + 1;
     show_capsule(&app, "transcribing");
-    emit_status(&app, operation_generation, "transcribing", None, None);
+    pipeline::emit_status(&app, operation_generation, "transcribing", None, None);
 
     // Step 1: Re-transcribe
-    let raw_text = stt::transcribe(
+    let raw_text = match stt::transcribe(
         &settings.stt,
         audio_data,
         settings.general.timeout_ms,
         settings.general.max_retries,
     )
     .await
-    .map_err(|e| {
-        let message = e.to_string();
-        if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
-            return String::new();
+    {
+        Ok(raw_text) => raw_text,
+        Err(e) => {
+            let message = e.to_string();
+            if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
+                log::info!(
+                    "suppressed retry_history_from_audio error after cancellation: {message}"
+                );
+                return Ok(String::new());
+            }
+            pipeline::emit_status(&app, operation_generation, "error", None, Some(&message));
+            schedule_capsule_hide(
+                app.clone(),
+                Arc::clone(&state.capsule_generation),
+                cap_gen,
+                Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
+            );
+            return Err(message);
         }
-        emit_status(&app, operation_generation, "error", None, Some(&message));
-        schedule_capsule_hide(
-            app.clone(),
-            Arc::clone(&state.capsule_generation),
-            cap_gen,
-            Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
-        );
-        message
-    })?;
+    };
 
     if state.recording_generation.load(Ordering::SeqCst) != operation_generation {
         return Ok(String::new());
@@ -1472,7 +1471,13 @@ async fn retry_history_from_audio(
 
     // Step 2: LLM polish (if enabled)
     let polished = if settings.llm.enabled && !raw_text.trim().is_empty() {
-        emit_status(&app, operation_generation, "polishing", Some(&raw_text), None);
+        pipeline::emit_status(
+            &app,
+            operation_generation,
+            "polishing",
+            Some(&raw_text),
+            None,
+        );
 
         // Use the entry's own app/window scope for context, not global history.
         let recent_ctx = if let Some(ref name) = entry.app_name {
@@ -1532,7 +1537,7 @@ async fn retry_history_from_audio(
         .insert(&updated)
         .map_err(|e| e.to_string())?;
 
-    emit_status(&app, operation_generation, "done", Some(final_text), None);
+    pipeline::emit_status(&app, operation_generation, "done", Some(final_text), None);
     schedule_capsule_hide(
         app.clone(),
         Arc::clone(&state.capsule_generation),
@@ -1575,15 +1580,16 @@ fn clear_all_history(state: tauri::State<'_, AppState>) -> Result<u64, String> {
 
 fn show_capsule(app: &AppHandle, status: &str) {
     let height = match status {
-        "error" | "clipboardFallback" | "autoPastePaused" | "dismissed" | "noSpeech" => CAPSULE_HEIGHT_DETAIL,
+        "error" | "clipboardFallback" | "autoPastePaused" | "dismissed" | "noSpeech" => {
+            CAPSULE_HEIGHT_DETAIL
+        }
         _ => CAPSULE_HEIGHT,
     };
 
     // Resolve the monitor where the user is currently working.
     // Use cursor position → monitor_from_point so that capsule always appears
     // on the active screen in multi-monitor setups.
-    let position_on_active_monitor =
-        |app: &AppHandle, window: &tauri::WebviewWindow| {
+    let position_on_active_monitor = |app: &AppHandle, window: &tauri::WebviewWindow| {
         let monitor = app
             .cursor_position()
             .ok()
@@ -1624,19 +1630,15 @@ fn show_capsule(app: &AppHandle, status: &str) {
             "failed to ignore cursor events for capsule window",
         );
     } else {
-        match WebviewWindowBuilder::new(
-            app,
-            "capsule",
-            WebviewUrl::App("capsule.html".into()),
-        )
-        .title("YAT")
-        .transparent(true)
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .focusable(false)
-        .inner_size(CAPSULE_WIDTH, height)
-        .build()
+        match WebviewWindowBuilder::new(app, "capsule", WebviewUrl::App("capsule.html".into()))
+            .title("YAT")
+            .transparent(true)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .focusable(false)
+            .inner_size(CAPSULE_WIDTH, height)
+            .build()
         {
             Ok(w) => {
                 position_on_active_monitor(app, &w);
@@ -1780,11 +1782,16 @@ fn tray_label_quit(lang: &str) -> &'static str {
 }
 
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let lang = app.state::<AppState>().settings.lock().general.language.clone();
-    let show_item = MenuItemBuilder::with_id("toggle_window", tray_label_toggle(false, &lang))
-        .build(app)?;
-    let quit_item =
-        MenuItemBuilder::with_id("quit", tray_label_quit(&lang)).build(app)?;
+    let lang = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .general
+        .language
+        .clone();
+    let show_item =
+        MenuItemBuilder::with_id("toggle_window", tray_label_toggle(false, &lang)).build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", tray_label_quit(&lang)).build(app)?;
     let show_menu_on_left_click = cfg!(target_os = "linux");
 
     let menu = MenuBuilder::new(app)
@@ -1893,9 +1900,7 @@ fn refresh_tray_menu(app: &AppHandle) {
         let quit_label = tray_label_quit(&lang);
 
         if let Ok(show_item) = MenuItemBuilder::with_id("toggle_window", toggle_label).build(app) {
-            if let Ok(quit_item) =
-                MenuItemBuilder::with_id("quit", quit_label).build(app)
-            {
+            if let Ok(quit_item) = MenuItemBuilder::with_id("quit", quit_label).build(app) {
                 if let Ok(menu) = MenuBuilder::new(app)
                     .item(&show_item)
                     .separator()
@@ -1993,11 +1998,10 @@ pub fn run() {
                                 refresh_tray_menu(&handle_for_events);
 
                                 // Show a one-time education hint the first time the window hides to tray
-                                if !state
-                                    .close_to_tray_hinted
-                                    .swap(true, Ordering::SeqCst)
-                                {
-                                    if let Err(error) = handle_for_events.emit("close-to-tray-hint", ()) {
+                                if !state.close_to_tray_hinted.swap(true, Ordering::SeqCst) {
+                                    if let Err(error) =
+                                        handle_for_events.emit("close-to-tray-hint", ())
+                                    {
                                         log::warn!("failed to emit close-to-tray-hint: {error}");
                                     }
                                 }
@@ -2025,7 +2029,7 @@ pub fn run() {
                             Ok(_) => {}
                             Err(e) => {
                                 log::error!("toggle recording error: {e}");
-                                emit_status(
+                                pipeline::emit_status(
                                     &app_handle,
                                     current_recording_generation_from_app(&app_handle),
                                     "error",
@@ -2040,9 +2044,7 @@ pub fn run() {
                                 show_capsule(&app_handle, "error");
                                 schedule_capsule_hide(
                                     app_handle.clone(),
-                                    Arc::clone(
-                                        &app_handle.state::<AppState>().capsule_generation,
-                                    ),
+                                    Arc::clone(&app_handle.state::<AppState>().capsule_generation),
                                     cap_gen,
                                     Duration::from_secs(CAPSULE_HIDE_DELAY_ERROR_SECS),
                                 );
@@ -2070,7 +2072,12 @@ pub fn run() {
             );
 
             // Show main window unless autostart + user prefers to start minimised
-            let start_minimized = handle.state::<AppState>().settings.lock().general.start_minimized;
+            let start_minimized = handle
+                .state::<AppState>()
+                .settings
+                .lock()
+                .general
+                .start_minimized;
             if !(launched_by_autostart && start_minimized) {
                 if let Some(win) = handle.get_webview_window("main") {
                     sync_macos_activation_policy(&handle, true);
@@ -2079,7 +2086,10 @@ pub fn run() {
                         "failed to unminimize main window during startup",
                     );
                     warn_if_err(win.show(), "failed to show main window during startup");
-                    warn_if_err(win.set_focus(), "failed to focus main window during startup");
+                    warn_if_err(
+                        win.set_focus(),
+                        "failed to focus main window during startup",
+                    );
                     set_main_window_focus_state(&handle, true);
                 }
             } else {
@@ -2162,7 +2172,7 @@ mod tests {
 
         let parsed = build_hotkey_settings(&config).expect("Alt hold should stay supported");
 
-        assert_eq!(parsed.hotkey_type, hotkey::HotkeyType::Hold);
+        assert_eq!(parsed.hotkey_type, HotkeyType::Hold);
         assert_eq!(parsed.key, Key::Alt);
         assert!(parsed.held_keys.is_empty());
     }
@@ -2178,7 +2188,7 @@ mod tests {
 
         let parsed = build_hotkey_settings(&config).expect("Alt single should stay supported");
 
-        assert_eq!(parsed.hotkey_type, hotkey::HotkeyType::Single);
+        assert_eq!(parsed.hotkey_type, HotkeyType::Single);
         assert_eq!(parsed.key, Key::Alt);
         assert!(parsed.held_keys.is_empty());
     }

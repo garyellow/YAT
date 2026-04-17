@@ -64,6 +64,7 @@
     "stats": {
       "speech": "Speech",
       "polish": "Polish",
+      "output": "Output",
       "hotkey": "Hotkey"
     },
     "metricValues": {
@@ -206,18 +207,8 @@
     "backgroundAudioDuckAmountBody": "Other audio will be reduced by {{percent}}%, leaving about {{remaining}}% while you record.",
     "autoPauseMedia": "Pause media during recording",
     "autoPauseMediaHint": "Pause media when recording starts, then resume when finished.",
-    "autoPauseMediaHintMacos": "Pause media when recording starts, then resume when finished. Supports Music, Spotify, and the active media source.",
-    "autoPauseMediaHintLinux": "Pause media when recording starts, then resume when finished. Uses MPRIS (requires playerctl).",
     "autoPauseMediaDetailMacos": "Supports Music, Spotify, and the active media source.",
     "autoPauseMediaDetailLinux": "Requires playerctl to be installed.",
-    "backgroundAudioPactlMissing": "pactl not installed",
-    "backgroundAudioPactlMissingBody": "Background audio control requires pactl. Please install pulseaudio-utils or pipewire-pulse and restart YAT.",
-    "autoPausePlayerctlMissing": "playerctl not installed",
-    "autoPausePlayerctlMissingBody": "Pause-media requires playerctl. Please install it and restart YAT.",
-    "autoPauseAccessibilityRequired": "Accessibility permission required",
-    "autoPauseAccessibilityRequiredBody": "Pause-media on macOS requires Accessibility permission. Go to System Settings → Privacy & Security → Accessibility to allow YAT.",
-    "autoPasteAccessibilityRequired": "Accessibility permission required",
-    "autoPasteAccessibilityRequiredBody": "Auto-paste on macOS requires Accessibility permission. Go to System Settings → Privacy & Security → Accessibility to allow YAT.",
     "sectionAppearance": "Appearance",
     "sectionRecording": "Recording",
     "sectionOutput": "Output",
@@ -515,14 +506,10 @@
   "capsule": {
     "escHint": "Press Esc to cancel",
     "escKey": "Esc",
-    "dismissedHint": "Recording was too short and has been dismissed.",
-    "noSpeechHint": "No speech was detected in this recording.",
-    "clipboardFallbackHint": "Paste failed, but the text is still in your clipboard.",
-    "clipboardFallbackHintWindows": "Paste failed, but the text is still in your clipboard. On Windows this often happens when the target app is running elevated or simulated input is blocked.",
-    "clipboardFallbackHintMacos": "Paste failed, but the text is still in your clipboard. Make sure YAT has Accessibility permission and the target app accepts simulated input.",
-    "autoPastePausedHint": "Recent auto-paste attempts kept failing, so this result was copied to the clipboard instead. Check permissions or switch to clipboard-only mode.",
-    "autoPastePausedHintWindows": "Recent auto-paste attempts kept failing, so this result was copied to the clipboard instead. If the target app is running elevated, YAT needs the same privilege level, or you can switch to clipboard-only mode.",
-    "autoPastePausedHintMacos": "Recent auto-paste attempts kept failing, so this result was copied to the clipboard instead. Make sure YAT has Accessibility permission, or switch to clipboard-only mode.",
+    "dismissedHint": "Recording was too short.",
+    "noSpeechHint": "No speech was detected.",
+    "clipboardFallbackHint": "Paste failed. The text was copied to your clipboard.",
+    "autoPastePausedHint": "Auto-paste was paused after repeated failures. The text was copied to your clipboard.",
     "errorUnknown": "Something went wrong, but no detailed reason was provided."
   },
   "accessibility": {

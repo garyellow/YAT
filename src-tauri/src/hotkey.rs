@@ -4,17 +4,11 @@ use rdev::grab;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use rdev::listen;
 use rdev::{Event, EventType, Key};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum HotkeyType {
-    Single,
-    DoubleTap,
-    Combo,
-    Hold,
-}
+use crate::config::HotkeyType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum KeyMatcher {
@@ -414,9 +408,8 @@ where
                         }
                         if st.hold_active {
                             let consumed = st.key_consumed;
-                            let too_short = st
-                                .hold_start
-                                .is_some_and(|t| t.elapsed().as_millis() < 150);
+                            let too_short =
+                                st.hold_start.is_some_and(|t| t.elapsed().as_millis() < 150);
                             st.hold_active = false;
                             st.hold_start = None;
                             st.key_consumed = false;
@@ -468,8 +461,7 @@ pub fn start_listener<F, G>(
     triggers_enabled: Arc<AtomicBool>,
     on_trigger: F,
     on_cancel: G,
-)
-where
+) where
     F: Fn() + Send + 'static,
     G: Fn() -> bool + Send + 'static,
 {
@@ -533,6 +525,8 @@ where
             );
         };
 
+        log::info!("global hotkey listener started");
+
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         let result = grab(callback).map_err(|e| format!("{:?}", e));
 
@@ -543,8 +537,6 @@ where
             log::error!("keyboard listener error: {e}");
         }
     });
-
-    log::info!("global hotkey listener started");
 }
 
 #[cfg(test)]
@@ -762,21 +754,51 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // Press modifier alone — no trigger
-        handle_event_type(&EventType::KeyPress(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlLeft),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
 
         // Press key while modifier held — trigger
-        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        let consumed = handle_event_type(
+            &EventType::KeyPress(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert!(consumed);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
 
         // Release key, release modifier
-        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyRelease(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::ControlLeft),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1); // still only 1
     }
 
@@ -792,11 +814,20 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // Press key without modifier — not consumed, no trigger
-        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        let consumed = handle_event_type(
+            &EventType::KeyPress(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert!(!consumed);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
     }
@@ -813,17 +844,47 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // First tap (press + release)
-        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0); // first tap just records time
 
         // Second tap immediately (press + release, within interval)
-        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
     }
 
@@ -839,19 +900,49 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // First tap
-        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
 
         // Simulate expired interval by backdating last_trigger_time
         state.last_trigger_time = Some(Instant::now() - std::time::Duration::from_secs(5));
 
         // Second tap — interval expired, no trigger
-        handle_event_type(&EventType::KeyPress(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::ControlRight), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::ControlRight),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
     }
 
@@ -868,16 +959,35 @@ mod tests {
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
         let cancel_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
-        let on_cancel = || { cancel_count.fetch_add(1, AtomicOrdering::SeqCst); true };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
+        let on_cancel = || {
+            cancel_count.fetch_add(1, AtomicOrdering::SeqCst);
+            true
+        };
 
         // Hotkey press with trigger_enabled=false — NOT consumed
-        let consumed = handle_event_type(&EventType::KeyPress(Key::Alt), &settings, &mut state, false, &on_trigger, &on_cancel);
+        let consumed = handle_event_type(
+            &EventType::KeyPress(Key::Alt),
+            &settings,
+            &mut state,
+            false,
+            &on_trigger,
+            &on_cancel,
+        );
         assert!(!consumed);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
 
         // ESC should still work even when triggers are disabled
-        let esc_consumed = handle_event_type(&EventType::KeyPress(Key::Escape), &settings, &mut state, false, &on_trigger, &on_cancel);
+        let esc_consumed = handle_event_type(
+            &EventType::KeyPress(Key::Escape),
+            &settings,
+            &mut state,
+            false,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(cancel_count.load(AtomicOrdering::SeqCst), 1);
         // ESC consumed depends on on_cancel() return — here it returns true
         assert!(esc_consumed);
@@ -895,15 +1005,31 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // Press — no trigger yet
-        handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
 
         // Release — trigger fires
-        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyRelease(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);
     }
 
@@ -919,13 +1045,36 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
         // Press hotkey, press another key, release hotkey
-        handle_event_type(&EventType::KeyPress(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyPress(Key::Unknown('b' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyRelease(Key::Unknown('a' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyPress(Key::Unknown('b' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyRelease(Key::Unknown('a' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 0);
     }
 
@@ -944,12 +1093,35 @@ mod tests {
         };
         let mut state = fresh_state();
         let trigger_count = AtomicUsize::new(0);
-        let on_trigger = || { trigger_count.fetch_add(1, AtomicOrdering::SeqCst); };
+        let on_trigger = || {
+            trigger_count.fetch_add(1, AtomicOrdering::SeqCst);
+        };
         let on_cancel = || false;
 
-        handle_event_type(&EventType::KeyPress(Key::ControlLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
-        handle_event_type(&EventType::KeyPress(Key::ShiftLeft), &settings, &mut state, true, &on_trigger, &on_cancel);
-        let consumed = handle_event_type(&EventType::KeyPress(Key::Unknown('c' as u32)), &settings, &mut state, true, &on_trigger, &on_cancel);
+        handle_event_type(
+            &EventType::KeyPress(Key::ControlLeft),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        handle_event_type(
+            &EventType::KeyPress(Key::ShiftLeft),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
+        let consumed = handle_event_type(
+            &EventType::KeyPress(Key::Unknown('c' as u32)),
+            &settings,
+            &mut state,
+            true,
+            &on_trigger,
+            &on_cancel,
+        );
 
         assert!(consumed);
         assert_eq!(trigger_count.load(AtomicOrdering::SeqCst), 1);

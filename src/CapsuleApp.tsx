@@ -19,13 +19,13 @@ const statusStyles: Record<RecordingStatus, StatusStyle> = {
   done:              { dot: "bg-emerald-400",  pulse: false },
   clipboardFallback: { dot: "bg-amber-400",    pulse: false },
   autoPastePaused:   { dot: "bg-amber-300",    pulse: false },
+  // `busy` is skipped in the event listener and never displayed, but kept
+  // here so TypeScript's exhaustive record check stays happy.
   busy:              { dot: "bg-indigo-300",   pulse: true  },
   error:             { dot: "bg-red-400",      pulse: false },
   dismissed:         { dot: "bg-slate-500",    pulse: false },
   noSpeech:          { dot: "bg-amber-500",    pulse: false },
 };
-
-type CapsulePlatform = "windows" | "macos" | "linux" | "unknown";
 
 interface CapsulePreviewState {
   status: RecordingStatus;
@@ -34,7 +34,6 @@ interface CapsulePreviewState {
   maxSeconds: number;
   message: string;
   language: string | null;
-  platform: CapsulePlatform;
 }
 
 /* ─── Mic level → display bar ─── */
@@ -44,15 +43,6 @@ function micLevelToBar(rms: number): number {
   if (rms < NOISE_FLOOR) return 0;
   const db = 20 * Math.log10(rms / NOISE_FLOOR);
   return Math.min(db * 2.5, 100);
-}
-
-function getPlatformOs(): CapsulePlatform {
-  if (typeof navigator === "undefined") return "unknown";
-  const platform = (navigator as any).userAgentData?.platform ?? navigator.platform;
-  if (/win/i.test(platform)) return "windows";
-  if (/mac/i.test(platform)) return "macos";
-  if (/linux/i.test(platform)) return "linux";
-  return "unknown";
 }
 
 function parsePreviewStatus(value: string | null): RecordingStatus | null {
@@ -79,17 +69,6 @@ function parsePositiveNumber(value: string | null, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function parsePreviewPlatform(value: string | null): CapsulePlatform {
-  switch (value) {
-    case "windows":
-    case "macos":
-    case "linux":
-      return value;
-    default:
-      return getPlatformOs();
-  }
-}
-
 function getCapsulePreviewState(): CapsulePreviewState | null {
   if (typeof window === "undefined" || isTauriRuntime()) return null;
 
@@ -104,7 +83,6 @@ function getCapsulePreviewState(): CapsulePreviewState | null {
     maxSeconds: Math.max(1, parsePositiveNumber(params.get("max"), 180)),
     message: params.get("message") ?? "",
     language: params.get("lang"),
-    platform: parsePreviewPlatform(params.get("platform")),
   };
 }
 
@@ -113,7 +91,6 @@ function getCapsulePreviewState(): CapsulePreviewState | null {
 export default function CapsuleApp() {
   const { t, i18n } = useTranslation();
   const preview = useMemo(() => getCapsulePreviewState(), []);
-  const platformOs = preview?.platform ?? getPlatformOs();
 
   const [status, setStatus] = useState<RecordingStatus>(preview?.status ?? "idle");
   const [elapsed, setElapsed] = useState(preview?.elapsed ?? 0);
@@ -265,17 +242,9 @@ export default function CapsuleApp() {
     status === "error"
       ? errorMsg || t("capsule.errorUnknown")
       : status === "clipboardFallback"
-        ? platformOs === "windows"
-          ? t("capsule.clipboardFallbackHintWindows")
-          : platformOs === "macos"
-            ? t("capsule.clipboardFallbackHintMacos")
-            : t("capsule.clipboardFallbackHint")
+        ? t("capsule.clipboardFallbackHint")
         : status === "autoPastePaused"
-          ? platformOs === "windows"
-            ? t("capsule.autoPastePausedHintWindows")
-            : platformOs === "macos"
-              ? t("capsule.autoPastePausedHintMacos")
-              : t("capsule.autoPastePausedHint")
+          ? t("capsule.autoPastePausedHint")
         : status === "dismissed"
           ? t("capsule.dismissedHint")
           : status === "noSpeech"

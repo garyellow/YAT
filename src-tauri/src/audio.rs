@@ -70,21 +70,27 @@ impl AudioRecorder {
     }
 
     /// Start recording from the specified device (or system default if None).
-    pub fn start(&mut self, device_name: Option<&str>, mic_level: Arc<AtomicU32>) -> Result<(), AudioError> {
+    pub fn start(
+        &mut self,
+        device_name: Option<&str>,
+        mic_level: Arc<AtomicU32>,
+    ) -> Result<(), AudioError> {
         let host = cpal::default_host();
 
         let device = if let Some(name) = device_name {
             // Try to find the requested device
             host.input_devices()
                 .map_err(|e| AudioError::DeviceConfig(e.to_string()))?
-                .find(|d| d.description().map(|desc| desc.name() == name).unwrap_or(false))
+                .find(|d| {
+                    d.description()
+                        .map(|desc| desc.name() == name)
+                        .unwrap_or(false)
+                })
                 .ok_or_else(|| {
                     log::warn!("requested device '{name}' not found, using default");
                     AudioError::NoInputDevice
                 })
-                .or_else(|_| {
-                    host.default_input_device().ok_or(AudioError::NoInputDevice)
-                })?
+                .or_else(|_| host.default_input_device().ok_or(AudioError::NoInputDevice))?
         } else {
             host.default_input_device()
                 .ok_or(AudioError::NoInputDevice)?
@@ -116,30 +122,32 @@ impl AudioRecorder {
             cpal::SampleFormat::F32 => {
                 let mic_level_f32 = Arc::clone(&mic_level);
                 device
-                .build_input_stream(
-                    &config.into(),
-                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        let mut guard = recording.lock();
-                        let data = if let Some(ref mut state) = *guard {
-                            let ignore = state.samples_to_ignore.min(data.len());
-                            state.samples_to_ignore -= ignore;
-                            let sliced = &data[ignore..];
-                            state.samples.extend_from_slice(sliced);
-                            sliced
-                        } else {
-                            data
-                        };
-                        drop(guard);
+                    .build_input_stream(
+                        &config.into(),
+                        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                            let mut guard = recording.lock();
+                            let data = if let Some(ref mut state) = *guard {
+                                let ignore = state.samples_to_ignore.min(data.len());
+                                state.samples_to_ignore -= ignore;
+                                let sliced = &data[ignore..];
+                                state.samples.extend_from_slice(sliced);
+                                sliced
+                            } else {
+                                data
+                            };
+                            drop(guard);
 
-                        if !data.is_empty() {
-                            let rms = (data.iter().map(|&s| s * s).sum::<f32>() / data.len() as f32).sqrt();
-                            mic_level_f32.store(rms.to_bits(), Ordering::Relaxed);
-                        }
-                    },
-                    err_fn,
-                    None,
-                )
-                .map_err(|e| AudioError::BuildStream(e.to_string()))?
+                            if !data.is_empty() {
+                                let rms = (data.iter().map(|&s| s * s).sum::<f32>()
+                                    / data.len() as f32)
+                                    .sqrt();
+                                mic_level_f32.store(rms.to_bits(), Ordering::Relaxed);
+                            }
+                        },
+                        err_fn,
+                        None,
+                    )
+                    .map_err(|e| AudioError::BuildStream(e.to_string()))?
             }
             cpal::SampleFormat::I16 => {
                 let recording = Arc::clone(&self.recording);
@@ -163,10 +171,15 @@ impl AudioRecorder {
                             drop(guard);
 
                             if !data.is_empty() {
-                                let rms = (data.iter().map(|&s| {
-                                    let f = s as f32 / i16::MAX as f32;
-                                    f * f
-                                }).sum::<f32>() / data.len() as f32).sqrt();
+                                let rms = (data
+                                    .iter()
+                                    .map(|&s| {
+                                        let f = s as f32 / i16::MAX as f32;
+                                        f * f
+                                    })
+                                    .sum::<f32>()
+                                    / data.len() as f32)
+                                    .sqrt();
                                 mic_level_i16.store(rms.to_bits(), Ordering::Relaxed);
                             }
                         },
@@ -188,7 +201,8 @@ impl AudioRecorder {
                                 state.samples_to_ignore -= ignore;
                                 let sliced = &data[ignore..];
                                 state.samples.extend(
-                                    sliced.iter()
+                                    sliced
+                                        .iter()
                                         .map(|&s| (s as f32 / u16::MAX as f32) * 2.0 - 1.0),
                                 );
                                 sliced
@@ -198,10 +212,15 @@ impl AudioRecorder {
                             drop(guard);
 
                             if !data.is_empty() {
-                                let rms = (data.iter().map(|&s| {
-                                    let f = (s as f32 / u16::MAX as f32) * 2.0 - 1.0;
-                                    f * f
-                                }).sum::<f32>() / data.len() as f32).sqrt();
+                                let rms = (data
+                                    .iter()
+                                    .map(|&s| {
+                                        let f = (s as f32 / u16::MAX as f32) * 2.0 - 1.0;
+                                        f * f
+                                    })
+                                    .sum::<f32>()
+                                    / data.len() as f32)
+                                    .sqrt();
                                 mic_level_u16.store(rms.to_bits(), Ordering::Relaxed);
                             }
                         },

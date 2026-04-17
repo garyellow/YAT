@@ -96,8 +96,7 @@ pub fn prepare(general: &GeneralConfig) -> RecordingEnvState {
             }
             Err(e) => log::warn!("background-audio mute failed: {e}"),
         },
-        BackgroundAudioMode::Duck => match duck_system(general.background_audio_ducking_percent)
-        {
+        BackgroundAudioMode::Duck => match duck_system(general.background_audio_ducking_percent) {
             Ok(snapshot) => {
                 env.system_audio = Some(SystemAudioRestoreState::Duck { snapshot });
             }
@@ -110,7 +109,7 @@ pub fn prepare(general: &GeneralConfig) -> RecordingEnvState {
 
 /// Restore the recording environment to its pre-recording state.
 /// Operations run in reverse order of [`prepare`].
-pub fn restore(_general: &GeneralConfig, env: &RecordingEnvState) {
+pub fn restore(env: &RecordingEnvState) {
     if let Some(system_audio) = &env.system_audio {
         retry_restore_once("background-audio", || restore_system_audio(system_audio));
     }
@@ -194,7 +193,7 @@ fn duck_system(reduction_percent: u8) -> Result<SystemAudioSnapshot, String> {
 
     let target_volume = ((f32::from(current_volume) * retained_volume_ratio(reduction_percent))
         .round())
-        .clamp(0.0, 100.0) as u8;
+    .clamp(0.0, 100.0) as u8;
 
     run_osascript(&format!(
         "set volume without output muted output volume {target_volume}"
@@ -275,10 +274,10 @@ fn with_endpoint_volume<T>(
         windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume,
     ) -> Result<T, String>,
 ) -> Result<T, String> {
+    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
-    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
     unsafe {
@@ -363,8 +362,8 @@ fn duck_system(reduction_percent: u8) -> Result<SystemAudioSnapshot, String> {
             });
         }
 
-        let target_volume = (current_volume * retained_volume_ratio(reduction_percent))
-            .clamp(0.0, 1.0);
+        let target_volume =
+            (current_volume * retained_volume_ratio(reduction_percent)).clamp(0.0, 1.0);
 
         unsafe {
             volume
@@ -407,7 +406,11 @@ fn restore_ducked_system(snapshot: &SystemAudioSnapshot) -> Result<(), String> {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn parse_first_percent(raw: &str) -> Result<u32, String> {
     raw.split_whitespace()
-        .find_map(|token| token.strip_suffix('%').and_then(|value| value.parse::<u32>().ok()))
+        .find_map(|token| {
+            token
+                .strip_suffix('%')
+                .and_then(|value| value.parse::<u32>().ok())
+        })
         .ok_or_else(|| format!("failed to parse sink volume from pactl output: {raw}"))
 }
 
@@ -495,8 +498,8 @@ fn duck_system(reduction_percent: u8) -> Result<SystemAudioSnapshot, String> {
         });
     }
 
-    let target_volume = ((current_volume as f32) * retained_volume_ratio(reduction_percent))
-        .round() as u32;
+    let target_volume =
+        ((current_volume as f32) * retained_volume_ratio(reduction_percent)).round() as u32;
 
     let status = Command::new("pactl")
         .args([
@@ -781,8 +784,7 @@ fn resume_media(paused_ids: &[String]) -> Result<(), String> {
 fn simulate_media_play_pause() -> Result<(), String> {
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
-    let mut enigo =
-        Enigo::new(&Settings::default()).map_err(|e| format!("enigo init: {e}"))?;
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo init: {e}"))?;
     enigo
         .key(Key::MediaPlayPause, Direction::Click)
         .map_err(|e| format!("media key: {e}"))?;

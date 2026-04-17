@@ -391,6 +391,33 @@ export function validateSettings(settings: AppSettings): HotkeyValidationCode | 
   return hotkeyError ? hotkeyError.code : null;
 }
 
+export function formatConnectionError(
+  error: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  serviceLabel: string,
+): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const normalized = raw.toLowerCase();
+
+  if (/timeout|timed out|deadline exceeded/.test(normalized)) {
+    return t("settings.connectionErrorTimeout", { service: serviceLabel });
+  }
+  if (/401|unauthorized|authentication|invalid api key|api key required/.test(normalized)) {
+    return t("settings.connectionErrorUnauthorized", { service: serviceLabel });
+  }
+  if (/403|forbidden|permission denied|insufficient/.test(normalized)) {
+    return t("settings.connectionErrorForbidden", { service: serviceLabel });
+  }
+  if (/404|not found|no such model|model_not_found/.test(normalized)) {
+    return t("settings.connectionErrorNotFound", { service: serviceLabel });
+  }
+  if (/connection|network|dns|refused|socket|unreachable|failed to fetch/.test(normalized)) {
+    return t("settings.connectionErrorNetwork", { service: serviceLabel });
+  }
+
+  return t("settings.connectionErrorUnknown", { service: serviceLabel, error: raw });
+}
+
 export function buildPromptPreview(prompt: PromptConfig): string {
   const parts = [prompt.system_prompt.trim()];
 

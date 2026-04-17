@@ -64,6 +64,7 @@
     "stats": {
       "speech": "語音辨識",
       "polish": "文字潤飾",
+      "output": "輸出",
       "hotkey": "快捷鍵"
     },
     "metricValues": {
@@ -202,18 +203,8 @@
     "backgroundAudioDuckAmountBody": "錄音時會降低 {{percent}}%，保留約 {{remaining}}% 的音量。",
     "autoPauseMedia": "錄音時暫停媒體播放",
     "autoPauseMediaHint": "錄音開始時暫停媒體播放，結束後恢復。",
-    "autoPauseMediaHintMacos": "錄音開始時暫停媒體播放，結束後恢復。支援 Music、Spotify 與目前媒體來源。",
-    "autoPauseMediaHintLinux": "錄音開始時暫停媒體播放，結束後恢復。透過 MPRIS 控制（需要 playerctl）。",
     "autoPauseMediaDetailMacos": "支援 Music、Spotify 與目前媒體來源。",
     "autoPauseMediaDetailLinux": "需安裝 playerctl 才能正常運作。",
-    "backgroundAudioPactlMissing": "找不到 pactl",
-    "backgroundAudioPactlMissingBody": "背景音訊控制需要 pactl。請安裝 pulseaudio-utils 或 pipewire-pulse 後重新啟動 YAT。",
-    "autoPausePlayerctlMissing": "playerctl 未安裝",
-    "autoPausePlayerctlMissingBody": "暫停媒體需要 playerctl。請安裝後重新啟動 YAT。",
-    "autoPauseAccessibilityRequired": "需要輔助使用權限",
-    "autoPauseAccessibilityRequiredBody": "暫停媒體功能在 macOS 上需要輔助使用權限。請到「系統設定 → 隱私權與安全性 → 輔助使用」允許 YAT。",
-    "autoPasteAccessibilityRequired": "需要輔助使用權限",
-    "autoPasteAccessibilityRequiredBody": "自動貼上在 macOS 上需要輔助使用權限。請到「系統設定 → 隱私權與安全性 → 輔助使用」允許 YAT。",
     "sectionAppearance": "外觀",
     "sectionRecording": "錄音",
     "sectionOutput": "輸出",
@@ -514,14 +505,10 @@
   "capsule": {
     "escHint": "按 Esc 取消錄音",
     "escKey": "Esc",
-    "dismissedHint": "錄音時間太短，已自動略過。",
-    "noSpeechHint": "這次錄音沒有偵測到語音內容。",
-    "clipboardFallbackHint": "貼上失敗了，但文字仍然保留在剪貼簿。",
-    "clipboardFallbackHintWindows": "貼上失敗了，但文字仍然保留在剪貼簿。若目標 App 以系統管理員權限執行，或 Windows 阻擋模擬輸入，就可能發生這種情況。",
-    "clipboardFallbackHintMacos": "貼上失敗了，但文字仍然保留在剪貼簿。請確認 YAT 已獲得輔助使用權限，且目標 App 接受模擬輸入。",
-    "autoPastePausedHint": "最近幾次自動貼上都失敗了，這次先改為只複製到剪貼簿。建議檢查權限，或改用「僅複製到剪貼簿」。",
-    "autoPastePausedHintWindows": "最近幾次自動貼上都失敗了，這次先改為只複製到剪貼簿。若目標 App 以系統管理員權限執行，請讓 YAT 使用相同權限，或改用「僅複製到剪貼簿」。",
-    "autoPastePausedHintMacos": "最近幾次自動貼上都失敗了，這次先改為只複製到剪貼簿。請確認 YAT 已獲得輔助使用權限，或改用「僅複製到剪貼簿」。",
+    "dismissedHint": "錄音時間太短。",
+    "noSpeechHint": "沒有偵測到語音。",
+    "clipboardFallbackHint": "貼上失敗，文字已複製到剪貼簿。",
+    "autoPastePausedHint": "自動貼上已因連續失敗而暫停，文字已複製到剪貼簿。",
     "errorUnknown": "發生錯誤，但系統沒有提供更詳細的原因。"
   },
   "accessibility": {

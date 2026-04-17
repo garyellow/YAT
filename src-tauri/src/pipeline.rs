@@ -26,7 +26,7 @@ pub struct PipelineStatus {
     pub generation: u64,
 }
 
-fn emit_status(
+pub(crate) fn emit_status(
     app: &AppHandle,
     generation: u64,
     status: &str,
@@ -44,12 +44,16 @@ fn emit_status(
     }
 }
 
-fn was_cancelled(cancel_generation: &Arc<AtomicU64>, operation_generation: u64) -> bool {
-    cancel_generation.load(Ordering::SeqCst) != operation_generation
+fn was_cancelled(recording_generation: &Arc<AtomicU64>, operation_generation: u64) -> bool {
+    recording_generation.load(Ordering::SeqCst) != operation_generation
 }
 
 /// Build the system prompt, appending user instructions and preferred vocabulary.
-pub fn build_system_prompt(base_prompt: &str, user_instructions: &str, vocabulary: &[VocabularyEntry]) -> String {
+pub fn build_system_prompt(
+    base_prompt: &str,
+    user_instructions: &str,
+    vocabulary: &[VocabularyEntry],
+) -> String {
     let mut prompt = base_prompt.to_string();
 
     if !user_instructions.trim().is_empty() {
@@ -81,7 +85,13 @@ fn append_reference_context_block(prompt: &mut String, label: &str, value: &str)
 
     let marker = label
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
 
     prompt.push_str(&format!(
@@ -115,7 +125,7 @@ pub async fn run(
     app_name: Option<&str>,
     input_field_context: Option<String>,
     screenshot_context: Option<String>,
-    cancel_generation: Arc<AtomicU64>,
+    recording_generation: Arc<AtomicU64>,
     operation_generation: u64,
     paste_fail_count: &AtomicU32,
     auto_clipboard_fallback_threshold: u32,
@@ -132,7 +142,7 @@ pub async fn run(
     )
     .await?;
 
-    if was_cancelled(&cancel_generation, operation_generation) {
+    if was_cancelled(&recording_generation, operation_generation) {
         log::info!("pipeline cancelled after transcription; suppressing result presentation");
         return Ok(PipelineResult {
             raw_text,
@@ -158,7 +168,13 @@ pub async fn run(
 
     // Step 2: LLM polish (optional)
     let polished = if settings.llm.enabled {
-        emit_status(app, operation_generation, "polishing", Some(&raw_text), None);
+        emit_status(
+            app,
+            operation_generation,
+            "polishing",
+            Some(&raw_text),
+            None,
+        );
 
         let mut system_prompt = build_system_prompt(
             &settings.prompt.system_prompt,
@@ -189,11 +205,7 @@ pub async fn run(
             );
         }
         if let Some(ref input) = input_field_context {
-            append_reference_context_block(
-                &mut system_prompt,
-                "focused input field text",
-                input,
-            );
+            append_reference_context_block(&mut system_prompt, "focused input field text", input);
         }
         if let Some(ref clip) = clipboard_context {
             append_reference_context_block(&mut system_prompt, "clipboard reference", clip);
@@ -230,7 +242,7 @@ pub async fn run(
         None
     };
 
-    if was_cancelled(&cancel_generation, operation_generation) {
+    if was_cancelled(&recording_generation, operation_generation) {
         log::info!("pipeline cancelled during processing; suppressing result presentation");
         return Ok(PipelineResult {
             raw_text,
@@ -287,7 +299,7 @@ pub async fn run(
         output::OutputOutcome::CopiedToClipboard
     };
 
-    if was_cancelled(&cancel_generation, operation_generation) {
+    if was_cancelled(&recording_generation, operation_generation) {
         log::info!("pipeline cancelled after output delivery; suppressing status presentation");
         return Ok(PipelineResult {
             raw_text,
@@ -367,8 +379,12 @@ mod tests {
     #[test]
     fn build_system_prompt_with_vocabulary() {
         let vocab = vec![
-            VocabularyEntry { text: "ChatGPT".into() },
-            VocabularyEntry { text: "DeepSeek".into() },
+            VocabularyEntry {
+                text: "ChatGPT".into(),
+            },
+            VocabularyEntry {
+                text: "DeepSeek".into(),
+            },
         ];
         let result = build_system_prompt("Base.", "", &vocab);
         assert!(result.contains("Preferred vocabulary and spelling"));
@@ -380,7 +396,9 @@ mod tests {
 
     #[test]
     fn build_system_prompt_with_both() {
-        let vocab = vec![VocabularyEntry { text: "TypeScript".into() }];
+        let vocab = vec![VocabularyEntry {
+            text: "TypeScript".into(),
+        }];
         let result = build_system_prompt("Base.", "Be concise.", &vocab);
         assert!(result.contains("Additional user instructions:"));
         assert!(result.contains("Be concise."));

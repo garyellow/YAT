@@ -149,7 +149,7 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
     },
     {
       key: "output",
-      label: t("general.sectionOutput"),
+      label: t("overview.stats.output"),
       value:
         settings.general.output_mode === "auto_paste"
           ? t("general.autoPaste")

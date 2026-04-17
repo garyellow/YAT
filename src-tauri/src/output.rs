@@ -94,9 +94,7 @@ fn perform_paste_shortcut(
         (Ok(()), Err(release_error)) => Err(release_error),
         (Err(paste_error), Ok(())) => Err(paste_error),
         (Err(paste_error), Err(release_error)) => {
-            log::warn!(
-                "paste simulation failed and modifier release also failed: {release_error}"
-            );
+            log::warn!("paste simulation failed and modifier release also failed: {release_error}");
             Err(paste_error)
         }
     }
@@ -139,9 +137,7 @@ fn simulate_paste_with_retry(max_attempts: u8) -> Result<(), OutputError> {
         match simulate_paste() {
             Ok(()) => {
                 if attempt > 1 {
-                    log::info!(
-                        "paste simulation recovered on retry ({attempt}/{attempts})"
-                    );
+                    log::info!("paste simulation recovered on retry ({attempt}/{attempts})");
                 }
                 return Ok(());
             }
@@ -190,9 +186,8 @@ pub fn output_text(
                         std::thread::spawn(move || {
                             std::thread::sleep(std::time::Duration::from_millis(500));
                             if let Ok(mut cb) = Clipboard::new() {
-                                let still_ours = cb
-                                    .get_text()
-                                    .is_ok_and(|current| current == expected);
+                                let still_ours =
+                                    cb.get_text().is_ok_and(|current| current == expected);
                                 if still_ours {
                                     if let Err(error) = cb.clear() {
                                         log::debug!(

@@ -234,9 +234,9 @@ pub struct HistoryConfig {
 impl Default for HistoryConfig {
     fn default() -> Self {
         Self {
-            retention_hours: 720,        // 30 days
-            context_window_minutes: 10,  // last 10 min for context
-            audio_retention_hours: 24,   // keep audio files for 24 hours
+            retention_hours: 720,       // 30 days
+            context_window_minutes: 10, // last 10 min for context
+            audio_retention_hours: 24,  // keep audio files for 24 hours
         }
     }
 }

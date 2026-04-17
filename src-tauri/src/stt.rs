@@ -3,6 +3,7 @@ use reqwest::multipart;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::api_utils::{summarize_api_error_body, truncate_for_ui, MAX_ERROR_BODY_LEN};
 use crate::config::SttConfig;
 
 #[derive(Error, Debug)]
@@ -18,50 +19,6 @@ pub enum SttError {
 #[derive(Debug, Deserialize)]
 struct SttResponse {
     text: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiErrorEnvelope {
-    error: Option<ApiErrorBody>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiErrorBody {
-    message: Option<String>,
-}
-
-const MAX_ERROR_BODY_LEN: usize = 400;
-
-fn truncate_for_ui(input: &str, max_len: usize) -> String {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-
-    let mut chars = trimmed.chars();
-    let preview: String = chars.by_ref().take(max_len).collect();
-    if chars.next().is_some() {
-        format!("{preview}…")
-    } else {
-        preview
-    }
-}
-
-fn summarize_api_error_body(raw_body: &str) -> String {
-    if raw_body.trim().is_empty() {
-        return "(empty response body)".to_string();
-    }
-
-    if let Ok(parsed) = serde_json::from_str::<ApiErrorEnvelope>(raw_body) {
-        if let Some(message) = parsed.error.and_then(|err| err.message) {
-            let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
-            if !normalized.is_empty() {
-                return truncate_for_ui(&normalized, MAX_ERROR_BODY_LEN);
-            }
-        }
-    }
-
-    truncate_for_ui(raw_body, MAX_ERROR_BODY_LEN)
 }
 
 /// Send audio bytes (WAV) to an OpenAI-compatible `/audio/transcriptions` endpoint.
@@ -86,10 +43,7 @@ pub async fn transcribe(
         ));
     }
 
-    let url = format!(
-        "{}/audio/transcriptions",
-        base_url.trim_end_matches('/')
-    );
+    let url = format!("{}/audio/transcriptions", base_url.trim_end_matches('/'));
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_millis(timeout_ms))
@@ -159,9 +113,7 @@ pub async fn transcribe(
 
                 let stt_resp: SttResponse = serde_json::from_str(&raw_response).map_err(|e| {
                     let body_preview = truncate_for_ui(&raw_response, MAX_ERROR_BODY_LEN);
-                    SttError::Parse(format!(
-                        "{e}; response body preview: {body_preview}"
-                    ))
+                    SttError::Parse(format!("{e}; response body preview: {body_preview}"))
                 })?;
 
                 return Ok(stt_resp.text);
@@ -186,8 +138,8 @@ pub async fn test_connection(config: &SttConfig) -> Result<String, SttError> {
         sample_format: hound::SampleFormat::Int,
     };
     let mut cursor = std::io::Cursor::new(Vec::new());
-    let mut writer = hound::WavWriter::new(&mut cursor, spec)
-        .map_err(|e| SttError::Request(e.to_string()))?;
+    let mut writer =
+        hound::WavWriter::new(&mut cursor, spec).map_err(|e| SttError::Request(e.to_string()))?;
     for _ in 0..8000 {
         writer
             .write_sample(0i16)

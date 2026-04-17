@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Notice, PageIntro, Section, StatusDot } from "./SettingPrimitives";
-import { isLocalEndpointUrl } from "../../lib/settingsFormatters";
+import { formatConnectionError, isLocalEndpointUrl } from "../../lib/settingsFormatters";
 import { HintTip } from "../ui/Tooltip";
 
 const labelCls = "text-xs font-medium text-(--text-secondary)";
@@ -39,29 +39,6 @@ export default function SttTab() {
     updateSettings({ stt: { ...stt, ...patch } });
   };
 
-  const formatConnectionError = (error: unknown) => {
-    const raw = error instanceof Error ? error.message : String(error);
-    const normalized = raw.toLowerCase();
-
-    if (/timeout|timed out|deadline exceeded/.test(normalized)) {
-      return t("settings.connectionErrorTimeout", { service: serviceLabel });
-    }
-    if (/401|unauthorized|authentication|invalid api key|api key required/.test(normalized)) {
-      return t("settings.connectionErrorUnauthorized", { service: serviceLabel });
-    }
-    if (/403|forbidden|permission denied|insufficient/.test(normalized)) {
-      return t("settings.connectionErrorForbidden", { service: serviceLabel });
-    }
-    if (/404|not found|no such model|model_not_found/.test(normalized)) {
-      return t("settings.connectionErrorNotFound", { service: serviceLabel });
-    }
-    if (/connection|network|dns|refused|socket|unreachable|failed to fetch/.test(normalized)) {
-      return t("settings.connectionErrorNetwork", { service: serviceLabel });
-    }
-
-    return t("settings.connectionErrorUnknown", { service: serviceLabel, error: raw });
-  };
-
   const testConnection = async () => {
     setTestStatus("testing");
     try {
@@ -70,7 +47,7 @@ export default function SttTab() {
       setTestMsg(msg);
     } catch (e) {
       setTestStatus("fail");
-      setTestMsg(formatConnectionError(e));
+      setTestMsg(formatConnectionError(e, t, serviceLabel));
     }
   };
 

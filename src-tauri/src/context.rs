@@ -115,8 +115,8 @@ pub fn read_selected_text() -> Option<String> {
 /// that don't implement the pattern (triggers the Ctrl+C fallback).
 #[cfg(target_os = "windows")]
 fn read_selected_text_via_uia() -> Option<String> {
-    use uiautomation::UIAutomation;
     use uiautomation::patterns::UITextPattern;
+    use uiautomation::UIAutomation;
 
     let automation = UIAutomation::new().ok()?;
     let focused = automation.get_focused_element().ok()?;
@@ -156,7 +156,11 @@ fn read_selected_text_x11_primary() -> Option<String> {
 
     let text = String::from_utf8(val).ok()?;
     let text = text.trim().to_string();
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 // -- Input Field Text (platform-specific) ------------------------------------
@@ -190,8 +194,8 @@ pub fn read_input_field_text() -> Option<String> {
 
 #[cfg(target_os = "windows")]
 fn read_input_field_text_windows() -> Option<String> {
-    use uiautomation::UIAutomation;
     use uiautomation::patterns::UITextPattern;
+    use uiautomation::UIAutomation;
 
     let automation = UIAutomation::new().ok()?;
     let focused = automation.get_focused_element().ok()?;
@@ -199,6 +203,8 @@ fn read_input_field_text_windows() -> Option<String> {
     // Try ValuePattern first -- works for simple text fields, combo boxes, etc.
     if let Ok(value) = focused.get_property_value(uiautomation::types::UIProperty::ValueValue) {
         let text = value.to_string();
+        // The `uiautomation` crate serialises a null VARIANT as the literal
+        // string "null".  Filter it out so we don't treat it as real content.
         if !text.is_empty() && text != "null" {
             return Some(text);
         }
@@ -280,11 +286,7 @@ fn read_input_field_text_macos() -> Option<String> {
 
         // Get the focused UI element
         let mut focused: *mut c_void = ptr::null_mut();
-        let err = AXUIElementCopyAttributeValue(
-            system_wide,
-            focused_attribute,
-            &mut focused,
-        );
+        let err = AXUIElementCopyAttributeValue(system_wide, focused_attribute, &mut focused);
         if err != 0 || focused.is_null() {
             CFRelease(system_wide);
             CFRelease(focused_attribute);
@@ -336,7 +338,12 @@ unsafe fn cfstring_to_string(cfstr: *mut std::ffi::c_void) -> Option<String> {
     let buf_size = (len * 4 + 1) as usize;
     let mut buf = vec![0u8; buf_size];
 
-    if CFStringGetCString(cfstr, buf.as_mut_ptr(), buf_size as isize, K_CF_STRING_ENCODING_UTF8) {
+    if CFStringGetCString(
+        cfstr,
+        buf.as_mut_ptr(),
+        buf_size as isize,
+        K_CF_STRING_ENCODING_UTF8,
+    ) {
         let nul_pos = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         String::from_utf8(buf[..nul_pos].to_vec()).ok()
     } else {
@@ -367,7 +374,12 @@ pub fn capture_screenshot_base64() -> Option<String> {
                 log::debug!("no monitors detected for screenshot capture");
                 None
             } else {
-                Some(ms.swap_remove(0))
+                // Prefer the primary monitor; fall back to the first one.
+                let idx = ms
+                    .iter()
+                    .position(|m| m.is_primary().unwrap_or(false))
+                    .unwrap_or(0);
+                Some(ms.swap_remove(idx))
             }
         })
     })?;
@@ -386,8 +398,7 @@ pub fn capture_screenshot_base64() -> Option<String> {
         return None;
     }
 
-    let (target_width, target_height) =
-        scale_dimensions_to_max_edge(width, height, MAX_EDGE);
+    let (target_width, target_height) = scale_dimensions_to_max_edge(width, height, MAX_EDGE);
     if target_width != width || target_height != height {
         log::debug!(
             "downscaling screenshot for LLM context: {}x{} -> {}x{}",
