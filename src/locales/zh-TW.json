@@ -14,8 +14,8 @@
     "transcribing": "辨識中…",
     "polishing": "潤飾中…",
     "done": "完成",
-    "clipboardFallback": "已複製到剪貼簿（貼上失敗）",
-    "autoPastePaused": "已暫停自動貼上",
+    "clipboardFallback": "已複製",
+    "autoPastePaused": "改用剪貼簿",
     "error": "錯誤",
     "busy": "處理中…",
     "loading": "載入中…",
@@ -57,6 +57,7 @@
     },
     "actions": {
       "configureSpeech": "前往語音辨識",
+      "configurePolish": "前往文字潤飾",
       "reviewPrompt": "前往提示詞",
       "adjustOutput": "調整輸出方式",
       "openHistory": "前往歷史紀錄"
@@ -73,11 +74,14 @@
       "off": "已關閉"
     },
     "setup": {
-      "title": "建議先確認這三項",
-      "desc": "優先確認語音辨識、輸出方式與文字偏好。",
+      "title": "重點檢查清單",
+      "desc": "優先確認語音辨識、啟用中的文字潤飾、輸出方式與文字偏好。",
       "speechTitle": "完成語音辨識設定",
       "speechReady": "目前模型：{{model}}",
       "speechPending": "還沒完成 STT 端點與模型設定。",
+      "polishTitle": "完成文字潤飾設定",
+      "polishReady": "目前模型：{{model}}",
+      "polishPending": "文字潤飾已開啟，但 LLM 端點、模型或 API 金鑰尚未完整。",
       "outputTitle": "輸出方式",
       "outputAutoPaste": "完成後會直接貼到目前游標位置。",
       "outputClipboard": "完成後只會複製到剪貼簿。",

@@ -161,7 +161,7 @@ export function StatusDot({
 }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-(--text-secondary)">
-      <span className="dot" data-tone={tone} />
+      <span className="dot" data-tone={tone} aria-hidden="true" />
       {children}
     </span>
   );

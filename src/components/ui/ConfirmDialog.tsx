@@ -74,10 +74,12 @@ export default function ConfirmDialog({ open, title, message, onConfirm, onCance
 
   return createPortal(
     <div className="fixed inset-0 z-9999 flex items-center justify-center">
-      <div
-        className={`absolute inset-0 bg-black/40 ${exiting ? "dialog-backdrop-exit" : "dialog-backdrop"}`}
+      <button
+        type="button"
+        tabIndex={-1}
+        className={`absolute inset-0 cursor-default border-0 bg-black/40 p-0 ${exiting ? "dialog-backdrop-exit" : "dialog-backdrop"}`}
         onClick={onCancel}
-        aria-hidden="true"
+        aria-label={t("actions.cancel")}
       />
       <div
         className={`relative w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-(--border) bg-(--bg-elevated) p-5 shadow-md ${exiting ? "dialog-panel-exit" : "dialog-panel"}`}

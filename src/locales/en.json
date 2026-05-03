@@ -14,8 +14,8 @@
     "transcribing": "Transcribing…",
     "polishing": "Polishing…",
     "done": "Done",
-    "clipboardFallback": "Copied to clipboard (paste failed)",
-    "autoPastePaused": "Auto-paste paused",
+    "clipboardFallback": "Copied",
+    "autoPastePaused": "Clipboard mode",
     "error": "Error",
     "busy": "Processing…",
     "loading": "Loading…",
@@ -57,6 +57,7 @@
     },
     "actions": {
       "configureSpeech": "Open speech settings",
+      "configurePolish": "Open polishing settings",
       "reviewPrompt": "Open prompt",
       "adjustOutput": "Adjust output",
       "openHistory": "Open history"
@@ -83,11 +84,14 @@
       "hotkeyStatus": "Current state: {{status}}"
     },
     "setup": {
-      "title": "Recommended first checks",
-      "desc": "Start with speech, output, and wording preferences.",
+      "title": "Readiness checklist",
+      "desc": "Check speech, enabled polishing, output, and wording preferences first.",
       "speechTitle": "Finish speech setup",
       "speechReady": "Current model: {{model}}",
       "speechPending": "The STT endpoint and model are not fully set up yet.",
+      "polishTitle": "Finish polishing setup",
+      "polishReady": "Current model: {{model}}",
+      "polishPending": "Polishing is enabled, but the LLM endpoint, model, or API key is not complete yet.",
       "outputTitle": "Output",
       "outputAutoPaste": "The result will be pasted into the current cursor position.",
       "outputClipboard": "The result will only be copied to the clipboard.",

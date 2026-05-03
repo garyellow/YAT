@@ -91,6 +91,16 @@ export default function OverviewTab({ onNavigate }: OverviewTabProps) {
       action: () => onNavigate("stt"),
       actionLabel: t("overview.actions.configureSpeech"),
     },
+    ...(settings.llm.enabled ? [{
+      key: "polish",
+      ready: llmReady,
+      label: t("overview.setup.polishTitle"),
+      detail: llmReady
+        ? t("overview.setup.polishReady", { model: settings.llm.model })
+        : t("overview.setup.polishPending"),
+      action: () => onNavigate("llm"),
+      actionLabel: t("overview.actions.configurePolish"),
+    }] : []),
     {
       key: "output",
       ready: true,

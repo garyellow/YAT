@@ -7,7 +7,7 @@ YAT is a cross-platform desktop voice input tool. Simply hold a hotkey, speak in
 
 Stop letting your typing speed hold back your thoughts.
 
-**👉 [Download latest release](../../releases) ｜ [Quick Start](#quick-start) ｜ [Why YAT?](#why-yat) ｜ [FAQ](#faq)**
+**👉 [Download latest release](../../releases) ｜ [Quick Start](#quick-start) ｜ [Why YAT?](#why-yat) ｜ [Product review](./docs/product-review.md) ｜ [FAQ](#faq)**
 
 ---
 

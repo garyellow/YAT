@@ -89,10 +89,10 @@ struct PlatformContext {
 
 const SETTINGS_STORE_FILE: &str = "settings.json";
 const HISTORY_DB_FILE: &str = "history.db";
-const CAPSULE_WIDTH: f64 = 280.0;
-const CAPSULE_HEIGHT: f64 = 32.0;
-const CAPSULE_HEIGHT_DETAIL: f64 = 62.0;
-const CAPSULE_MAX_HEIGHT: f64 = 160.0;
+const CAPSULE_WIDTH: f64 = 320.0;
+const CAPSULE_HEIGHT: f64 = 52.0;
+const CAPSULE_HEIGHT_DETAIL: f64 = 96.0;
+const CAPSULE_MAX_HEIGHT: f64 = 180.0;
 const CAPSULE_HIDE_DELAY_SUCCESS_SECS: u64 = 2;
 const CAPSULE_HIDE_DELAY_ERROR_SECS: u64 = 8;
 const CAPSULE_HIDE_DELAY_DISMISSED_SECS: u64 = 2;
@@ -1624,11 +1624,11 @@ fn show_capsule(app: &AppHandle, status: &str) {
             "failed to resize capsule window",
         );
         position_on_active_monitor(app, &capsule);
-        warn_if_err(capsule.show(), "failed to show capsule window");
         warn_if_err(
             capsule.set_ignore_cursor_events(true),
             "failed to ignore cursor events for capsule window",
         );
+        warn_if_err(capsule.show(), "failed to show capsule window");
     } else {
         match WebviewWindowBuilder::new(app, "capsule", WebviewUrl::App("capsule.html".into()))
             .title("YAT")

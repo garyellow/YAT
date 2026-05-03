@@ -95,6 +95,7 @@ interface SettingsState {
 }
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let settingsRevision = 0;
 
 function mergeSettings(current: AppSettings, partial: Partial<AppSettings>): AppSettings {
   return {
@@ -178,6 +179,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         ? await invoke<AppSettings>("get_settings")
         : loadMockSettings();
 
+      settingsRevision = 0;
+
       set({
         settings,
         loading: false,
@@ -195,6 +198,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: async (settings: AppSettings) => {
     const sanitized = sanitizeSettings(settings);
     const validationError = validateSettings(sanitized);
+    const revisionAtStart = settingsRevision;
 
     if (validationError) {
       set({
@@ -223,8 +227,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       throw new Error(message);
     }
 
-    // If user made more changes while saving, stay in pending state.
-    if (get().dirty) {
+    // If the user made more changes while this save was in flight, keep the
+    // newer in-memory settings dirty and let the next debounce/flush persist
+    // them. Otherwise a normal autosave would stay dirty forever because the
+    // save starts from a dirty state by definition.
+    if (settingsRevision !== revisionAtStart) {
       set({ saveStatus: "pending" });
       return;
     }
@@ -248,6 +255,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   updateSettings: (partial) => {
     const current = get().settings;
     if (current) {
+      settingsRevision += 1;
       const merged = mergeSettings(current, partial);
       const validationError = validateSettings(sanitizeSettings(merged));
 

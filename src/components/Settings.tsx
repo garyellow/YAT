@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { isSttConfigured } from "../lib/settingsFormatters";
+import { isLlmConfigured, isSttConfigured } from "../lib/settingsFormatters";
 import { isTauriRuntime } from "../lib/tauriRuntime";
 import OverviewTab from "./settings/OverviewTab";
 import GeneralTab from "./settings/GeneralTab";
@@ -88,6 +88,8 @@ export default function Settings() {
 
   const tabTitle = t(`tabs.${active}`);
   const sttReady = isSttConfigured(settings);
+  const llmReady = isLlmConfigured(settings);
+  const appReady = sttReady && llmReady;
   const currentTheme: ThemeSetting = settings?.general.theme === "light" || settings?.general.theme === "dark"
     ? settings.general.theme
     : "system";
@@ -412,13 +414,15 @@ export default function Settings() {
         </nav>
 
         <div className="sidebar-footer">
-          <StatusDot tone={sttReady ? "success" : "warning"}>
-            {sttReady ? t("overview.badges.ready") : t("overview.badges.setupNeeded")}
+          <StatusDot tone={appReady ? "success" : "warning"}>
+            {appReady ? t("overview.badges.ready") : t("overview.badges.setupNeeded")}
           </StatusDot>
           <p className="mt-2 text-[11px] leading-5 text-(--text-muted)">
-            {sttReady
-              ? t("overview.summary.speechReady", { model: settings?.stt.model ?? "" })
-              : t("overview.summary.speechPending")}
+            {!sttReady
+              ? t("overview.summary.speechPending")
+              : !llmReady
+                ? t("overview.summary.polishPending")
+                : t("overview.summary.speechReady", { model: settings?.stt.model ?? "" })}
           </p>
         </div>
       </aside>

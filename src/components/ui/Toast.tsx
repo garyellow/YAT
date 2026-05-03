@@ -87,13 +87,14 @@ export default function Toast({
         <span
           className="dot"
           data-tone={tone === "error" ? "danger" : tone === "info" ? "info" : "success"}
+          aria-hidden="true"
         />
         <span>{message}</span>
         <button
           type="button"
           onClick={dismiss}
           aria-label={t("actions.close")}
-          className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-(--text-muted) transition-colors hover:bg-(--bg-muted) hover:text-(--text-primary) focus-visible:outline-2 focus-visible:outline-(--accent)"
+          className="ml-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-(--text-muted) transition-colors hover:bg-(--bg-muted) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--accent)"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" />
